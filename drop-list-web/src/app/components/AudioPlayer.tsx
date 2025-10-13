@@ -38,14 +38,40 @@ export default function AudioPlayer({
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
 
+    // State to hold the blob URL
+    const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
     // Memoize source: prefer remote URLs over local blob
     const src = useMemo(() => {
         if (!track) return undefined;
         if (track.googleDriveUrl) return track.googleDriveUrl;
         if (track.url) return track.url;
-        if (track.file) return URL.createObjectURL(track.file);
+        if (track.file) {
+            // Create blob URL if we don't have one for this file
+            if (!blobUrl) {
+                const newBlobUrl = URL.createObjectURL(track.file);
+                setBlobUrl(newBlobUrl);
+                return newBlobUrl;
+            }
+            return blobUrl;
+        }
         return undefined;
-    }, [track]);
+    }, [track, blobUrl]);
+
+    // Clean up blob URL when track changes
+    useEffect(() => {
+        return () => {
+            if (blobUrl) {
+                URL.revokeObjectURL(blobUrl);
+                setBlobUrl(null);
+            }
+        };
+    }, [track?.id]); // Clean up when track ID changes
+
+    // Debug: log when src changes
+    useEffect(() => {
+        console.log('Audio src changed:', { trackId: track?.id, src, trackName: track?.name });
+    }, [src, track]);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -53,11 +79,6 @@ export default function AudioPlayer({
         audio.volume = volume;
     }, [volume]);
 
-    useEffect(() => {
-        return () => {
-            if (src && typeof src === 'string' && src.startsWith('blob:')) URL.revokeObjectURL(src);
-        };
-    }, [src]);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -79,6 +100,7 @@ export default function AudioPlayer({
         const audio = audioRef.current;
         if (!audio || !track) return;
         const trackDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
+        console.log('handleLoadedMetadata called:', { trackId: track.id, duration: trackDuration, src });
         setDuration(trackDuration);
         
         // Notify parent component about the duration
@@ -327,6 +349,16 @@ export default function AudioPlayer({
                 onEnded={onEnded}
                 onLoadedMetadata={handleLoadedMetadata}
                 onTimeUpdate={handleTimeUpdate}
+                onError={(e) => {
+                    const audio = e.target as HTMLAudioElement;
+                    console.error('Audio loading error:', {
+                        error: audio.error,
+                        networkState: audio.networkState,
+                        readyState: audio.readyState,
+                        src: audio.src,
+                        trackId: track?.id
+                    });
+                }}
             />
         </div>
     );
