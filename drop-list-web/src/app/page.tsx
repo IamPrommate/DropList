@@ -1,103 +1,165 @@
-import Image from "next/image";
+// src/app/page.tsx
+'use client';
 
-export default function Home() {
+import { useCallback, useMemo, useState } from 'react';
+import AudioPlayer from './components/AudioPlayer';
+import { PlaylistType, TrackType } from './lib/types';
+import { Layout, Button, Space, Switch, Typography, List } from 'antd';
+import AlbumList from './components/AlbumList';
+import './layout.scss';
+const { Sider, Content } = Layout;
+const { Title, Text } = Typography;
+
+function makeId() {
+  return Math.random().toString(36).slice(2);
+}
+
+export default function HomePage() {
+  const [tracks, setTracks] = useState<TrackType[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isShuffled, setIsShuffled] = useState(false);
+  const [volume, setVolume] = useState(0.8);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
+  const [albums, setAlbums] = useState<string[]>([]);
+
+  const currentTrack = tracks[currentIndex];
+
+  const playlist: PlaylistType = useMemo(
+    () => ({
+      id: 'local',
+      name: 'Local Session',
+      tracks,
+      currentIndex,
+      isShuffled,
+      volume,
+    }),
+    [tracks, currentIndex, isShuffled, volume]
+  );
+
+  const handleFilesSelected = useCallback((files: FileList | null) => {
+    if (!files) return;
+    const next: TrackType[] = Array.from(files)
+      .filter((f) => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac)$/i.test(f.name))
+      .map((f) => ({
+        id: makeId(),
+        name: f.name,
+        file: f,
+      }));
+    setTracks(next);
+    setCurrentIndex(0);
+    setIsPlaying(next.length > 0);
+
+    // Derive folder name when picking a directory (webkitRelativePath available)
+    const first: any = files[0];
+    const rel: string | undefined = first && (first.webkitRelativePath as string | undefined);
+    if (rel && rel.includes('/')) {
+      const top = rel.split('/')[0];
+      setSelectedFolderName(top || null);
+      if (top) {
+        setAlbums((prev) => (prev.includes(top) ? prev : [...prev, top]));
+      }
+    } else {
+      setSelectedFolderName(null);
+    }
+  }, []);
+
+  // Directory picker (supported in Chromium-based browsers)
+  const handleFolderPick = useCallback(async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.webkitdirectory = true;
+    input.multiple = true;
+    input.accept = 'audio/*,.mp3,.wav,.ogg,.m4a,.flac';
+    input.onchange = () => handleFilesSelected(input.files);
+    input.click();
+  }, [handleFilesSelected]);
+
+  const handleNext = useCallback(() => {
+    if (tracks.length === 0) return;
+    if (isShuffled) {
+      const next = Math.floor(Math.random() * tracks.length);
+      setCurrentIndex(next);
+    } else {
+      setCurrentIndex((i) => (i + 1) % tracks.length);
+    }
+    setIsPlaying(true);
+  }, [tracks, isShuffled]);
+
+  const handlePrev = useCallback(() => {
+    if (tracks.length === 0) return;
+    if (isShuffled) {
+      const next = Math.floor(Math.random() * tracks.length);
+      setCurrentIndex(next);
+    } else {
+      setCurrentIndex((i) => (i - 1 + tracks.length) % tracks.length);
+    }
+    setIsPlaying(true);
+  }, [tracks, isShuffled]);
+
+  const handleShuffleToggle = useCallback(() => {
+    setIsShuffled((s) => !s);
+  }, []);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="pageRoot">
+      <div suppressHydrationWarning>
+        <Layout style={{ minHeight: '100dvh' }}>
+          <Sider width={300} className='sidebar'>
+            <Space direction="vertical" style={{ width: '100%' }} size="large">
+              <Button block onClick={handleFolderPick}>Pick folder</Button>
+              <AlbumList albums={albums} onSelect={() => {}} />
+            </Space>
+          </Sider>
+          <Content className='pt-12'>
+            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              {selectedFolderName ? (
+                <div style={{ maxWidth: 900, margin: '0 auto' }}>
+                  <Title level={1} style={{ margin: 0 }}>{selectedFolderName}</Title>
+                </div>
+              ) : null}
+              <List
+                size="large"
+                bordered
+                dataSource={tracks}
+                style={{ maxWidth: 900, margin: '0 auto' }}
+                className='mt-20'
+                renderItem={(t, i) => (
+                  <List.Item
+                    onClick={() => {
+                      setCurrentIndex(i);
+                      setIsPlaying(true);
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      background: i === currentIndex ? 'var(--ant-primary-color-deprecated-5, #e6f4ff)' : undefined,
+                    }}
+                  >
+                    <Text ellipsis title={t.name} style={{ maxWidth: '100%' }}>
+                      {t.name}
+                    </Text>
+                  </List.Item>
+                )}
+              />
+            </Space>
+          </Content>
+        </Layout>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        {/* Fixed bottom audio bar via SCSS */}
+        <AudioPlayer
+          track={currentTrack}
+          volume={volume}
+          onEnded={handleNext}
+          onVolumeChange={setVolume}
+          onPlayPauseToggle={() => setIsPlaying((p) => !p)}
+          isPlaying={isPlaying}
+          handlePrev={handlePrev}
+          handleNext={handleNext}
+          handleShuffleToggle={handleShuffleToggle}
+          isShuffled={isShuffled}
+        />
+
+      </div>
+    </main>
   );
 }

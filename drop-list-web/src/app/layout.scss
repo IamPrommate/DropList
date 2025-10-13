@@ -1,0 +1,46 @@
+@reference "./globals.css";
+
+.pageRoot {
+  /* Tailwind utilities via @apply */
+  @apply min-h-dvh h-dvh pb-24 flex flex-col bg-white;
+}
+
+.sidebar {
+  @apply p-4 bg-white;
+}
+
+.audioPlayer {
+  @apply w-full flex items-center gap-3;
+}
+
+.audioBar {
+  @apply fixed left-0 right-0 bottom-0 px-4 py-3 z-[1000] bg-white;
+
+  .audioPlayer {
+    @apply flex justify-center px-4 py-1;
+
+    .leftPlayer {
+        @apply flex gap-2
+    }
+    
+    .rightPlayer {
+        @apply flex gap-2 ml-4
+    }
+    .volumeGroup { 
+        @apply flex items-center ; 
+
+        .volumeSlider { 
+            @apply w-[160px];
+         }
+    }
+  }
+}
+
+.musicSlider {
+    @apply w-[300px];
+  }
+
+
+.playlist {
+}
+
