@@ -66,7 +66,14 @@
   display: flex;
   gap: 3rem;
   margin-bottom: 3rem;
-  margin-left: 3rem
+  margin-left: 3rem;
+  
+  &.centered {
+    justify-content: center;
+    align-items: center;
+    margin-left: 0;
+    min-height: 60vh;
+  }
 }
 
 .album-art {
@@ -124,7 +131,7 @@
   transition: all 0.2s ease;
 }
 
-.download-btn {
+.add-btn {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -138,8 +145,29 @@
   transition: background 0.2s;
 }
 
-.download-btn:hover {
+.add-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.add-btn-ggd {
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-btn-ggd:hover {
+  background: rgba(0, 0, 0, 0.9);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
   transition: all 0.2s ease;
@@ -455,5 +483,25 @@
   background: #fff;
   border-radius: 2px;
   width: 70%;
+}
+
+.duration-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  
+  svg {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 

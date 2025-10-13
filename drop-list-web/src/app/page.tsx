@@ -24,6 +24,7 @@ export default function HomePage() {
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
   const [albums, setAlbums] = useState<string[]>([]);
   const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
+  const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
 
   const currentTrack = tracks[currentIndex];
 
@@ -39,26 +40,52 @@ export default function HomePage() {
     [tracks, currentIndex, isShuffled, volume]
   );
 
-  // Preload durations for all tracks
+  // Preload durations for all tracks (both local files and Google Drive URLs)
   const preloadTrackDurations = useCallback(async (tracks: TrackType[]) => {
+    // Mark all tracks as loading
+    const trackIds = tracks.map(track => track.id);
+    setLoadingDurations(prev => {
+      const updated = new Set(prev);
+      trackIds.forEach(id => updated.add(id));
+      return updated;
+    });
+
     const durationPromises = tracks.map(track => {
       return new Promise<{ trackId: string; duration: number }>((resolve) => {
+        let audioSrc: string | undefined;
+        
         if (track.file) {
+          // Local file - create blob URL
+          audioSrc = URL.createObjectURL(track.file);
+        } else if (track.googleDriveUrl) {
+          // Google Drive URL - use directly
+          audioSrc = track.googleDriveUrl;
+        } else if (track.url) {
+          // Generic URL
+          audioSrc = track.url;
+        }
+        
+        if (audioSrc) {
           const audio = new Audio();
-          const url = URL.createObjectURL(track.file);
           
           audio.addEventListener('loadedmetadata', () => {
             const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-            URL.revokeObjectURL(url);
+            // Only revoke blob URLs, not Drive URLs
+            if (track.file && audioSrc?.startsWith('blob:')) {
+              URL.revokeObjectURL(audioSrc);
+            }
             resolve({ trackId: track.id, duration });
           });
           
           audio.addEventListener('error', () => {
-            URL.revokeObjectURL(url);
+            // Only revoke blob URLs, not Drive URLs
+            if (track.file && audioSrc?.startsWith('blob:')) {
+              URL.revokeObjectURL(audioSrc);
+            }
             resolve({ trackId: track.id, duration: 0 });
           });
           
-          audio.src = url;
+          audio.src = audioSrc;
         } else {
           resolve({ trackId: track.id, duration: 0 });
         }
@@ -78,6 +105,13 @@ export default function HomePage() {
       newDurations.forEach((duration, trackId) => {
         updated.set(trackId, duration);
       });
+      return updated;
+    });
+
+    // Remove tracks from loading state
+    setLoadingDurations(prev => {
+      const updated = new Set(prev);
+      trackIds.forEach(id => updated.delete(id));
       return updated;
     });
   }, []);
@@ -237,48 +271,63 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="main-content">
+          <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
             <div className="album-art"></div>
             <div className="info-section">
-              <h1 className="title">{selectedFolderName || 'DropList'}</h1>
-              <p className="subtitle">{tracks.length} tracks, {formatDuration(totalDuration)}</p>
+              <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1>
+              <p className="subtitle">
+                {tracks.length > 0 
+                  ? `${tracks.length} tracks, ${formatDuration(totalDuration)}`
+                  : 'Ready to drop?'
+                }
+              </p>
               <div className="buttons">
-                <button 
-                  className="play-btn"
-                  onClick={() => {
-                    if (tracks.length > 0) {
-                      setIsPlaying(!isPlaying);
-                    }
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    {isPlaying ? (
-                      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
-                    ) : (
-                      <path d="M8 5v14l11-7z"></path>
-                    )}
-                  </svg>
-                  {isPlaying ? 'Pause' : 'Play'}
-                </button>
-                <button className="download-btn" onClick={handleFolderPick}>
+                {tracks.length > 0 && (
+                  <button 
+                    className="play-btn"
+                    onClick={() => {
+                      if (tracks.length > 0) {
+                        setIsPlaying(!isPlaying);
+                      }
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      {isPlaying ? (
+                        <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                      ) : (
+                        <path d="M8 5v14l11-7z"></path>
+                      )}
+                    </svg>
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </button>
+                )}
+                <button className="add-btn" onClick={handleFolderPick}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 5v14m-7-7h14"></path>
                   </svg>
-                  Add
+                  Add from local
                 </button>
                 <GoogleDrivePicker
-                  onPicked={(picked) => {
+                  onPicked={(picked, folderName) => {
                     console.log('Drive tracks picked:', picked);
-                    setTracks(prev => [...prev, ...picked]);
+                    setTracks(picked); // Replace tracks instead of concatenating
                     setCurrentIndex(0);
                     setIsPlaying(picked.length > 0);
+                    
+                    // Set folder name if provided
+                    if (folderName) {
+                      setSelectedFolderName(folderName);
+                    }
+                    
+                    // Preload durations for Google Drive tracks
+                    preloadTrackDurations(picked);
                   }}
                 />
               </div>
             </div>
           </div>
 
-          <Divider />
+          {currentTrack && (<Divider />)}
 
           <div className="playlist">
             {tracks.map((track, i) => {
@@ -304,7 +353,15 @@ export default function HomePage() {
                     <div className="track-artist">{trackInfo.artist}</div>
                   </div>
                   <div className="track-duration">
-                    {formatDuration(duration)}
+                    {loadingDurations.has(track.id) ? (
+                      <div className="duration-spinner">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                        </svg>
+                      </div>
+                    ) : (
+                      formatDuration(duration)
+                    )}
                   </div>
                   <div className="track-menu">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -326,19 +383,21 @@ export default function HomePage() {
         </div>
 
         {/* Fixed bottom audio bar via SCSS */}
-        <AudioPlayer
-          track={currentTrack}
-          volume={volume}
-          onEnded={handleNext}
-          onVolumeChange={setVolume}
-          onPlayPauseToggle={() => setIsPlaying((p) => !p)}
-          isPlaying={isPlaying}
-          handlePrev={handlePrev}
-          handleNext={handleNext}
-          handleShuffleToggle={handleShuffleToggle}
-          isShuffled={isShuffled}
-          onDurationLoaded={handleDurationLoaded}
-        />
+        {currentTrack && (
+          <AudioPlayer
+            track={currentTrack}
+            volume={volume}
+            onEnded={handleNext}
+            onVolumeChange={setVolume}
+            onPlayPauseToggle={() => setIsPlaying((p) => !p)}
+            isPlaying={isPlaying}
+            handlePrev={handlePrev}
+            handleNext={handleNext}
+            handleShuffleToggle={handleShuffleToggle}
+            isShuffled={isShuffled}
+            onDurationLoaded={handleDurationLoaded}
+          />
+        )}
 
       </div>
     </main>

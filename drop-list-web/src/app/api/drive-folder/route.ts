@@ -23,6 +23,18 @@ export async function POST(request: NextRequest) {
 
     const html = await response.text();
     
+    // Extract folder name from the HTML
+    let folderName = 'Google Drive Folder';
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (titleMatch) {
+      // Remove various Google Drive suffixes (English, Thai, etc.)
+      folderName = titleMatch[1]
+        .replace(/\s*-\s*Google\s+Drive\s*$/i, '')
+        .replace(/\s*-\s*Google\s+ไดรฟ์\s*$/i, '')
+        .replace(/\s*-\s*Google\s*$/i, '')
+        .trim();
+    }
+    
     // Parse the HTML table structure for file information
     const files = [];
     const seenIds = new Set();
@@ -89,17 +101,25 @@ export async function POST(request: NextRequest) {
     if (files.length === 0) {
       return NextResponse.json({ 
         error: 'No files found in folder or folder not publicly accessible',
-        files: []
+        files: [],
+        folderName
       });
     }
     
-    return NextResponse.json({ files });
+    return NextResponse.json({ files, folderName });
     
   } catch (error) {
     console.error('Error fetching folder:', error);
+    let errorMessage = 'Failed to access folder.';
+    if (error instanceof Error) {
+      errorMessage = `Failed to access folder: ${error.message}`;
+    } else if (typeof error === 'string') {
+      errorMessage = `Failed to access folder: ${error}`;
+    }
     return NextResponse.json({ 
-      error: `Failed to access folder: ${error.message}`,
-      files: []
+      error: errorMessage,
+      files: [],
+      folderName: 'Google Drive Folder'
     }, { status: 500 });
   }
 }

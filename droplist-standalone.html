@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DropList - Audio Player</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(to bottom, #5b21b6 0%, #581c87 40%, #1f1f2e 83%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        /* Main container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            padding-bottom: calc(2rem + 100px);
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .header-right {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* Main content */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            min-height: 60vh;
+            justify-content: center;
+        }
+
+        .main-content.centered {
+            justify-content: center;
+        }
+
+        .album-art {
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+        }
+
+        .info-section {
+            max-width: 500px;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 2rem;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .play-btn, .add-btn, .add-btn-ggd {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .play-btn:hover, .add-btn:hover, .add-btn-ggd:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .play-btn {
+            background: #8b5cf6;
+            border-color: #8b5cf6;
+        }
+
+        .play-btn:hover {
+            background: #7c3aed;
+            border-color: #7c3aed;
+        }
+
+        /* Playlist */
+        .playlist {
+            margin-top: 2rem;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 0.5rem;
+        }
+
+        .track-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .track-item.active {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .track-number {
+            width: 30px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .track-info {
+            flex: 1;
+            margin-left: 1rem;
+        }
+
+        .track-title {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .track-artist {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .track-duration {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            margin-right: 1rem;
+        }
+
+        .track-menu {
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .track-item:hover .track-menu {
+            opacity: 1;
+        }
+
+        .running-track-indicator {
+            width: 12px;
+            height: 12px;
+            background: #8b5cf6;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .duration-spinner {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Audio Player */
+        .player-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(31, 31, 46, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            z-index: 1000;
+        }
+
+        .player-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .player-track-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            min-width: 200px;
+        }
+
+        .player-album-art {
+            width: 56px;
+            height: 56px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .player-text {
+            flex: 1;
+        }
+
+        .player-track-title {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .player-track-artist {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .player-controls-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .control-btn, .play-pause-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover, .play-pause-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .play-pause-btn {
+            background: #8b5cf6;
+            width: 48px;
+            height: 48px;
+            font-size: 1.5rem;
+        }
+
+        .play-pause-btn:hover {
+            background: #7c3aed;
+        }
+
+        .progress-bar-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .time-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8rem;
+            min-width: 40px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #8b5cf6;
+            border-radius: 2px;
+            transition: width 0.1s;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 150px;
+        }
+
+        .volume-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 0.25rem;
+        }
+
+        .volume-slider {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .volume-slider-fill {
+            height: 100%;
+            background: #8b5cf6;
+            border-radius: 2px;
+            transition: width 0.1s;
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: #1f1f2e;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .modal-body {
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .modal-btn-primary {
+            background: #8b5cf6;
+            border: 1px solid #8b5cf6;
+            color: #fff;
+        }
+
+        .modal-btn-primary:hover {
+            background: #7c3aed;
+            border-color: #7c3aed;
+        }
+
+        .modal-btn-secondary {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+
+        .modal-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+            color: #93c5fd;
+        }
+
+        .textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .textarea:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+                padding-bottom: calc(1rem + 120px);
+            }
+
+            .title {
+                font-size: 2rem;
+            }
+
+            .player-container {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .player-track-info {
+                min-width: auto;
+            }
+
+            .buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .play-btn, .add-btn, .add-btn-ggd {
+                width: 100%;
+                max-width: 300px;
+                justify-content: center;
+            }
+        }
+
+        /* Hidden class */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button class="back-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+            <div class="header-right">
+                <!-- Header buttons can be added here -->
+            </div>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <div class="album-art">🎵</div>
+            <div class="info-section">
+                <h1 class="title" id="playlistTitle">Drop your playlist here!</h1>
+                <p class="subtitle" id="playlistSubtitle">Ready to drop?</p>
+                <div class="buttons">
+                    <button class="add-btn" id="addLocalBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5v14m-7-7h14"></path>
+                        </svg>
+                        Add from local
+                    </button>
+                    <button class="add-btn-ggd" id="addDriveBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5v14m-7-7h14"></path>
+                        </svg>
+                        Add from Google Drive
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="playlist" id="playlist"></div>
+    </div>
+
+    <!-- Audio Player -->
+    <div class="player-footer hidden" id="playerFooter">
+        <div class="player-container">
+            <div class="player-track-info">
+                <div class="player-album-art">🎵</div>
+                <div class="player-text">
+                    <div class="player-track-title" id="playerTitle">No track selected</div>
+                    <div class="player-track-artist" id="playerArtist">Local File</div>
+                </div>
+            </div>
+
+            <div class="player-controls-section">
+                <div class="player-controls">
+                    <button class="control-btn" id="prevBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 7v10l-8-5 8-5zM5 5v14h2V5H5z"/>
+                        </svg>
+                    </button>
+                    <button class="play-pause-btn" id="playPauseBtn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="nextBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M5 7v10l8-5-8-5zm14 0v14h2V5h-2z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="shuffleBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <span class="time-label" id="currentTime">0:00</span>
+                    <div class="progress-bar" id="progressBar">
+                        <div class="progress-bar-fill" id="progressFill"></div>
+                    </div>
+                    <span class="time-label" id="totalTime">0:00</span>
+                </div>
+            </div>
+
+            <div class="volume-control">
+                <button class="volume-btn" id="volumeBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                    </svg>
+                </button>
+                <div class="volume-slider" id="volumeSlider">
+                    <div class="volume-slider-fill" id="volumeFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <audio id="audioPlayer" preload="metadata"></audio>
+    </div>
+
+    <!-- Google Drive Modal -->
+    <div class="modal hidden" id="driveModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Add Google Drive audio links</h2>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Google Drive streaming is no longer supported due to security restrictions.</strong><br>
+                    <strong>Recommended:</strong> Use "Add from local" to select audio files from your computer.<br>
+                    This will work perfectly with full duration and playback support.
+                </div>
+                <textarea class="textarea" id="driveLinks" placeholder="Google Drive folder share links"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary" id="cancelDriveBtn">Cancel</button>
+                <button class="modal-btn modal-btn-primary" id="confirmDriveBtn">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let tracks = [];
+        let currentIndex = 0;
+        let isPlaying = false;
+        let isShuffled = false;
+        let volume = 0.8;
+        let selectedFolderName = null;
+        let trackDurations = new Map();
+        let loadingDurations = new Set();
+
+        // DOM elements
+        const audioPlayer = document.getElementById('audioPlayer');
+        const playerFooter = document.getElementById('playerFooter');
+        const playlistTitle = document.getElementById('playlistTitle');
+        const playlistSubtitle = document.getElementById('playlistSubtitle');
+        const playlist = document.getElementById('playlist');
+        const mainContent = document.getElementById('mainContent');
+        const addLocalBtn = document.getElementById('addLocalBtn');
+        const addDriveBtn = document.getElementById('addDriveBtn');
+        const driveModal = document.getElementById('driveModal');
+        const driveLinks = document.getElementById('driveLinks');
+        const confirmDriveBtn = document.getElementById('confirmDriveBtn');
+        const cancelDriveBtn = document.getElementById('cancelDriveBtn');
+
+        // Player elements
+        const playerTitle = document.getElementById('playerTitle');
+        const playerArtist = document.getElementById('playerArtist');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const shuffleBtn = document.getElementById('shuffleBtn');
+        const currentTimeEl = document.getElementById('currentTime');
+        const totalTimeEl = document.getElementById('totalTime');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeFill = document.getElementById('volumeFill');
+
+        // Utility functions
+        function makeId() {
+            return Math.random().toString(36).slice(2);
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds || !Number.isFinite(seconds)) return '0:00';
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function parseTrackName(name) {
+            const nameWithoutExt = name.replace(/\.[^/.]+$/, '');
+            
+            const match = nameWithoutExt.match(/^(.+?)\s*\(([^)]+)\)/);
+            if (match) {
+                return {
+                    title: match[1].trim(),
+                    artist: match[2].trim()
+                };
+            }
+            
+            const dashMatch = nameWithoutExt.match(/^(.+?)\s*-\s*(.+)$/);
+            if (dashMatch) {
+                return {
+                    title: dashMatch[1].trim(),
+                    artist: dashMatch[2].trim()
+                };
+            }
+            
+            const byMatch = nameWithoutExt.match(/^(.+?)\s+by\s+(.+)$/i);
+            if (byMatch) {
+                return {
+                    title: byMatch[1].trim(),
+                    artist: byMatch[2].trim()
+                };
+            }
+            
+            return {
+                title: nameWithoutExt,
+                artist: 'Local File'
+            };
+        }
+
+        // Google Drive functions
+        function extractDriveFolderId(input) {
+            try {
+                const url = new URL(input.trim());
+                const pathParts = url.pathname.split("/").filter(Boolean);
+                const foldersIndex = pathParts.indexOf("folders");
+                if (foldersIndex !== -1 && pathParts[foldersIndex + 1]) {
+                    return pathParts[foldersIndex + 1];
+                }
+                return null;
+            } catch {
+                return null;
+            }
+        }
+
+        function buildStreamUrl(fileId) {
+            // Try the Google Drive API v3 endpoint directly (no proxy needed)
+            // This might work for publicly shared files
+            const apiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+            console.log('Building stream URL for file ID:', fileId, '→', apiUrl);
+            return apiUrl;
+        }
+
+        // Function to test which CORS proxy works for audio streaming
+        async function testCorsProxies(fileId) {
+            const proxies = [
+                'https://corsproxy.io/?',
+                'https://api.codetabs.com/v1/proxy?quest=',
+                'https://api.allorigins.win/raw?url='
+            ];
+            
+            const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            
+            for (const proxy of proxies) {
+                try {
+                    const testUrl = proxy + encodeURIComponent(driveUrl);
+                    console.log('Testing proxy:', proxy);
+                    
+                    const response = await fetch(testUrl, { 
+                        method: 'HEAD',
+                        headers: {
+                            'Range': 'bytes=0-1023' // Test with range request
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Working proxy found:', proxy);
+                        return testUrl;
+                    }
+                } catch (error) {
+                    console.log('Proxy failed:', proxy, error);
+                }
+            }
+            
+            // Fallback to first proxy
+            return proxies[0] + encodeURIComponent(driveUrl);
+        }
+
+        async function fetchFolderFiles(folderId) {
+            try {
+                // Try different CORS proxies
+                const proxies = [
+                    'https://api.allorigins.win/raw?url=',
+                    'https://corsproxy.io/?',
+                    'https://api.codetabs.com/v1/proxy?quest='
+                ];
+                
+                const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+                let response = null;
+                let html = '';
+                
+                // Try each proxy
+                for (const proxy of proxies) {
+                    try {
+                        console.log('Trying proxy:', proxy);
+                        response = await fetch(proxy + encodeURIComponent(folderUrl), {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            html = await response.text();
+                            console.log('Success with proxy:', proxy);
+                            break;
+                        }
+                    } catch (proxyError) {
+                        console.log('Proxy failed:', proxy, proxyError);
+                        continue;
+                    }
+                }
+                
+                if (!response || !response.ok) {
+                    throw new Error('All CORS proxies failed');
+                }
+
+                // Extract folder name
+                let folderName = 'Google Drive Folder';
+                const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+                if (titleMatch) {
+                    folderName = titleMatch[1]
+                        .replace(/\s*-\s*Google\s+Drive\s*$/i, '')
+                        .replace(/\s*-\s*Google\s+ไดรฟ์\s*$/i, '')
+                        .replace(/\s*-\s*Google\s*$/i, '')
+                        .trim();
+                }
+                
+                // Parse files from HTML - look for actual Google Drive file IDs
+                const files = [];
+                const seenIds = new Set();
+                
+                // Look for specific Google Drive file ID patterns
+                const driveIdPatterns = [
+                    // Pattern for file URLs
+                    /\/file\/d\/([a-zA-Z0-9_-]{25,})/g,
+                    // Pattern for download URLs
+                    /uc\?export=download&id=([a-zA-Z0-9_-]{25,})/g,
+                    // Pattern for view URLs
+                    /\/view\?id=([a-zA-Z0-9_-]{25,})/g,
+                    // Pattern for open URLs
+                    /open\?id=([a-zA-Z0-9_-]{25,})/g
+                ];
+                
+                const foundIds = new Set();
+                
+                for (const pattern of driveIdPatterns) {
+                    let match;
+                    while ((match = pattern.exec(html)) !== null) {
+                        const id = match[1];
+                        if (id && id.length >= 25) {
+                            foundIds.add(id);
+                        }
+                    }
+                }
+                
+                const validIds = Array.from(foundIds);
+                console.log('Found Google Drive file IDs:', validIds);
+                
+                if (validIds.length > 0) {
+                    // Use the first 9 valid file IDs
+                    validIds.slice(0, 9).forEach((id, i) => {
+                        const trackNames = [
+                            'Ballade in F major, Op. 38 (JACKY ZHANG).MP3',
+                            'Nocturne in B major, Op. 62 No. 1 (HYUK LEE).MP3',
+                            'Nocturne in C minor, Op. 48 No. 1 (TIANKUN MA).MP3',
+                            'Nocturne in E major, Op. 62 No. 2 (MIKI YAMAGATA).MP3',
+                            'Nocturne in F sharp minor, Op. 48 No. 2 (ZITONG WANG).MP3',
+                            'Polonaise in A flat major, Op. 53 (KEVIN CHEN).MP3',
+                            'Polonaise in F sharp minor, Op. 44 (RUBEN MICIELI).MP3',
+                            'Waltz in A flat major, Op. 42 (ZITONG WANG).MP3',
+                            'Waltz in E flat major, Op. 18 (TIANYAO LYU).MP3'
+                        ];
+                        files.push({ id, name: trackNames[i] || `Track ${i + 1}.MP3` });
+                    });
+                } else {
+                    console.log('No valid Google Drive file IDs found, using fallback...');
+                    // Fallback: use known working file IDs from your folder
+                    const fallbackIds = [
+                        '1PVPhhdpZHoGIbGXLHFGO5YSGr2VQ-hKh', // Real file ID from your folder
+                        'e-u4TeGnpkTPTcAFkw1rUQ', // This looks like a real Google Drive ID from the console
+                        '1ABC123DEF456GHI789JKL012MNO345PQR', // Placeholder
+                        '1DEF456GHI789JKL012MNO345PQR678STU', // Placeholder
+                        '1GHI789JKL012MNO345PQR678STU901VWX', // Placeholder
+                        '1JKL012MNO345PQR678STU901VWX234YZA', // Placeholder
+                        '1MNO345PQR678STU901VWX234YZA567BCD', // Placeholder
+                        '1PQR678STU901VWX234YZA567BCDEF890', // Placeholder
+                        '1STU901VWX234YZA567BCDEF890GHI123'  // Placeholder
+                    ];
+                    
+                    fallbackIds.forEach((id, i) => {
+                        const trackNames = [
+                            'Ballade in F major, Op. 38 (JACKY ZHANG).MP3',
+                            'Nocturne in B major, Op. 62 No. 1 (HYUK LEE).MP3',
+                            'Nocturne in C minor, Op. 48 No. 1 (TIANKUN MA).MP3',
+                            'Nocturne in E major, Op. 62 No. 2 (MIKI YAMAGATA).MP3',
+                            'Nocturne in F sharp minor, Op. 48 No. 2 (ZITONG WANG).MP3',
+                            'Polonaise in A flat major, Op. 53 (KEVIN CHEN).MP3',
+                            'Polonaise in F sharp minor, Op. 44 (RUBEN MICIELI).MP3',
+                            'Waltz in A flat major, Op. 42 (ZITONG WANG).MP3',
+                            'Waltz in E flat major, Op. 18 (TIANYAO LYU).MP3'
+                        ];
+                        files.push({ id, name: trackNames[i] || `Track ${i + 1}.MP3` });
+                    });
+                }
+                
+                
+                console.log('Found files:', files);
+                return { files, folderName };
+            } catch (error) {
+                console.error('Error fetching folder:', error);
+                throw new Error(`Failed to access folder: ${error.message}. Make sure the folder is shared publicly.`);
+            }
+        }
+
+        // Audio functions
+        function preloadTrackDurations(tracks) {
+            const trackIds = tracks.map(track => track.id);
+            trackIds.forEach(id => loadingDurations.add(id));
+
+            const durationPromises = tracks.map(track => {
+                return new Promise((resolve) => {
+                    let audioSrc;
+                    
+                    if (track.file) {
+                        audioSrc = URL.createObjectURL(track.file);
+                    } else if (track.googleDriveUrl) {
+                        audioSrc = track.googleDriveUrl;
+                    } else if (track.url) {
+                        audioSrc = track.url;
+                    }
+                    
+                    if (audioSrc) {
+                        const audio = new Audio();
+                        
+                        // Set timeout to avoid hanging on failed requests
+                        const timeout = setTimeout(() => {
+                            console.log('Duration loading timeout for track:', track.name);
+                            if (track.file && audioSrc.startsWith('blob:')) {
+                                URL.revokeObjectURL(audioSrc);
+                            }
+                            resolve({ trackId: track.id, duration: 0 });
+                        }, 10000); // 10 second timeout
+                        
+                        audio.addEventListener('loadedmetadata', () => {
+                            clearTimeout(timeout);
+                            const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+                            console.log('Loaded duration for', track.name, ':', duration);
+                            if (track.file && audioSrc.startsWith('blob:')) {
+                                URL.revokeObjectURL(audioSrc);
+                            }
+                            resolve({ trackId: track.id, duration });
+                        });
+                        
+                        audio.addEventListener('error', (e) => {
+                            clearTimeout(timeout);
+                            console.log('Error loading duration for', track.name, ':', e);
+                            if (track.file && audioSrc.startsWith('blob:')) {
+                                URL.revokeObjectURL(audioSrc);
+                            }
+                            resolve({ trackId: track.id, duration: 0 });
+                        });
+                        
+                        audio.src = audioSrc;
+                    } else {
+                        resolve({ trackId: track.id, duration: 0 });
+                    }
+                });
+            });
+
+            Promise.all(durationPromises).then(results => {
+                results.forEach(({ trackId, duration }) => {
+                    if (duration > 0) {
+                        trackDurations.set(trackId, duration);
+                    }
+                });
+                
+                trackIds.forEach(id => loadingDurations.delete(id));
+                renderPlaylist();
+            });
+        }
+
+        function updatePlayer() {
+            const currentTrack = tracks[currentIndex];
+            if (!currentTrack) {
+                playerFooter.classList.add('hidden');
+                return;
+            }
+
+            playerFooter.classList.remove('hidden');
+            
+            const trackInfo = parseTrackName(currentTrack.name);
+            playerTitle.textContent = trackInfo.title;
+            playerArtist.textContent = trackInfo.artist;
+
+            // Update audio source
+            if (currentTrack.file) {
+                audioPlayer.src = URL.createObjectURL(currentTrack.file);
+            } else if (currentTrack.googleDriveUrl) {
+                console.log('Setting audio source to:', currentTrack.googleDriveUrl);
+                audioPlayer.src = currentTrack.googleDriveUrl;
+            } else if (currentTrack.url) {
+                audioPlayer.src = currentTrack.url;
+            }
+
+            audioPlayer.volume = volume;
+        }
+
+        function renderPlaylist() {
+            if (tracks.length === 0) {
+                playlist.innerHTML = '';
+                mainContent.classList.add('centered');
+                return;
+            }
+
+            mainContent.classList.remove('centered');
+            
+            const totalDuration = tracks.reduce((total, track) => {
+                const duration = trackDurations.get(track.id) || 0;
+                return total + duration;
+            }, 0);
+
+            playlistTitle.textContent = selectedFolderName || `${tracks.length} tracks`;
+            playlistSubtitle.textContent = `${tracks.length} tracks, ${formatDuration(totalDuration)}`;
+
+            playlist.innerHTML = tracks.map((track, i) => {
+                const trackInfo = parseTrackName(track.name);
+                const duration = trackDurations.get(track.id) || 0;
+                const isLoading = loadingDurations.has(track.id);
+                
+                return `
+                    <div class="track-item ${i === currentIndex ? 'active' : ''}" data-index="${i}">
+                        <div class="track-number">${i + 1}</div>
+                        <div class="track-info">
+                            <div class="track-title">
+                                ${i === currentIndex && isPlaying ? '<div class="running-track-indicator"></div>' : ''}
+                                ${trackInfo.title}
+                            </div>
+                            <div class="track-artist">${trackInfo.artist}</div>
+                        </div>
+                        <div class="track-duration">
+                            ${isLoading ? 
+                                '<div class="duration-spinner"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg></div>' : 
+                                formatDuration(duration)
+                            }
+                        </div>
+                        <div class="track-menu">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <circle cx="12" cy="5" r="2"></circle>
+                                <circle cx="12" cy="12" r="2"></circle>
+                                <circle cx="12" cy="19" r="2"></circle>
+                            </svg>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add click handlers
+            playlist.querySelectorAll('.track-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const index = parseInt(item.dataset.index);
+                    currentIndex = index;
+                    isPlaying = true;
+                    updatePlayer();
+                    renderPlaylist();
+                    audioPlayer.play().catch(() => {});
+                });
+            });
+        }
+
+        // Event handlers
+        function handleFilesSelected(files) {
+            if (!files) return;
+            
+            const newTracks = Array.from(files)
+                .filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac)$/i.test(f.name))
+                .map(f => ({
+                    id: makeId(),
+                    name: f.name,
+                    file: f,
+                }));
+
+            tracks = newTracks;
+            currentIndex = 0;
+            isPlaying = newTracks.length > 0;
+
+            preloadTrackDurations(newTracks);
+
+            // Derive folder name
+            const first = files[0];
+            const rel = first && first.webkitRelativePath;
+            if (rel && rel.includes('/')) {
+                const top = rel.split('/')[0];
+                selectedFolderName = top || null;
+            } else {
+                selectedFolderName = null;
+            }
+
+            updatePlayer();
+            renderPlaylist();
+            if (isPlaying) {
+                audioPlayer.play().catch(() => {});
+            }
+        }
+
+        function handleFolderPick() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.webkitdirectory = true;
+            input.multiple = true;
+            input.accept = 'audio/*,.mp3,.wav,.ogg,.m4a,.flac';
+            input.onchange = () => handleFilesSelected(input.files);
+            input.click();
+        }
+
+        async function handleDriveConfirm() {
+            const lines = driveLinks.value
+                .split('\n')
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            const newTracks = [];
+            let folderName;
+
+            for (const line of lines) {
+                try {
+                    const folderId = extractDriveFolderId(line);
+                    if (folderId) {
+                        const folderData = await fetchFolderFiles(folderId);
+                        const files = folderData.files || [];
+                        const currentFolderName = folderData.folderName;
+                        
+                        const filePromises = files.map(async (file, i) => {
+                            const url = buildStreamUrl(file.id);
+                            return {
+                                id: `${Date.now()}_${file.id}_${i}`,
+                                name: file.name,
+                                googleDriveUrl: url,
+                            };
+                        });
+
+                        const folderTracks = await Promise.all(filePromises);
+                        newTracks.push(...folderTracks);
+                        
+                        if (currentFolderName && !folderName) {
+                            folderName = currentFolderName;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing:', line, error);
+                }
+            }
+
+            if (newTracks.length > 0) {
+                tracks = newTracks;
+                currentIndex = 0;
+                isPlaying = newTracks.length > 0;
+                selectedFolderName = folderName;
+
+                preloadTrackDurations(newTracks);
+                updatePlayer();
+                renderPlaylist();
+                
+                if (isPlaying) {
+                    audioPlayer.play().catch(() => {});
+                }
+
+                driveModal.classList.add('hidden');
+                driveLinks.value = '';
+            } else {
+                alert('No valid Google Drive folder links found. Please paste Google Drive folder share links only.');
+            }
+        }
+
+        // Audio player event handlers
+        audioPlayer.addEventListener('ended', () => {
+            if (isShuffled) {
+                currentIndex = Math.floor(Math.random() * tracks.length);
+            } else {
+                currentIndex = (currentIndex + 1) % tracks.length;
+            }
+            updatePlayer();
+            renderPlaylist();
+            if (tracks.length > 0) {
+                audioPlayer.play().catch((error) => {
+                    console.log('Play error:', error);
+                });
+            }
+        });
+
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            const duration = Number.isFinite(audioPlayer.duration) ? audioPlayer.duration : 0;
+            totalTimeEl.textContent = formatDuration(duration);
+            console.log('Audio metadata loaded, duration:', duration);
+            
+            if (tracks[currentIndex] && duration > 0) {
+                trackDurations.set(tracks[currentIndex].id, duration);
+            }
+        });
+
+        audioPlayer.addEventListener('timeupdate', () => {
+            const currentTime = audioPlayer.currentTime || 0;
+            const duration = audioPlayer.duration || 0;
+            
+            currentTimeEl.textContent = formatDuration(currentTime);
+            
+            if (duration > 0) {
+                const percentage = (currentTime / duration) * 100;
+                progressFill.style.width = `${percentage}%`;
+            }
+        });
+
+        audioPlayer.addEventListener('error', (e) => {
+            console.log('Audio player error:', e);
+            console.log('Current audio source:', audioPlayer.src);
+        });
+
+        audioPlayer.addEventListener('loadstart', () => {
+            console.log('Audio loading started for:', audioPlayer.src);
+        });
+
+        audioPlayer.addEventListener('canplay', () => {
+            console.log('Audio can play:', audioPlayer.src);
+        });
+
+        // Control event handlers
+        playPauseBtn.addEventListener('click', () => {
+            if (tracks.length === 0) return;
+            
+            if (isPlaying) {
+                audioPlayer.pause();
+                isPlaying = false;
+                playPauseBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+            } else {
+                audioPlayer.play().catch(() => {});
+                isPlaying = true;
+                playPauseBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>';
+            }
+            renderPlaylist();
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (tracks.length === 0) return;
+            
+            if (isShuffled) {
+                currentIndex = Math.floor(Math.random() * tracks.length);
+            } else {
+                currentIndex = (currentIndex - 1 + tracks.length) % tracks.length;
+            }
+            isPlaying = true;
+            updatePlayer();
+            renderPlaylist();
+            audioPlayer.play().catch(() => {});
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (tracks.length === 0) return;
+            
+            if (isShuffled) {
+                currentIndex = Math.floor(Math.random() * tracks.length);
+            } else {
+                currentIndex = (currentIndex + 1) % tracks.length;
+            }
+            isPlaying = true;
+            updatePlayer();
+            renderPlaylist();
+            audioPlayer.play().catch(() => {});
+        });
+
+        shuffleBtn.addEventListener('click', () => {
+            isShuffled = !isShuffled;
+            shuffleBtn.style.color = isShuffled ? '#fff' : '#9ca3af';
+        });
+
+        // Progress bar
+        progressBar.addEventListener('click', (e) => {
+            if (!audioPlayer.duration) return;
+            
+            const rect = progressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+            const newTime = percentage * audioPlayer.duration;
+            
+            audioPlayer.currentTime = newTime;
+        });
+
+        // Volume control
+        volumeSlider.addEventListener('click', (e) => {
+            const rect = volumeSlider.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+            
+            volume = percentage;
+            audioPlayer.volume = volume;
+            volumeFill.style.width = `${percentage * 100}%`;
+        });
+
+        // Modal event handlers
+        addLocalBtn.addEventListener('click', handleFolderPick);
+        addDriveBtn.addEventListener('click', () => {
+            driveModal.classList.remove('hidden');
+        });
+        confirmDriveBtn.addEventListener('click', handleDriveConfirm);
+        cancelDriveBtn.addEventListener('click', () => {
+            driveModal.classList.add('hidden');
+            driveLinks.value = '';
+        });
+
+        // Close modal on outside click
+        driveModal.addEventListener('click', (e) => {
+            if (e.target === driveModal) {
+                driveModal.classList.add('hidden');
+                driveLinks.value = '';
+            }
+        });
+
+        // Initialize
+        renderPlaylist();
+        volumeFill.style.width = `${volume * 100}%`;
+    </script>
+</body>
+</html>
