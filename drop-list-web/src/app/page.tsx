@@ -252,11 +252,11 @@ export default function HomePage() {
       <div suppressHydrationWarning>
         <div className="container">
           <div className="header">
-            <button className="back-btn">
+            {/* <button className="back-btn">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M15 19l-7-7 7-7"></path>
               </svg>
-            </button>
+            </button> */}
             <div className="header-right">
               {/* <button className="header-btn">Listen</button>
               <button className="header-btn">
