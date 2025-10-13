@@ -3,9 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TrackType } from '../lib/types';
-import { Button, Slider, Space, Typography } from 'antd';
-import { CaretRightOutlined, LeftOutlined, PauseOutlined, RightOutlined, StepBackwardOutlined, StepForwardFilled, StepForwardOutlined, SwapOutlined } from '@ant-design/icons';
-const { Text } = Typography;
+import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined, SwapOutlined } from '@ant-design/icons';
 
 type Props = {
     track?: TrackType;
@@ -18,6 +16,7 @@ type Props = {
     handlePrev: () => void;
     handleNext: () => void;
     handleShuffleToggle: () => void;
+    onDurationLoaded?: (trackId: string, duration: number) => void;
 };
 
 export default function AudioPlayer({
@@ -31,11 +30,13 @@ export default function AudioPlayer({
     handlePrev,
     handleNext,
     handleShuffleToggle,
+    onDurationLoaded,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [duration, setDuration] = useState<number>(0);
     const [currentTime, setCurrentTime] = useState<number>(0);
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
+    const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
 
     // Memoize blob URL so it doesn't recreate on every render
     const src = useMemo(() => {
@@ -75,8 +76,14 @@ export default function AudioPlayer({
 
     const handleLoadedMetadata = () => {
         const audio = audioRef.current;
-        if (!audio) return;
-        setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+        if (!audio || !track) return;
+        const trackDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
+        setDuration(trackDuration);
+        
+        // Notify parent component about the duration
+        if (onDurationLoaded && trackDuration > 0) {
+            onDurationLoaded(track.id, trackDuration);
+        }
     };
 
     const handleTimeUpdate = () => {
@@ -111,63 +118,202 @@ export default function AudioPlayer({
         return `${m}:${s.toString().padStart(2, '0')}`;
     };
 
+    const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+    const volumePercentage = volume * 100;
+
+    // Parse track name to extract title and artist
+    const parseTrackName = (name: string) => {
+        // Remove file extension first
+        const nameWithoutExt = name.replace(/\.[^/.]+$/, '');
+        
+        // Try to match pattern: "Title (Artist)" or "Title(Artist)"
+        const match = nameWithoutExt.match(/^(.+?)\s*\(([^)]+)\)/);
+        if (match) {
+            return {
+                title: match[1].trim(),
+                artist: match[2].trim()
+            };
+        }
+        
+        // If no parentheses, try to extract artist from common patterns
+        // Look for patterns like "Title - Artist" or "Title by Artist"
+        const dashMatch = nameWithoutExt.match(/^(.+?)\s*-\s*(.+)$/);
+        if (dashMatch) {
+            return {
+                title: dashMatch[1].trim(),
+                artist: dashMatch[2].trim()
+            };
+        }
+        
+        const byMatch = nameWithoutExt.match(/^(.+?)\s+by\s+(.+)$/i);
+        if (byMatch) {
+            return {
+                title: byMatch[1].trim(),
+                artist: byMatch[2].trim()
+            };
+        }
+        
+        return {
+            title: nameWithoutExt,
+            artist: 'Local File'
+        };
+    };
+
+    const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
+
     return (
-        <div className="audioBar">
-            <div className="audioPlayer">
-                
-                <div className='leftPlayer'>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260 }}>
-                    <Text type="secondary" style={{ width: 44, textAlign: 'right' }}>{formatTime(currentTime)}</Text>
-                    <Slider
-                        className="musicSlider"
-                        min={0}
-                        max={duration || 0}
-                        step={0.1}
-                        value={Math.min(currentTime, duration || 0)}
-                        onChange={(value) => {
-                            handleSeekStart();
-                            handleSeekChange(value);
-                        }}
-                        onAfterChange={handleSeekEnd}
-                        disabled={!track || !duration}
-                    />
-                    <Text type="secondary" style={{ width: 44 }}>{formatTime(duration)}</Text>
+        <div className="player-footer">
+            <div className="player-container">
+                {/* Track Info */}
+                <div className="player-track-info">
+                    <div className="player-album-art"></div>
+                    <div className="player-text">
+                        <div className="player-track-title">
+                            {trackInfo.title}
+                        </div>
+                        <div className="player-track-artist">{trackInfo.artist}</div>
+                    </div>
                 </div>
+
+                {/* Controls Section */}
+                <div className="player-controls-section">
+                    <div className="player-controls">
+                        <button 
+                            className="control-btn" 
+                            onClick={handlePrev} 
+                            disabled={!track}
+                        >
+                            <StepBackwardOutlined />
+                        </button>
+                        <button 
+                            className="play-pause-btn" 
+                            onClick={onPlayPauseToggle} 
+                            disabled={!track}
+                        >
+                            {isPlaying ? <PauseOutlined /> : <CaretRightOutlined />}
+                        </button>
+                        <button 
+                            className="control-btn" 
+                            onClick={handleNext} 
+                            disabled={!track}
+                        >
+                            <StepForwardOutlined />
+                        </button>
+                        <button 
+                            className="control-btn" 
+                            onClick={handleShuffleToggle} 
+                            disabled={!track}
+                            style={{ color: isShuffled ? '#fff' : '#9ca3af' }}
+                        >
+                            <SwapOutlined />
+                        </button>
+                    </div>
                     
-                    <Button onClick={onPlayPauseToggle} disabled={!track} type="text">
-                        {isPlaying ? <PauseOutlined className="text-xl" /> : <CaretRightOutlined className="text-xl" />}
-                    </Button>
+                    <div className="progress-bar-container">
+                        <span className="time-label">{formatTime(currentTime)}</span>
+                        <div 
+                            className="progress-bar"
+                            onMouseDown={(e) => {
+                                if (!duration) return;
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const updateProgress = (clientX: number) => {
+                                    const clickX = clientX - rect.left;
+                                    const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+                                    const newTime = percentage * duration;
+                                    setCurrentTime(newTime);
+                                    if (audioRef.current) {
+                                        audioRef.current.currentTime = newTime;
+                                    }
+                                };
+                                
+                                updateProgress(e.clientX);
+                                
+                                const handleMouseMove = (e: MouseEvent) => {
+                                    updateProgress(e.clientX);
+                                };
+                                
+                                const handleMouseUp = () => {
+                                    document.removeEventListener('mousemove', handleMouseMove);
+                                    document.removeEventListener('mouseup', handleMouseUp);
+                                };
+                                
+                                document.addEventListener('mousemove', handleMouseMove);
+                                document.addEventListener('mouseup', handleMouseUp);
+                            }}
+                            onClick={(e) => {
+                                if (!duration) return;
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const clickX = e.clientX - rect.left;
+                                const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+                                const newTime = percentage * duration;
+                                setCurrentTime(newTime);
+                                if (audioRef.current) {
+                                    audioRef.current.currentTime = newTime;
+                                }
+                            }}
+                        >
+                            <div 
+                                className="progress-bar-fill" 
+                                style={{ width: `${progressPercentage}%` }}
+                            ></div>
+                        </div>
+                        <span className="time-label">{formatTime(duration)}</span>
+                    </div>
                 </div>
 
-                <div className='rightPlayer'>
-                    <Button onClick={handleNext} disabled={!track} type="text"><StepBackwardOutlined className="text-xl" /></Button>
-                    <Button onClick={handlePrev} disabled={!track} type="text"><StepForwardFilled className="text-xl" /></Button>
-                    <Button type="text" onClick={handleShuffleToggle} disabled={!track}>
-                        <SwapOutlined />
-                    </Button>
-                </div>
-
-                <div className='volumeGroup'>
-                <Text type="secondary">Volume</Text>
-                    <Slider
-                        className="volumeSlider"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={volume}
-                        onChange={(v) => onVolumeChange(Array.isArray(v) ? v[0] : v)}
-                        disabled={!track}
-                    />
-                    <audio
-                        ref={audioRef}
-                        src={src}
-                        onEnded={onEnded}
-                        onLoadedMetadata={handleLoadedMetadata}
-                        onTimeUpdate={handleTimeUpdate}
-                    />
+                {/* Volume Control */}
+                <div className="volume-control">
+                    <button className="volume-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                        </svg>
+                    </button>
+                    <div 
+                        className="volume-slider"
+                        onMouseDown={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const updateVolume = (clientX: number) => {
+                                const clickX = clientX - rect.left;
+                                const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+                                onVolumeChange(percentage);
+                            };
+                            
+                            updateVolume(e.clientX);
+                            
+                            const handleMouseMove = (e: MouseEvent) => {
+                                updateVolume(e.clientX);
+                            };
+                            
+                            const handleMouseUp = () => {
+                                document.removeEventListener('mousemove', handleMouseMove);
+                                document.removeEventListener('mouseup', handleMouseUp);
+                            };
+                            
+                            document.addEventListener('mousemove', handleMouseMove);
+                            document.addEventListener('mouseup', handleMouseUp);
+                        }}
+                        onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const clickX = e.clientX - rect.left;
+                            const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+                            onVolumeChange(percentage);
+                        }}
+                    >
+                        <div 
+                            className="volume-slider-fill" 
+                            style={{ width: `${volumePercentage}%` }}
+                        ></div>
+                    </div>
                 </div>
             </div>
+
+            <audio
+                ref={audioRef}
+                src={src}
+                onEnded={onEnded}
+                onLoadedMetadata={handleLoadedMetadata}
+                onTimeUpdate={handleTimeUpdate}
+            />
         </div>
     );
 }
