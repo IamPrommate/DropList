@@ -154,9 +154,19 @@ export default function HomePage() {
 
   const formatDuration = (seconds: number) => {
     if (!seconds || !Number.isFinite(seconds)) return '0:00';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    // If 1 hour or more, show as H:MM:SS
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    // Otherwise show as MM:SS
+    else {
+      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
   };
 
   // Parse track name to extract title and artist
@@ -221,7 +231,7 @@ export default function HomePage() {
                 </svg>
                 Manage
               </button> */}
-              <button className="header-btn" onClick={handleFolderPick}>+ Add</button>
+              {/* <button className="header-btn" onClick={handleFolderPick}>+ Add</button> */}
               {/* <button className="share-btn">Share</button> */}
             </div>
           </div>
@@ -229,7 +239,7 @@ export default function HomePage() {
           <div className="main-content">
             <div className="album-art"></div>
             <div className="info-section">
-              <h1 className="title">{selectedFolderName || 'DropList Player'}</h1>
+              <h1 className="title">{selectedFolderName || 'DropList'}</h1>
               <p className="subtitle">{tracks.length} tracks, {formatDuration(totalDuration)}</p>
               <div className="buttons">
                 <button 
@@ -249,14 +259,12 @@ export default function HomePage() {
                   </svg>
                   {isPlaying ? 'Pause' : 'Play'}
                 </button>
-                {/* <button className="download-btn">
+                <button className="download-btn" onClick={handleFolderPick}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                    <path d="M12 5v14m-7-7h14"></path>
                   </svg>
-                  Download
-                </button> */}
+                  Add
+                </button>
               </div>
             </div>
           </div>

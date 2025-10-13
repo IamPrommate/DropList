@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TrackType } from '../lib/types';
-import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined, SwapOutlined } from '@ant-design/icons';
+import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
 
 type Props = {
     track?: TrackType;
@@ -113,9 +113,19 @@ export default function AudioPlayer({
 
     const formatTime = (sec: number) => {
         if (!sec || !Number.isFinite(sec)) return '0:00';
-        const m = Math.floor(sec / 60);
-        const s = Math.floor(sec % 60);
-        return `${m}:${s.toString().padStart(2, '0')}`;
+        
+        const hours = Math.floor(sec / 3600);
+        const minutes = Math.floor((sec % 3600) / 60);
+        const seconds = Math.floor(sec % 60);
+        
+        // If 1 hour or more, show as H:MM:SS
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        // Otherwise show as MM:SS
+        else {
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
     };
 
     const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -183,7 +193,7 @@ export default function AudioPlayer({
                             onClick={handlePrev} 
                             disabled={!track}
                         >
-                            <StepBackwardOutlined />
+                            <StepBackwardOutlined style={{ fontSize: '20px' }} />
                         </button>
                         <button 
                             className="play-pause-btn" 
@@ -197,7 +207,7 @@ export default function AudioPlayer({
                             onClick={handleNext} 
                             disabled={!track}
                         >
-                            <StepForwardOutlined />
+                            <StepForwardOutlined style={{ fontSize: '20px' }} />
                         </button>
                         <button 
                             className="control-btn" 
@@ -205,7 +215,9 @@ export default function AudioPlayer({
                             disabled={!track}
                             style={{ color: isShuffled ? '#fff' : '#9ca3af' }}
                         >
-                            <SwapOutlined />
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+                            </svg>
                         </button>
                     </div>
                     
@@ -264,12 +276,13 @@ export default function AudioPlayer({
                 {/* Volume Control */}
                 <div className="volume-control">
                     <button className="volume-btn">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
                         </svg>
                     </button>
                     <div 
                         className="volume-slider"
+                        style={{ width: '117px' }}
                         onMouseDown={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect();
                             const updateVolume = (clientX: number) => {
