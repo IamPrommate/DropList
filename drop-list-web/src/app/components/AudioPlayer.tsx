@@ -38,12 +38,13 @@ export default function AudioPlayer({
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
 
-    // Memoize blob URL so it doesn't recreate on every render
+    // Memoize source: prefer remote URLs over local blob
     const src = useMemo(() => {
-        if (track?.file) {
-            return URL.createObjectURL(track.file);
-        }
-        return track?.url;
+        if (!track) return undefined;
+        if (track.googleDriveUrl) return track.googleDriveUrl;
+        if (track.url) return track.url;
+        if (track.file) return URL.createObjectURL(track.file);
+        return undefined;
     }, [track]);
 
     useEffect(() => {
@@ -54,7 +55,7 @@ export default function AudioPlayer({
 
     useEffect(() => {
         return () => {
-            if (src && src.startsWith('blob:')) URL.revokeObjectURL(src);
+            if (src && typeof src === 'string' && src.startsWith('blob:')) URL.revokeObjectURL(src);
         };
     }, [src]);
 

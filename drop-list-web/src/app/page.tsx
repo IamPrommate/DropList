@@ -4,8 +4,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import AudioPlayer from './components/AudioPlayer';
 import { PlaylistType, TrackType } from './lib/types';
-import { Layout, Button, Space, Switch, Typography, List } from 'antd';
+import { Layout, Button, Space, Switch, Typography, List , Divider} from 'antd';
 import AlbumList from './components/AlbumList';
+import GoogleDrivePicker from './components/GoogleDrivePicker';
 import './layout.scss';
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -265,9 +266,19 @@ export default function HomePage() {
                   </svg>
                   Add
                 </button>
+                <GoogleDrivePicker
+                  onPicked={(picked) => {
+                    console.log('Drive tracks picked:', picked);
+                    setTracks(prev => [...prev, ...picked]);
+                    setCurrentIndex(0);
+                    setIsPlaying(picked.length > 0);
+                  }}
+                />
               </div>
             </div>
           </div>
+
+          <Divider />
 
           <div className="playlist">
             {tracks.map((track, i) => {

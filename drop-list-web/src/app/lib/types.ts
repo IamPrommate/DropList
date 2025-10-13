@@ -3,7 +3,8 @@ export type TrackType = {
     id: string;
     name: string;
     file?: File;
-    url?: string; // for future backend-served files
+    url?: string; // generic URL source
+    googleDriveUrl?: string; // direct streaming URL from Google Drive
   };
   
   export type PlaylistType = {
