@@ -7,6 +7,7 @@ import "./google-drive.scss";
 
 type Props = {
   onPicked: (tracks: TrackType[], folderName?: string) => void;
+  variant?: 'button' | 'dropdown';
 };
 
 function extractDriveFolderId(input: string): string | null {
@@ -108,7 +109,7 @@ async function fetchFolderFiles(
   }
 }
 
-export default function GoogleDrivePicker({ onPicked }: Props) {
+export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Props) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
   const [useApiKey, setUseApiKey] = useState(false);
@@ -183,20 +184,35 @@ export default function GoogleDrivePicker({ onPicked }: Props) {
 
   return (
     <>
-      <button className="add-btn-ggd" onClick={() => setOpen(true)}>
-        {" "}
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M12 5v14m-7-7h14"></path>
-        </svg>{" "}
-        Add from Google Drive
-      </button>
+      {variant === 'dropdown' ? (
+        <div className="dropdown-item" onClick={() => setOpen(true)}>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M12 5v14m-7-7h14"></path>
+          </svg>
+          Add from Google Drive
+        </div>
+      ) : (
+        <button className="add-btn-ggd" onClick={() => setOpen(true)}>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M12 5v14m-7-7h14"></path>
+          </svg>
+          Add from Google Drive
+        </button>
+      )}
       <Modal
         title="Add Google Drive audio links"
         open={open}

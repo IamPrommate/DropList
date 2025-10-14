@@ -7,6 +7,7 @@ import { PlaylistType, TrackType } from './lib/types';
 import { Layout, Button, Space, Switch, Typography, List , Divider} from 'antd';
 import AlbumList from './components/AlbumList';
 import GoogleDrivePicker from './components/GoogleDrivePicker';
+import Sidebar from './components/Sidebar';
 import './layout.scss';
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -26,6 +27,7 @@ export default function HomePage() {
   const [albums, setAlbums] = useState<string[]>([]);
   const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
   const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const currentTrack = tracks[currentIndex];
 
@@ -271,157 +273,184 @@ export default function HomePage() {
   return (
     <main className="pageRoot">
       <div suppressHydrationWarning>
-        <div className="container">
-          <div className="header">
-            {/* <button className="back-btn">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M15 19l-7-7 7-7"></path>
-              </svg>
-            </button> */}
-            <div className="header-right">
-              {/* <button className="header-btn">Listen</button>
-              <button className="header-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{display: 'inline', marginRight: '4px'}}>
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <path d="m21 21-4.35-4.35"></path>
-                </svg>
-                Manage
-              </button> */}
-              {/* <button className="header-btn" onClick={handleFolderPick}>+ Add</button> */}
-              {/* <button className="share-btn">Share</button> */}
-            </div>
-          </div>
+        <div className="app-layout">
+          {/* Left Sidebar */}
+          <Sidebar
+            selectedFolderName={selectedFolderName}
+            tracks={tracks}
+            onFolderPick={handleFolderPick}
+            onGoogleDrivePicked={(picked, folderName) => {
+              console.log('Drive tracks picked:', picked);
+              setTracks(picked); // Replace tracks instead of concatenating
+              setCurrentIndex(0);
+              setIsPlaying(picked.length > 0);
+              
+              // Set folder name if provided
+              if (folderName) {
+                setSelectedFolderName(folderName);
+              }
+              
+              // Preload durations for Google Drive tracks
+              preloadTrackDurations(picked);
+            }}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
 
-          <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
-            <div className="album-art"></div>
-            <div className="info-section">
-              <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1>
-              <p className="subtitle">
-                {tracks.length > 0 
-                  ? `${tracks.length} tracks, ${formatDuration(totalDuration)}`
-                  : 'Ready to drop?'
-                }
-              </p>
-              <div className="buttons">
-                {tracks.length > 0 && (
-                  <button 
-                    className="play-btn"
-                    onClick={() => {
-                      if (tracks.length > 0) {
-                        setIsPlaying(!isPlaying);
-                      }
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      {isPlaying ? (
-                        <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
-                      ) : (
-                        <path d="M8 5v14l11-7z"></path>
-                      )}
-                    </svg>
-                    {isPlaying ? 'Pause' : 'Play'}
-                  </button>
-                )}
-                <button className="add-btn" onClick={handleFolderPick}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14m-7-7h14"></path>
+          {/* Main Content */}
+          <div className="main-wrapper">
+            <div className="container">
+              <div className="header">
+                {/* <button className="back-btn">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M15 19l-7-7 7-7"></path>
                   </svg>
-                  Add from local
-                </button>
-                <GoogleDrivePicker
-                  onPicked={(picked, folderName) => {
-                    console.log('Drive tracks picked:', picked);
-                    setTracks(picked); // Replace tracks instead of concatenating
-                    setCurrentIndex(0);
-                    setIsPlaying(picked.length > 0);
-                    
-                    // Set folder name if provided
-                    if (folderName) {
-                      setSelectedFolderName(folderName);
-                    }
-                    
-                    // Preload durations for Google Drive tracks
-                    preloadTrackDurations(picked);
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {currentTrack && (<Divider />)}
-
-          <div className="playlist">
-            {tracks.map((track, i) => {
-              const trackInfo = parseTrackName(track.name);
-              const duration = trackDurations.get(track.id) || 0;
-              return (
-                <div 
-                  key={track.id}
-                  className={`track-item ${i === currentIndex ? 'active' : ''}`}
-                  onClick={() => {
-                    setCurrentIndex(i);
-                    setIsPlaying(true);
-                  }}
-                >
-                  <div className="track-number">{i + 1}</div>
-                  <div className="track-info">
-                    <div className="track-title">
-                      {i === currentIndex && isPlaying && (
-                        <div className="running-track-indicator"></div>
-                      )}
-                      {trackInfo.title}
-                    </div>
-                    <div className="track-artist">{trackInfo.artist}</div>
-                  </div>
-                  <div className="track-duration">
-                    {loadingDurations.has(track.id) ? (
-                      <div className="duration-spinner">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                        </svg>
-                      </div>
-                    ) : (
-                      formatDuration(duration)
-                    )}
-                  </div>
-                  <div className="track-menu">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="5" r="2"></circle>
-                      <circle cx="12" cy="12" r="2"></circle>
-                      <circle cx="12" cy="19" r="2"></circle>
+                </button> */}
+                <div className="header-right">
+                  {/* <button className="header-btn">Listen</button>
+                  <button className="header-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{display: 'inline', marginRight: '4px'}}>
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
                     </svg>
+                    Manage
+                  </button> */}
+                  {/* <button className="header-btn" onClick={handleFolderPick}>+ Add</button> */}
+                  {/* <button className="share-btn">Share</button> */}
+                </div>
+              </div>
+
+              <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
+                <div className="album-art"></div>
+                <div className="info-section">
+                  <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1>
+                  <p className="subtitle">
+                    {tracks.length > 0 
+                      ? `${tracks.length} tracks, ${formatDuration(totalDuration)}`
+                      : 'Ready to drop?'
+                    }
+                  </p>
+                  <div className="buttons">
+                    {tracks.length > 0 && (
+                      <button 
+                        className="play-btn"
+                        onClick={() => {
+                          if (tracks.length > 0) {
+                            setIsPlaying(!isPlaying);
+                          }
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          {isPlaying ? (
+                            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                          ) : (
+                            <path d="M8 5v14l11-7z"></path>
+                          )}
+                        </svg>
+                        {isPlaying ? 'Pause' : 'Play'}
+                      </button>
+                    )}
+                    <button className="add-btn" onClick={handleFolderPick}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 5v14m-7-7h14"></path>
+                      </svg>
+                      Add from local
+                    </button>
+                    <GoogleDrivePicker
+                      onPicked={(picked, folderName) => {
+                        console.log('Drive tracks picked:', picked);
+                        setTracks(picked); // Replace tracks instead of concatenating
+                        setCurrentIndex(0);
+                        setIsPlaying(picked.length > 0);
+                        
+                        // Set folder name if provided
+                        if (folderName) {
+                          setSelectedFolderName(folderName);
+                        }
+                        
+                        // Preload durations for Google Drive tracks
+                        preloadTrackDurations(picked);
+                      }}
+                    />
                   </div>
                 </div>
-              );
-            })}
+              </div>
+
+              {currentTrack && (<Divider />)}
+
+              <div className="playlist">
+                {tracks.map((track, i) => {
+                  const trackInfo = parseTrackName(track.name);
+                  const duration = trackDurations.get(track.id) || 0;
+                  return (
+                    <div 
+                      key={track.id}
+                      className={`track-item ${i === currentIndex ? 'active' : ''}`}
+                      onClick={() => {
+                        setCurrentIndex(i);
+                        setIsPlaying(true);
+                      }}
+                    >
+                      <div className="track-number">{i + 1}</div>
+                      <div className="track-info">
+                        <div className="track-title">
+                          {i === currentIndex && isPlaying && (
+                            <div className="running-track-indicator"></div>
+                          )}
+                          {trackInfo.title}
+                        </div>
+                        <div className="track-artist">{trackInfo.artist}</div>
+                      </div>
+                      <div className="track-duration">
+                        {loadingDurations.has(track.id) ? (
+                          <div className="duration-spinner">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                            </svg>
+                          </div>
+                        ) : (
+                          formatDuration(duration)
+                        )}
+                      </div>
+                      <div className="track-menu">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="2"></circle>
+                          <circle cx="12" cy="12" r="2"></circle>
+                          <circle cx="12" cy="19" r="2"></circle>
+                        </svg>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* <div className="audio-options">
+                <button className="audio-options-btn">
+                  <span>⚙️</span> Audio options
+                </button>
+              </div> */}
+            </div>
+
+            {/* Fixed bottom audio bar via SCSS */}
+            {currentTrack && (
+              <AudioPlayer
+                track={currentTrack}
+                volume={volume}
+                onEnded={handleNext}
+                onVolumeChange={setVolume}
+                onPlayPauseToggle={() => setIsPlaying((p) => !p)}
+                isPlaying={isPlaying}
+                handlePrev={handlePrev}
+                handleNext={handleNext}
+                handleShuffleToggle={handleShuffleToggle}
+                handleRepeatToggle={handleRepeatToggle}
+                isShuffled={isShuffled}
+                isRepeated={isRepeated}
+                onDurationLoaded={handleDurationLoaded}
+              />
+            )}
           </div>
-
-          {/* <div className="audio-options">
-            <button className="audio-options-btn">
-              <span>⚙️</span> Audio options
-            </button>
-          </div> */}
         </div>
-
-        {/* Fixed bottom audio bar via SCSS */}
-        {currentTrack && (
-          <AudioPlayer
-            track={currentTrack}
-            volume={volume}
-            onEnded={handleNext}
-            onVolumeChange={setVolume}
-            onPlayPauseToggle={() => setIsPlaying((p) => !p)}
-            isPlaying={isPlaying}
-            handlePrev={handlePrev}
-            handleNext={handleNext}
-            handleShuffleToggle={handleShuffleToggle}
-            handleRepeatToggle={handleRepeatToggle}
-            isShuffled={isShuffled}
-            isRepeated={isRepeated}
-            onDurationLoaded={handleDurationLoaded}
-          />
-        )}
-
       </div>
     </main>
   );
