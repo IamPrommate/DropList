@@ -11,8 +11,10 @@
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
+    "@types/lodash": "^4.17.20",
     "antd": "^5.27.4",
     "googleapis": "^162.0.0",
+    "lodash": "^4.17.21",
     "next": "15.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",

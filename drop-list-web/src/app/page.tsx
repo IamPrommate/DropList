@@ -1,16 +1,21 @@
 // src/app/page.tsx
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import AudioPlayer from './components/AudioPlayer';
-import { PlaylistType, TrackType } from './lib/types';
-import { Layout, Button, Space, Switch, Typography, List , Divider} from 'antd';
-import AlbumList from './components/AlbumList';
+import { TrackType } from './lib/types';
+import { Divider} from 'antd';
 import GoogleDrivePicker from './components/GoogleDrivePicker';
 import Sidebar from './components/Sidebar';
+import { 
+  ShuffleState, 
+  createInitialShuffleState, 
+  getNextShuffleTrack, 
+  getPrevShuffleTrack, 
+  handleManualTrackSelection, 
+  resetShuffleState 
+} from '../utils/shuffle';
 import './layout.scss';
-const { Sider, Content } = Layout;
-const { Title, Text } = Typography;
 
 function makeId() {
   return Math.random().toString(36).slice(2);
@@ -24,25 +29,19 @@ export default function HomePage() {
   const [volume, setVolume] = useState(0.8);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
-  const [albums, setAlbums] = useState<string[]>([]);
   const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
   const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Shuffle state
+  const [shuffleState, setShuffleState] = useState<ShuffleState>({
+    queue: [],
+    queueIndex: 0,
+    recentlyPlayed: []
+  });
 
   const currentTrack = tracks[currentIndex];
 
-  const playlist: PlaylistType = useMemo(
-    () => ({
-      id: 'local',
-      name: 'Local Session',
-      tracks,
-      currentIndex,
-      isShuffled,
-      isRepeated,
-      volume,
-    }),
-    [tracks, currentIndex, isShuffled, isRepeated, volume]
-  );
 
   // Preload durations for all tracks (both local files and Google Drive URLs)
   const preloadTrackDurations = useCallback(async (tracks: TrackType[]) => {
@@ -133,18 +132,18 @@ export default function HomePage() {
     setCurrentIndex(0);
     setIsPlaying(next.length > 0);
 
+    // Reset shuffle state when new tracks are loaded
+    setShuffleState(resetShuffleState());
+
     // Preload durations for all tracks
     preloadTrackDurations(next);
 
     // Derive folder name when picking a directory (webkitRelativePath available)
-    const first: any = files[0];
-    const rel: string | undefined = first && (first.webkitRelativePath as string | undefined);
+    const first = files[0] as File & { webkitRelativePath?: string };
+    const rel: string | undefined = first?.webkitRelativePath;
     if (rel && rel.includes('/')) {
       const top = rel.split('/')[0];
       setSelectedFolderName(top || null);
-      if (top) {
-        setAlbums((prev) => (prev.includes(top) ? prev : [...prev, top]));
-      }
     } else {
       setSelectedFolderName(null);
     }
@@ -165,42 +164,57 @@ export default function HomePage() {
     if (tracks.length === 0) return;
     
     if (isShuffled) {
-      const next = Math.floor(Math.random() * tracks.length);
-      setCurrentIndex(next);
+      const result = getNextShuffleTrack(tracks, currentIndex, shuffleState);
+      if (result) {
+        setCurrentIndex(result.nextIndex);
+        setShuffleState(result.newState);
+      }
     } else {
-      setCurrentIndex((i) => (i + 1) % tracks.length);
+      const nextIndex = (currentIndex + 1) % tracks.length;
+      setCurrentIndex(nextIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled]);
+  }, [tracks, isShuffled, currentIndex, shuffleState]);
 
   const handlePrev = useCallback(() => {
     if (tracks.length === 0) return;
     if (isShuffled) {
-      const next = Math.floor(Math.random() * tracks.length);
-      setCurrentIndex(next);
+      const result = getPrevShuffleTrack(tracks, currentIndex, shuffleState);
+      if (result) {
+        setCurrentIndex(result.prevIndex);
+        setShuffleState(result.newState);
+      }
     } else {
-      setCurrentIndex((i) => (i - 1 + tracks.length) % tracks.length);
+      const prevIndex = (currentIndex - 1 + tracks.length) % tracks.length;
+      setCurrentIndex(prevIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled]);
+  }, [tracks, isShuffled, currentIndex, shuffleState]);
 
   const handleShuffleToggle = useCallback(() => {
     setIsShuffled((s) => {
       const newShuffleState = !s;
-      // If enabling shuffle, disable repeat
+      
+      // If enabling shuffle, disable repeat and generate new queue
       if (newShuffleState) {
         setIsRepeated(false);
+        const newShuffleState = createInitialShuffleState(tracks, currentIndex);
+        setShuffleState(newShuffleState);
+      } else {
+        // If disabling shuffle, clear the queue and history
+        setShuffleState(resetShuffleState());
       }
       return newShuffleState;
     });
-  }, []);
+  }, [tracks, currentIndex]);
 
   const handleRepeatToggle = useCallback(() => {
     setIsRepeated((r) => {
       const newRepeatState = !r;
-      // If enabling repeat, disable shuffle
+      // If enabling repeat, disable shuffle and clear queue
       if (newRepeatState) {
         setIsShuffled(false);
+        setShuffleState(resetShuffleState());
       }
       return newRepeatState;
     });
@@ -280,10 +294,12 @@ export default function HomePage() {
             tracks={tracks}
             onFolderPick={handleFolderPick}
             onGoogleDrivePicked={(picked, folderName) => {
-              console.log('Drive tracks picked:', picked);
               setTracks(picked); // Replace tracks instead of concatenating
               setCurrentIndex(0);
               setIsPlaying(picked.length > 0);
+              
+              // Reset shuffle state when new tracks are loaded
+              setShuffleState(resetShuffleState());
               
               // Set folder name if provided
               if (folderName) {
@@ -358,10 +374,12 @@ export default function HomePage() {
                     </button>
                     <GoogleDrivePicker
                       onPicked={(picked, folderName) => {
-                        console.log('Drive tracks picked:', picked);
                         setTracks(picked); // Replace tracks instead of concatenating
                         setCurrentIndex(0);
                         setIsPlaying(picked.length > 0);
+                        
+                        // Reset shuffle state when new tracks are loaded
+                        setShuffleState(resetShuffleState());
                         
                         // Set folder name if provided
                         if (folderName) {
@@ -387,6 +405,12 @@ export default function HomePage() {
                       key={track.id}
                       className={`track-item ${i === currentIndex ? 'active' : ''}`}
                       onClick={() => {
+                        // If shuffle is enabled, reset the queue when user manually selects a track
+                        if (isShuffled) {
+                          const newShuffleState = handleManualTrackSelection(tracks, i, shuffleState);
+                          setShuffleState(newShuffleState);
+                        }
+                        
                         setCurrentIndex(i);
                         setIsPlaying(true);
                       }}
