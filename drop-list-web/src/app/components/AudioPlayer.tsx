@@ -47,26 +47,32 @@ export default function AudioPlayer({
         if (track.googleDriveUrl) return track.googleDriveUrl;
         if (track.url) return track.url;
         if (track.file) {
-            // Create blob URL if we don't have one for this file
-            if (!blobUrl) {
-                const newBlobUrl = URL.createObjectURL(track.file);
-                setBlobUrl(newBlobUrl);
-                return newBlobUrl;
-            }
-            return blobUrl;
+            // Always create a new blob URL for each file to avoid race conditions
+            const newBlobUrl = URL.createObjectURL(track.file);
+            setBlobUrl(newBlobUrl);
+            return newBlobUrl;
         }
         return undefined;
-    }, [track, blobUrl]);
+    }, [track?.id, track?.file]); // Only depend on track ID and file, not blobUrl
 
     // Clean up blob URL when track changes
+    useEffect(() => {
+        const currentBlobUrl = blobUrl;
+        return () => {
+            if (currentBlobUrl) {
+                URL.revokeObjectURL(currentBlobUrl);
+            }
+        };
+    }, [track?.id]); // Clean up when track ID changes
+
+    // Clean up blob URL when component unmounts
     useEffect(() => {
         return () => {
             if (blobUrl) {
                 URL.revokeObjectURL(blobUrl);
-                setBlobUrl(null);
             }
         };
-    }, [track?.id]); // Clean up when track ID changes
+    }, []); // Only run on unmount
 
     // Debug: log when src changes
     useEffect(() => {
