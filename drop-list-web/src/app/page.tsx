@@ -19,6 +19,7 @@ export default function HomePage() {
   const [tracks, setTracks] = useState<TrackType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isShuffled, setIsShuffled] = useState(false);
+  const [isRepeated, setIsRepeated] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
@@ -35,9 +36,10 @@ export default function HomePage() {
       tracks,
       currentIndex,
       isShuffled,
+      isRepeated,
       volume,
     }),
-    [tracks, currentIndex, isShuffled, volume]
+    [tracks, currentIndex, isShuffled, isRepeated, volume]
   );
 
   // Preload durations for all tracks (both local files and Google Drive URLs)
@@ -159,6 +161,7 @@ export default function HomePage() {
 
   const handleNext = useCallback(() => {
     if (tracks.length === 0) return;
+    
     if (isShuffled) {
       const next = Math.floor(Math.random() * tracks.length);
       setCurrentIndex(next);
@@ -180,7 +183,25 @@ export default function HomePage() {
   }, [tracks, isShuffled]);
 
   const handleShuffleToggle = useCallback(() => {
-    setIsShuffled((s) => !s);
+    setIsShuffled((s) => {
+      const newShuffleState = !s;
+      // If enabling shuffle, disable repeat
+      if (newShuffleState) {
+        setIsRepeated(false);
+      }
+      return newShuffleState;
+    });
+  }, []);
+
+  const handleRepeatToggle = useCallback(() => {
+    setIsRepeated((r) => {
+      const newRepeatState = !r;
+      // If enabling repeat, disable shuffle
+      if (newRepeatState) {
+        setIsShuffled(false);
+      }
+      return newRepeatState;
+    });
   }, []);
 
   const handleDurationLoaded = useCallback((trackId: string, duration: number) => {
@@ -394,7 +415,9 @@ export default function HomePage() {
             handlePrev={handlePrev}
             handleNext={handleNext}
             handleShuffleToggle={handleShuffleToggle}
+            handleRepeatToggle={handleRepeatToggle}
             isShuffled={isShuffled}
+            isRepeated={isRepeated}
             onDurationLoaded={handleDurationLoaded}
           />
         )}

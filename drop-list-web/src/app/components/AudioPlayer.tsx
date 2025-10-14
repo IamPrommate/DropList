@@ -13,9 +13,11 @@ type Props = {
     onPlayPauseToggle: () => void;
     isPlaying: boolean;
     isShuffled: boolean;
+    isRepeated: boolean;
     handlePrev: () => void;
     handleNext: () => void;
     handleShuffleToggle: () => void;
+    handleRepeatToggle: () => void;
     onDurationLoaded?: (trackId: string, duration: number) => void;
 };
 
@@ -27,9 +29,11 @@ export default function AudioPlayer({
     onPlayPauseToggle,
     isPlaying,
     isShuffled,
+    isRepeated,
     handlePrev,
     handleNext,
     handleShuffleToggle,
+    handleRepeatToggle,
     onDurationLoaded,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -120,6 +124,24 @@ export default function AudioPlayer({
         const audio = audioRef.current;
         if (!audio) return;
         setCurrentTime(audio.currentTime || 0);
+    };
+
+    const handleEnded = () => {
+        if (isRepeated) {
+            // If repeat is enabled, restart the current track
+            const audio = audioRef.current;
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch((error) => {
+                    console.error('Failed to restart track in repeat mode:', error);
+                    // If restart fails, fall back to normal behavior
+                    onEnded();
+                });
+            }
+        } else {
+            // Normal behavior: go to next track
+            onEnded();
+        }
     };
 
     const handleSeekStart = () => setIsSeeking(true);
@@ -248,6 +270,16 @@ export default function AudioPlayer({
                                 <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
                             </svg>
                         </button>
+                        <button 
+                            className="control-btn" 
+                            onClick={handleRepeatToggle} 
+                            disabled={!track}
+                            style={{ color: isRepeated ? '#fff' : '#9ca3af' }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+                            </svg>
+                        </button>
                     </div>
                     
                     <div className="progress-bar-container">
@@ -352,7 +384,7 @@ export default function AudioPlayer({
             <audio
                 ref={audioRef}
                 src={src}
-                onEnded={onEnded}
+                onEnded={handleEnded}
                 onLoadedMetadata={handleLoadedMetadata}
                 onTimeUpdate={handleTimeUpdate}
                 onError={(e) => {

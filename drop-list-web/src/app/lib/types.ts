@@ -13,5 +13,6 @@ export type TrackType = {
     tracks: TrackType[];
     currentIndex: number;
     isShuffled: boolean;
+    isRepeated: boolean;
     volume: number; // 0..1
   };
