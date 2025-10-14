@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
+import { formatDuration } from '../../utils/time';
+import { parseTrackName } from '../../utils/track';
 
 type Props = {
     track?: TrackType;
@@ -162,63 +164,10 @@ export default function AudioPlayer({
         }
     };
 
-    const formatTime = (sec: number) => {
-        if (!sec || !Number.isFinite(sec)) return '0:00';
-        
-        const hours = Math.floor(sec / 3600);
-        const minutes = Math.floor((sec % 3600) / 60);
-        const seconds = Math.floor(sec % 60);
-        
-        // If 1 hour or more, show as H:MM:SS
-        if (hours > 0) {
-            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }
-        // Otherwise show as MM:SS
-        else {
-            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-    };
 
     const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
     const volumePercentage = volume * 100;
 
-    // Parse track name to extract title and artist
-    const parseTrackName = (name: string) => {
-        // Remove file extension first
-        const nameWithoutExt = name.replace(/\.[^/.]+$/, '');
-        
-        // Try to match pattern: "Title (Artist)" or "Title(Artist)"
-        const match = nameWithoutExt.match(/^(.+?)\s*\(([^)]+)\)/);
-        if (match) {
-            return {
-                title: match[1].trim(),
-                artist: match[2].trim()
-            };
-        }
-        
-        // If no parentheses, try to extract artist from common patterns
-        // Look for patterns like "Title - Artist" or "Title by Artist"
-        const dashMatch = nameWithoutExt.match(/^(.+?)\s*-\s*(.+)$/);
-        if (dashMatch) {
-            return {
-                title: dashMatch[1].trim(),
-                artist: dashMatch[2].trim()
-            };
-        }
-        
-        const byMatch = nameWithoutExt.match(/^(.+?)\s+by\s+(.+)$/i);
-        if (byMatch) {
-            return {
-                title: byMatch[1].trim(),
-                artist: byMatch[2].trim()
-            };
-        }
-        
-        return {
-            title: nameWithoutExt,
-            artist: 'Local File'
-        };
-    };
 
     const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
 
@@ -283,7 +232,7 @@ export default function AudioPlayer({
                     </div>
                     
                     <div className="progress-bar-container">
-                        <span className="time-label">{formatTime(currentTime)}</span>
+                        <span className="time-label">{formatDuration(currentTime)}</span>
                         <div 
                             className="progress-bar"
                             onMouseDown={(e) => {
@@ -330,7 +279,7 @@ export default function AudioPlayer({
                                 style={{ width: `${progressPercentage}%` }}
                             ></div>
                         </div>
-                        <span className="time-label">{formatTime(duration)}</span>
+                        <span className="time-label">{formatDuration(duration)}</span>
                     </div>
                 </div>
 

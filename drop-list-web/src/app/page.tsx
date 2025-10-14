@@ -15,11 +15,9 @@ import {
   handleManualTrackSelection, 
   resetShuffleState 
 } from '../utils/shuffle';
+import { formatDuration } from '../utils/time';
+import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
 import './layout.scss';
-
-function makeId() {
-  return Math.random().toString(36).slice(2);
-}
 
 export default function HomePage() {
   const [tracks, setTracks] = useState<TrackType[]>([]);
@@ -41,7 +39,6 @@ export default function HomePage() {
   });
 
   const currentTrack = tracks[currentIndex];
-
 
   // Preload durations for all tracks (both local files and Google Drive URLs)
   const preloadTrackDurations = useCallback(async (tracks: TrackType[]) => {
@@ -121,13 +118,12 @@ export default function HomePage() {
 
   const handleFilesSelected = useCallback((files: FileList | null) => {
     if (!files) return;
-    const next: TrackType[] = Array.from(files)
-      .filter((f) => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac)$/i.test(f.name))
-      .map((f) => ({
-        id: makeId(),
-        name: f.name,
-        file: f,
-      }));
+    const audioFiles = filterAudioFiles(files);
+    const next: TrackType[] = audioFiles.map((f) => ({
+      id: generateTrackId(),
+      name: f.name,
+      file: f,
+    }));
     setTracks(next);
     setCurrentIndex(0);
     setIsPlaying(next.length > 0);
@@ -140,13 +136,8 @@ export default function HomePage() {
 
     // Derive folder name when picking a directory (webkitRelativePath available)
     const first = files[0] as File & { webkitRelativePath?: string };
-    const rel: string | undefined = first?.webkitRelativePath;
-    if (rel && rel.includes('/')) {
-      const top = rel.split('/')[0];
-      setSelectedFolderName(top || null);
-    } else {
-      setSelectedFolderName(null);
-    }
+    const folderName = extractFolderName(first);
+    setSelectedFolderName(folderName);
   }, [preloadTrackDurations]);
 
   // Directory picker (supported in Chromium-based browsers)
@@ -224,60 +215,6 @@ export default function HomePage() {
     setTrackDurations(prev => new Map(prev.set(trackId, duration)));
   }, []);
 
-  const formatDuration = (seconds: number) => {
-    if (!seconds || !Number.isFinite(seconds)) return '0:00';
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    
-    // If 1 hour or more, show as H:MM:SS
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    // Otherwise show as MM:SS
-    else {
-      return `${minutes}:${secs.toString().padStart(2, '0')}`;
-    }
-  };
-
-  // Parse track name to extract title and artist
-  const parseTrackName = (name: string) => {
-    // Remove file extension first
-    const nameWithoutExt = name.replace(/\.[^/.]+$/, '');
-    
-    // Try to match pattern: "Title (Artist)" or "Title(Artist)"
-    const match = nameWithoutExt.match(/^(.+?)\s*\(([^)]+)\)/);
-    if (match) {
-      return {
-        title: match[1].trim(),
-        artist: match[2].trim()
-      };
-    }
-    
-    // If no parentheses, try to extract artist from common patterns
-    // Look for patterns like "Title - Artist" or "Title by Artist"
-    const dashMatch = nameWithoutExt.match(/^(.+?)\s*-\s*(.+)$/);
-    if (dashMatch) {
-      return {
-        title: dashMatch[1].trim(),
-        artist: dashMatch[2].trim()
-      };
-    }
-    
-    const byMatch = nameWithoutExt.match(/^(.+?)\s+by\s+(.+)$/i);
-    if (byMatch) {
-      return {
-        title: byMatch[1].trim(),
-        artist: byMatch[2].trim()
-      };
-    }
-    
-    return {
-      title: nameWithoutExt,
-      artist: 'Local File'
-    };
-  };
 
   const totalDuration = tracks.reduce((total, track) => {
     const duration = trackDurations.get(track.id) || 0;
