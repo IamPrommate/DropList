@@ -552,6 +552,25 @@
   font-weight: 500;
 }
 
+/* Custom purple styling for Ant Design Switch */
+.image-toggle-control .ant-switch {
+  background-color: rgba(168, 85, 247, 0.3) !important;
+  border-color: rgba(168, 85, 247, 0.5) !important;
+}
+
+.image-toggle-control .ant-switch-checked {
+  background-color: rgba(168, 85, 247, 0.8) !important;
+  border-color: rgba(168, 85, 247, 1) !important;
+}
+
+.image-toggle-control .ant-switch:hover:not(.ant-switch-disabled) {
+  background-color: rgba(168, 85, 247, 0.4) !important;
+}
+
+.image-toggle-control .ant-switch-checked:hover:not(.ant-switch-disabled) {
+  background-color: rgba(168, 85, 247, 0.9) !important;
+}
+
 .add-btn-ggd {
   background: rgba(0, 0, 0, 0.75);
   color: #fff;
