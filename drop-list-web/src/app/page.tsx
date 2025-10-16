@@ -4,7 +4,7 @@
 import { useCallback, useState } from 'react';
 import AudioPlayer from './components/AudioPlayer';
 import { TrackType } from './lib/types';
-import { Divider} from 'antd';
+import { Divider, Switch} from 'antd';
 import GoogleDrivePicker from './components/GoogleDrivePicker';
 import Sidebar from './components/Sidebar';
 import { 
@@ -31,6 +31,8 @@ export default function HomePage() {
   const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
   
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
@@ -43,8 +45,15 @@ export default function HomePage() {
 
   // Preload and cache all artist images
   const preloadArtistImages = useCallback(async (tracks: TrackType[]) => {
-    const imagePromises = tracks
-      .filter(track => track.artistImageUrl)
+    // Add all tracks with artist images to loading set
+    const tracksWithImages = tracks.filter(track => track.artistImageUrl);
+    setLoadingImages(prev => {
+      const updated = new Set(prev);
+      tracksWithImages.forEach(track => updated.add(track.id));
+      return updated;
+    });
+
+    const imagePromises = tracksWithImages
       .map(async (track) => {
         return new Promise<{ trackId: string; imageUrl: string }>((resolve) => {
           const img = new Image();
@@ -409,6 +418,19 @@ export default function HomePage() {
 
               {currentTrack && (<Divider />)}
 
+              {tracks.length > 0 && (
+                <div className="playlist-controls">
+                  <div className="image-toggle-control">
+                    <span className="toggle-label">Show artist image</span>
+                    <Switch 
+                      checked={showArtistImages}
+                      onChange={setShowArtistImages}
+                      size="small"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="playlist">
                 {tracks.map((track, i) => {
                   const trackInfo = parseTrackName(track.name);
@@ -429,6 +451,49 @@ export default function HomePage() {
                       }}
                     >
                       <div className="track-number">{i + 1}</div>
+                      {showArtistImages && (
+                        <div className="track-artist-image">
+                          {track.artistImageUrl ? (
+                            <>
+                              <img 
+                                src={track.artistImageUrl} 
+                                alt={trackInfo.artist}
+                                className="artist-thumbnail"
+                                onLoad={() => {
+                                  // Remove from loading set when image loads
+                                  setLoadingImages(prev => {
+                                    const updated = new Set(prev);
+                                    updated.delete(track.id);
+                                    return updated;
+                                  });
+                                }}
+                                onError={() => {
+                                  // Remove from loading set if image fails to load
+                                  setLoadingImages(prev => {
+                                    const updated = new Set(prev);
+                                    updated.delete(track.id);
+                                    return updated;
+                                  });
+                                }}
+                              />
+                              {loadingImages.has(track.id) && (
+                                <div className="artist-image-spinner">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                                  </svg>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="artist-placeholder">
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {showArtistImages && <div className="track-splitter"></div>}
                       <div className="track-info">
                         <div className="track-title">
                           {i === currentIndex && isPlaying && (
