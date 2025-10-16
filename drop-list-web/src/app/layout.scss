@@ -701,6 +701,8 @@
   align-items: center;
   gap: 1rem;
   min-width: 250px;
+  max-width: 350px; 
+  flex: 1;
 }
 
 .player-album-art {
@@ -754,12 +756,14 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  flex: 1;
+  min-width: 0; /* Allow text to shrink */
+  overflow: hidden; /* Constrain the text container */
 }
 
 .player-track-title {
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 500;
+  width: 100%;
+  overflow: hidden;
 }
 
 .player-track-artist {
@@ -901,5 +905,19 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Scrolling text animation */
+@keyframes scroll-left {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.scroll-text {
+  animation: scroll-left linear infinite;
 }
 

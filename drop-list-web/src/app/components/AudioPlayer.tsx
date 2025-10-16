@@ -6,6 +6,7 @@ import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
 import { formatDuration } from '../../utils/time';
 import { parseTrackName } from '../../utils/track';
+import ScrollingText from './ScrollingText';
 
 type Props = {
     track?: TrackType;
@@ -41,10 +42,12 @@ export default function AudioPlayer({
     cachedImages,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const trackTitleRef = useRef<HTMLDivElement>(null);
     const [duration, setDuration] = useState<number>(0);
     const [currentTime, setCurrentTime] = useState<number>(0);
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
+    const [shouldScroll, setShouldScroll] = useState<boolean>(false);
 
     // State to hold the blob URL
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -99,6 +102,36 @@ export default function AudioPlayer({
             audio.pause();
         }
     }, [isPlaying, src]);
+
+    // Parse track info early so it can be used in useEffects
+    const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
+
+    // Check for text overflow to enable scrolling
+    useEffect(() => {
+        const checkTextOverflow = () => {
+            const titleElement = trackTitleRef.current;
+            if (!titleElement) return;
+
+            // Check if text overflows by comparing to actual container width
+            const isOverflowing = titleElement.scrollWidth > titleElement.clientWidth;
+            setShouldScroll(isOverflowing);
+        };
+
+        // Reset shouldScroll first
+        setShouldScroll(false);
+
+        // Check immediately and after delays to ensure DOM is ready
+        checkTextOverflow();
+        const timeoutId = setTimeout(checkTextOverflow, 100);
+        const timeoutId2 = setTimeout(checkTextOverflow, 500);
+        const timeoutId3 = setTimeout(checkTextOverflow, 1000); // Extra check
+
+        return () => {
+            clearTimeout(timeoutId);
+            clearTimeout(timeoutId2);
+            clearTimeout(timeoutId3);
+        };
+    }, [trackInfo.title, track?.id]); // Add track.id to dependencies
 
     // Reset progress on new source
     useEffect(() => {
@@ -166,8 +199,6 @@ export default function AudioPlayer({
     const volumePercentage = volume * 100;
 
 
-    const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
-
     return (
         <div className="player-footer">
             <div className="player-container">
@@ -206,7 +237,44 @@ export default function AudioPlayer({
                     </div>
                     <div className="player-text">
                         <div className="player-track-title">
-                            {trackInfo.title}
+                            {/* Hidden measurement element - always present */}
+                            <div 
+                                ref={trackTitleRef}
+                                style={{ 
+                                    position: 'absolute',
+                                    visibility: 'hidden',
+                                    whiteSpace: 'nowrap',
+                                    fontSize: '0.875rem',
+                                    fontWeight: '500',
+                                    width: '278px', // Exact width from Chrome dev tools
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                {trackInfo.title}
+                            </div>
+                            
+                            {/* Visible element - conditional rendering */}
+                            {shouldScroll ? (
+                                <ScrollingText 
+                                    key={`scroll-${track?.id || trackInfo.title}`} // Force remount when track changes
+                                    text={trackInfo.title}
+                                    className="text-white text-sm font-medium"
+                                    containerWidth="w-[278px]"
+                                    animationDuration="14s"
+                                    animationDelay="1s"
+                                />
+                            ) : (
+                                <div 
+                                    style={{ 
+                                        color: '#fff',
+                                        fontSize: '0.875rem',
+                                        fontWeight: '500',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {trackInfo.title}
+                                </div>
+                            )}
                         </div>
                         <div className="player-track-artist">{trackInfo.artist}</div>
                     </div>
