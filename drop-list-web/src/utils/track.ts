@@ -1,3 +1,5 @@
+import { isAudioFile, isImageFile } from '../app/lib/common';
+
 export interface ParsedTrackInfo {
   title: string;
   artist: string;
@@ -62,9 +64,17 @@ export function generateTrackId(): string {
  */
 export function isValidAudioFile(file: File): boolean {
   const validTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/flac'];
-  const validExtensions = /\.(mp3|wav|ogg|m4a|flac)$/i;
   
-  return validTypes.includes(file.type) || validExtensions.test(file.name);
+  return validTypes.includes(file.type) || isAudioFile(file.name);
+}
+
+/**
+ * Check if a file is a valid image file based on its type and extension
+ * @param fileName - The file name to check
+ * @returns True if the file is a valid image file
+ */
+export function isValidImageFile(fileName: string): boolean {
+  return isImageFile(fileName);
 }
 
 /**
@@ -88,4 +98,38 @@ export function extractFolderName(file: File & { webkitRelativePath?: string }):
     return rel.split('/')[0];
   }
   return null;
+}
+
+/**
+ * Match artist images with tracks based on filename patterns
+ * @param audioFiles - Array of audio file objects
+ * @param imageFiles - Array of image file objects
+ * @returns Map of track names to image URLs
+ */
+export function matchArtistImages(
+  audioFiles: { id: string; name: string }[],
+  imageFiles: { id: string; name: string }[]
+): Map<string, string> {
+  const imageMap = new Map<string, string>();
+  
+  // Create a map of image files by their base name (without extension)
+  const imageMapByName = new Map<string, string>();
+  imageFiles.forEach(image => {
+    const baseName = image.name.replace(/\.[^/.]+$/, '').toLowerCase();
+    imageMapByName.set(baseName, image.id);
+  });
+  
+  // Match audio files with images
+  audioFiles.forEach(audio => {
+    const audioInfo = parseTrackName(audio.name);
+    const artistName = audioInfo.artist.toLowerCase();
+    
+    // Try to find matching image by artist name
+    if (imageMapByName.has(artistName)) {
+      const imageId = imageMapByName.get(artistName)!;
+      imageMap.set(audio.id, imageId);
+    }
+  });
+  
+  return imageMap;
 }

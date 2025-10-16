@@ -186,7 +186,7 @@ export function getPrevShuffleTrack(
 export function handleManualTrackSelection(
   tracks: TrackType[],
   selectedIndex: number,
-  currentShuffleState: ShuffleState
+  _currentShuffleState: ShuffleState
 ): ShuffleState {
   // Generate new shuffle queue excluding the selected track
   const newQueue = generateShuffleQueue(tracks, { excludeIndices: [selectedIndex] });

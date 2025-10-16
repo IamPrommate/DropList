@@ -21,6 +21,7 @@ type Props = {
     handleShuffleToggle: () => void;
     handleRepeatToggle: () => void;
     onDurationLoaded?: (trackId: string, duration: number) => void;
+    cachedImages?: Map<string, string>;
 };
 
 export default function AudioPlayer({
@@ -37,6 +38,7 @@ export default function AudioPlayer({
     handleShuffleToggle,
     handleRepeatToggle,
     onDurationLoaded,
+    cachedImages,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [duration, setDuration] = useState<number>(0);
@@ -80,10 +82,6 @@ export default function AudioPlayer({
         };
     }, []); // Only run on unmount
 
-    // Debug: log when src changes
-    useEffect(() => {
-        console.log('Audio src changed:', { trackId: track?.id, src, trackName: track?.name });
-    }, [src, track]);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -112,7 +110,6 @@ export default function AudioPlayer({
         const audio = audioRef.current;
         if (!audio || !track) return;
         const trackDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
-        console.log('handleLoadedMetadata called:', { trackId: track.id, duration: trackDuration, src });
         setDuration(trackDuration);
         
         // Notify parent component about the duration
@@ -176,7 +173,37 @@ export default function AudioPlayer({
             <div className="player-container">
                 {/* Track Info */}
                 <div className="player-track-info">
-                    <div className="player-album-art"></div>
+                    <div className="player-album-art">
+                        {track?.artistImageUrl ? (
+                            <>
+                                <img 
+                                    src={cachedImages?.get(track.id) || track.artistImageUrl} 
+                                    alt={`${trackInfo.artist} image`}
+                                    className="artist-image"
+                                    onLoad={(e) => {
+                                        // Hide spinner when image loads
+                                        const target = e.target as HTMLImageElement;
+                                        const spinner = target.nextElementSibling as HTMLElement;
+                                        if (spinner) spinner.style.display = 'none';
+                                    }}
+                                    onError={(e) => {
+                                        // Fallback to gradient if image fails to load
+                                        const target = e.target as HTMLImageElement;
+                                        const spinner = target.nextElementSibling as HTMLElement;
+                                        if (spinner) spinner.style.display = 'none';
+                                        target.style.display = 'none';
+                                        target.nextElementSibling?.nextElementSibling?.classList.add('show');
+                                    }}
+                                />
+                                <div className="artist-image-spinner">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                                    </svg>
+                                </div>
+                            </>
+                        ) : null}
+                        <div className={`player-album-art-fallback ${track?.artistImageUrl ? '' : 'show'}`}></div>
+                    </div>
                     <div className="player-text">
                         <div className="player-track-title">
                             {trackInfo.title}

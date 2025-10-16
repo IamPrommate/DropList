@@ -30,6 +30,7 @@ export default function HomePage() {
   const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
   const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
   
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
@@ -39,6 +40,51 @@ export default function HomePage() {
   });
 
   const currentTrack = tracks[currentIndex];
+
+  // Preload and cache all artist images
+  const preloadArtistImages = useCallback(async (tracks: TrackType[]) => {
+    const imagePromises = tracks
+      .filter(track => track.artistImageUrl)
+      .map(async (track) => {
+        return new Promise<{ trackId: string; imageUrl: string }>((resolve) => {
+          const img = new Image();
+          
+          img.onload = () => {
+            // Create a canvas to convert the image to a blob URL for caching
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx?.drawImage(img, 0, 0);
+            
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const cachedUrl = URL.createObjectURL(blob);
+                resolve({ trackId: track.id, imageUrl: cachedUrl });
+              } else {
+                resolve({ trackId: track.id, imageUrl: track.artistImageUrl! });
+              }
+            }, 'image/jpeg', 0.9);
+          };
+          
+          img.onerror = () => {
+            // If image fails to load, don't cache it
+            resolve({ trackId: track.id, imageUrl: track.artistImageUrl! });
+          };
+          
+          img.src = track.artistImageUrl!;
+        });
+      });
+
+    const results = await Promise.all(imagePromises);
+    const newCachedImages = new Map<string, string>();
+    
+    results.forEach(({ trackId, imageUrl }) => {
+      newCachedImages.set(trackId, imageUrl);
+    });
+    
+    setCachedImages(newCachedImages);
+  }, []);
 
   // Preload durations for all tracks (both local files and Google Drive URLs)
   const preloadTrackDurations = useCallback(async (tracks: TrackType[]) => {
@@ -118,6 +164,15 @@ export default function HomePage() {
 
   const handleFilesSelected = useCallback((files: FileList | null) => {
     if (!files) return;
+    
+    // Clean up previous cached images
+    cachedImages.forEach(url => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    setCachedImages(new Map());
+    
     const audioFiles = filterAudioFiles(files);
     const next: TrackType[] = audioFiles.map((f) => ({
       id: generateTrackId(),
@@ -131,14 +186,15 @@ export default function HomePage() {
     // Reset shuffle state when new tracks are loaded
     setShuffleState(resetShuffleState());
 
-    // Preload durations for all tracks
+    // Preload durations and artist images for all tracks
     preloadTrackDurations(next);
+    preloadArtistImages(next);
 
     // Derive folder name when picking a directory (webkitRelativePath available)
     const first = files[0] as File & { webkitRelativePath?: string };
     const folderName = extractFolderName(first);
     setSelectedFolderName(folderName);
-  }, [preloadTrackDurations]);
+  }, [preloadTrackDurations, preloadArtistImages]);
 
   // Directory picker (supported in Chromium-based browsers)
   const handleFolderPick = useCallback(async () => {
@@ -231,6 +287,14 @@ export default function HomePage() {
             tracks={tracks}
             onFolderPick={handleFolderPick}
             onGoogleDrivePicked={(picked, folderName) => {
+              // Clean up previous cached images
+              cachedImages.forEach(url => {
+                if (url.startsWith('blob:')) {
+                  URL.revokeObjectURL(url);
+                }
+              });
+              setCachedImages(new Map());
+              
               setTracks(picked); // Replace tracks instead of concatenating
               setCurrentIndex(0);
               setIsPlaying(picked.length > 0);
@@ -243,8 +307,9 @@ export default function HomePage() {
                 setSelectedFolderName(folderName);
               }
               
-              // Preload durations for Google Drive tracks
+              // Preload durations and artist images for Google Drive tracks
               preloadTrackDurations(picked);
+              preloadArtistImages(picked);
             }}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -274,7 +339,9 @@ export default function HomePage() {
               </div>
 
               <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
-                <div className="album-art"></div>
+                <div className="album-art">
+                  <div className="album-art-default"></div>
+                </div>
                 <div className="info-section">
                   <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1>
                   <p className="subtitle">
@@ -311,6 +378,14 @@ export default function HomePage() {
                     </button>
                     <GoogleDrivePicker
                       onPicked={(picked, folderName) => {
+                        // Clean up previous cached images
+                        cachedImages.forEach(url => {
+                          if (url.startsWith('blob:')) {
+                            URL.revokeObjectURL(url);
+                          }
+                        });
+                        setCachedImages(new Map());
+                        
                         setTracks(picked); // Replace tracks instead of concatenating
                         setCurrentIndex(0);
                         setIsPlaying(picked.length > 0);
@@ -323,8 +398,9 @@ export default function HomePage() {
                           setSelectedFolderName(folderName);
                         }
                         
-                        // Preload durations for Google Drive tracks
+                        // Preload durations and artist images for Google Drive tracks
                         preloadTrackDurations(picked);
+                        preloadArtistImages(picked);
                       }}
                     />
                   </div>
@@ -408,6 +484,7 @@ export default function HomePage() {
                 isShuffled={isShuffled}
                 isRepeated={isRepeated}
                 onDurationLoaded={handleDurationLoaded}
+                cachedImages={cachedImages}
               />
             )}
           </div>

@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Modal, Button, Input, Typography, Space, Alert, Switch } from "antd";
+import { Modal, Input, Space, Alert } from "antd";
 import type { TrackType } from "../lib/types";
+import { matchArtistImages } from "../../utils/track";
+import { isAudioFile, isImageFile } from "../lib/common";
 import "./google-drive.scss";
 
 type Props = {
@@ -25,24 +27,6 @@ function extractDriveFolderId(input: string): string | null {
   }
 }
 
-function extractDriveFileId(input: string): string | null {
-  // Supports: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-  //           https://drive.google.com/open?id=FILE_ID
-  //           https://drive.google.com/uc?id=FILE_ID&export=download
-  try {
-    const url = new URL(input.trim());
-    const pathParts = url.pathname.split("/").filter(Boolean);
-    const dIndex = pathParts.indexOf("d");
-    if (dIndex !== -1 && pathParts[dIndex + 1]) return pathParts[dIndex + 1];
-    const idParam = url.searchParams.get("id");
-    if (idParam) return idParam;
-    return null;
-  } catch {
-    // Not a valid URL, might be a raw ID
-    if (/^[a-zA-Z0-9_-]{20,}$/.test(input.trim())) return input.trim();
-    return null;
-  }
-}
 
 async function buildStreamUrl(
   fileId: string,
@@ -60,7 +44,7 @@ async function buildStreamUrl(
 // Use server-side API to fetch folder contents (no CORS issues)
 async function fetchFolderFiles(
   folderId: string
-): Promise<{ files: { id: string; name: string }[]; folderName?: string }> {
+): Promise<{ files: { id: string; name: string }[]; folderName?: string; error?: string }> {
   try {
     console.log("Fetching folder via server API:", folderId);
 
@@ -82,7 +66,7 @@ async function fetchFolderFiles(
     const data = await response.json();
 
     if (data.error) {
-      throw new Error(data.error);
+      return { files: [], folderName: data.folderName, error: data.error };
     }
 
     console.log("Successfully found files:", data.files);
@@ -92,15 +76,17 @@ async function fetchFolderFiles(
 
     // error is unknown by default; safely extract message
     let message = "Unknown error";
-    if (
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (typeof error === "string") {
+      message = error;
+    } else if (
       typeof error === "object" &&
       error !== null &&
       "message" in error &&
-      typeof (error as any).message === "string"
+      typeof (error as { message: unknown }).message === "string"
     ) {
-      message = (error as any).message;
-    } else if (typeof error === "string") {
-      message = error;
+      message = (error as { message: string }).message;
     }
 
     throw new Error(
@@ -112,7 +98,7 @@ async function fetchFolderFiles(
 export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Props) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
-  const [useApiKey, setUseApiKey] = useState(false);
+  const [useApiKey] = useState(false);
   const apiKey = useMemo(
     () => process.env.NEXT_PUBLIC_GOOGLE_API_KEY ?? null,
     []
@@ -126,31 +112,55 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
 
     const tracks: TrackType[] = [];
     let folderName: string | undefined;
+    let lastError: string | undefined;
 
     for (const line of lines) {
       try {
         // Only process folder links
         const folderId = extractDriveFolderId(line);
         if (folderId) {
-          console.log("Processing folder:", folderId);
           const folderData = await fetchFolderFiles(folderId);
-          console.log("Found files in folder:", folderData);
+
+          // Check if there's an error from the backend
+          if (folderData.error) {
+            lastError = folderData.error;
+            console.error("Backend error:", folderData.error);
+            continue; // Skip this folder but continue with others
+          }
 
           // Extract files array and folder name
           const files = folderData.files || [];
           const currentFolderName = folderData.folderName;
           
-          // Process all files in parallel for better performance
-          const filePromises = files.map(async (file, i) => {
+          // Separate audio and image files using enums
+          const audioFiles = files.filter((file) => isAudioFile(file.name));
+          const imageFiles = files.filter((file) => isImageFile(file.name));
+          
+          // Match artist images with tracks
+          const artistImageMap = matchArtistImages(audioFiles, imageFiles);
+          
+          // Process audio files in parallel for better performance
+          const filePromises = audioFiles.map(async (file, i) => {
             const url = await buildStreamUrl(
               file.id,
               useApiKey ? apiKey : null
             );
 
+            // Get artist image URL if available
+            let artistImageUrl = undefined;
+            const imageId = artistImageMap.get(file.id);
+            if (imageId) {
+              artistImageUrl = await buildStreamUrl(
+                imageId,
+                useApiKey ? apiKey : null
+              );
+            }
+
             return {
               id: `${Date.now()}_${file.id}_${i}`,
               name: file.name,
               googleDriveUrl: url,
+              artistImageUrl,
             };
           });
 
@@ -166,19 +176,23 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
         }
       } catch (error) {
         console.error("Error processing:", line, error);
-        // Don't show alert for individual errors, just log them
+        // Capture the error message to show to user
+        if (error instanceof Error) {
+          lastError = error.message;
+        } else if (typeof error === 'string') {
+          lastError = error;
+        }
       }
     }
 
-    console.log("Final tracks:", tracks);
     if (tracks.length > 0) {
       onPicked(tracks, folderName);
       setOpen(false);
       setRaw("");
     } else {
-      alert(
-        "No valid Google Drive folder links found. Please paste Google Drive folder share links only."
-      );
+      // Show the specific backend error if available, otherwise show generic message
+      const errorMessage = lastError || "No valid Google Drive folder links found. Please paste Google Drive folder share links only.";
+      alert(errorMessage);
     }
   };
 

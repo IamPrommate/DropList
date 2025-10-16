@@ -37,8 +37,9 @@ export async function POST(request: Request) {
       url: `/api/drive-file?id=${fileId}`
     });
 
-  } catch (error: any) {
-    console.error('Error getting file metadata:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Error getting file metadata:', errorMessage);
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

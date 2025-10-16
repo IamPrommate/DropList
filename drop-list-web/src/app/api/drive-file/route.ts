@@ -55,8 +55,9 @@ export async function GET(request: Request) {
       headers: responseHeaders,
     });
 
-  } catch (error: any) {
-    console.error('Error fetching file:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Error fetching file:', errorMessage);
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
