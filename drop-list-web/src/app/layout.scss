@@ -1,7 +1,7 @@
 /* Import globals.css */
 
 .pageRoot {
-  background: linear-gradient(to bottom, #5b21b6 0%, #581c87 40%, #1f1f2e 83%);
+  background: linear-gradient(to bottom, #5b21b6 0%, #581c87 20%, #1f1f2e 43%);
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: #fff;
@@ -634,6 +634,13 @@
   border-radius: 3px;
   object-fit: cover;
   background: rgba(255, 255, 255, 0.1);
+  image-rendering: auto;
+  image-rendering: smooth;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  filter: blur(0.2px);
 }
 
 .artist-placeholder {
@@ -815,6 +822,13 @@
   height: 100%;
   object-fit: cover;
   border-radius: 4px;
+  image-rendering: auto;
+  image-rendering: smooth;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  filter: blur(0.15px);
 }
 
 .artist-image-spinner {
