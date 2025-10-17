@@ -1,7 +1,7 @@
 /* Import globals.css */
 
 .pageRoot {
-  background: linear-gradient(to bottom, #5b21b6 0%, #581c87 40%, #1f1f2e 83%);
+  background: linear-gradient(to bottom, #5b21b6 0%, #581c87 20%, #1f1f2e 43%);
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: #fff;
@@ -601,7 +601,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
+  padding: 1.2rem;
   border-radius: 4px;
   transition: background 0.2s;
   cursor: pointer;
@@ -621,9 +621,9 @@
 }
 
 .track-artist-image {
-  width: 40px;
-  height: 40px;
-  margin-right: 12px;
+  width: 48px;
+  height: 48px;
+  margin-right: 14px;
   flex-shrink: 0;
   position: relative;
 }
@@ -649,18 +649,18 @@
 
 .track-splitter {
   width: 1px;
-  height: 30px;
+  height: 36px;
   background: rgba(168, 85, 247, 0.4);
-  margin: 0 8px;
+  margin: 0 10px;
   flex-shrink: 0;
 }
 
 .track-number {
   color: #d1d5db;
-  width: 30px;
+  width: 36px;
   text-align: center;
-  margin-right: 12px;
-  font-size: 0.875rem;
+  margin-right: 14px;
+  font-size: 1rem;
 }
 
 .track-info {
@@ -671,11 +671,11 @@
 .track-title {
   color: #fff;
   font-weight: 500;
-  font-size: 0.875rem;
-  margin-bottom: 0.25rem;
+  font-size: 1rem;
+  margin-bottom: 0.3rem;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .track-subtitle {
@@ -685,14 +685,14 @@
 
 .track-artist {
   color: #818897;
-  font-size: 0.75rem;
-  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  margin-top: 0.3rem;
 }
 
 .track-duration {
   color: #9ca3af;
-  font-size: 0.875rem;
-  margin: 0 1.5rem;
+  font-size: 1rem;
+  margin: 0 1.8rem;
 }
 
 .running-track-indicator {
