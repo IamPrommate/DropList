@@ -634,6 +634,13 @@
   border-radius: 3px;
   object-fit: cover;
   background: rgba(255, 255, 255, 0.1);
+  image-rendering: auto;
+  image-rendering: smooth;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  filter: blur(0.1px);
 }
 
 .artist-placeholder {
@@ -815,6 +822,13 @@
   height: 100%;
   object-fit: cover;
   border-radius: 4px;
+  image-rendering: auto;
+  image-rendering: smooth;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  filter: blur(0.05px);
 }
 
 .artist-image-spinner {
@@ -842,12 +856,20 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #ec4899, #a855f7, #3b82f6);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   display: none;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  
+  svg {
+    width: 28px;
+    height: 28px;
+  }
   
   &.show {
-    display: block;
+    display: flex;
   }
 }
 
