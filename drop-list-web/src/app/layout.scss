@@ -601,7 +601,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.2rem;
+  padding: 1.1rem;
   border-radius: 4px;
   transition: background 0.2s;
   cursor: pointer;
@@ -621,9 +621,9 @@
 }
 
 .track-artist-image {
-  width: 48px;
-  height: 48px;
-  margin-right: 14px;
+  width: 44px;
+  height: 44px;
+  margin-right: 13px;
   flex-shrink: 0;
   position: relative;
 }
@@ -640,7 +640,7 @@
   -webkit-backface-visibility: hidden;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
-  filter: blur(0.1px);
+  filter: blur(0.15px);
 }
 
 .artist-placeholder {
@@ -656,18 +656,18 @@
 
 .track-splitter {
   width: 1px;
-  height: 36px;
+  height: 33px;
   background: rgba(168, 85, 247, 0.4);
-  margin: 0 10px;
+  margin: 0 9px;
   flex-shrink: 0;
 }
 
 .track-number {
   color: #d1d5db;
-  width: 36px;
+  width: 33px;
   text-align: center;
-  margin-right: 14px;
-  font-size: 1rem;
+  margin-right: 13px;
+  font-size: 0.95rem;
 }
 
 .track-info {
@@ -678,11 +678,11 @@
 .track-title {
   color: #fff;
   font-weight: 500;
-  font-size: 1rem;
-  margin-bottom: 0.3rem;
+  font-size: 0.95rem;
+  margin-bottom: 0.28rem;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.55rem;
 }
 
 .track-subtitle {
@@ -692,14 +692,14 @@
 
 .track-artist {
   color: #818897;
-  font-size: 0.875rem;
-  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  margin-top: 0.28rem;
 }
 
 .track-duration {
   color: #9ca3af;
-  font-size: 1rem;
-  margin: 0 1.8rem;
+  font-size: 0.95rem;
+  margin: 0 1.65rem;
 }
 
 .running-track-indicator {
@@ -828,7 +828,7 @@
   -webkit-backface-visibility: hidden;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
-  filter: blur(0.05px);
+  filter: blur(0.15px);
 }
 
 .artist-image-spinner {
