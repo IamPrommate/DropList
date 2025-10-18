@@ -1,7 +1,7 @@
 // src/app/page.tsx
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import AudioPlayer from './components/AudioPlayer';
 import { TrackType } from './lib/types';
 import { Divider, Switch} from 'antd';
@@ -27,7 +27,21 @@ export default function HomePage() {
   const [volume, setVolume] = useState(0.8);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
-  const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
+  // Initialize trackDurations from localStorage
+  const [trackDurations, setTrackDurations] = useState<Map<string, number>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('trackDurations');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          return new Map(Object.entries(parsed));
+        }
+      } catch (error) {
+        console.warn('Failed to load cached durations:', error);
+      }
+    }
+    return new Map();
+  });
   const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
@@ -42,6 +56,124 @@ export default function HomePage() {
   });
 
   const currentTrack = tracks[currentIndex];
+
+  // Save durations to localStorage cache
+  const saveDurationsToCache = useCallback((durations: Map<string, number>) => {
+    if (typeof window !== 'undefined') {
+      try {
+        const obj = Object.fromEntries(durations);
+        localStorage.setItem('trackDurations', JSON.stringify(obj));
+      } catch (error) {
+        console.warn('Failed to save durations to cache:', error);
+      }
+    }
+  }, []);
+
+  // Generate cache key for tracks
+  const getTrackCacheKey = useCallback((track: TrackType): string => {
+    if (track.file) {
+      // For local files, use name + size for uniqueness
+      return `${track.name}-${track.file.size}`;
+    } else if (track.googleDriveUrl) {
+      // For Google Drive URLs, use the URL as key
+      return track.googleDriveUrl;
+    } else if (track.url) {
+      // For generic URLs, use the URL as key
+      return track.url;
+    }
+    // Fallback to track ID
+    return track.id;
+  }, []);
+
+  // Audio cache for blob URLs - prevents memory leaks
+  const audioCache = useRef<Map<string, string>>(new Map());
+  
+  // Get cached blob URL or create new one
+  const getCachedBlobUrl = useCallback((track: TrackType): string | undefined => {
+    if (!track.file) return undefined;
+    
+    const cacheKey = `${track.name}-${track.file.size}-${track.file.lastModified}`;
+    
+    if (!audioCache.current.has(cacheKey)) {
+      const blobUrl = URL.createObjectURL(track.file);
+      audioCache.current.set(cacheKey, blobUrl);
+    }
+    
+    return audioCache.current.get(cacheKey);
+  }, []);
+
+  // Preload audio files for instant switching
+  const preloadAudioFiles = useCallback(async (tracks: TrackType[]) => {
+    const audioPromises = tracks
+      .filter(track => track.file) // Only local files
+      .map(track => {
+        return new Promise<void>((resolve) => {
+          const blobUrl = getCachedBlobUrl(track);
+          
+          if (!blobUrl) {
+            resolve();
+            return;
+          }
+          
+          // Create audio element
+          const audio = new Audio();
+          
+          // Add timeout to prevent hanging
+          const timeout = setTimeout(() => {
+            cleanup();
+            resolve();
+          }, 10000); // 10 second timeout
+          
+          // Cleanup function to prevent memory leaks
+          const cleanup = () => {
+            clearTimeout(timeout);
+            audio.removeEventListener('canplaythrough', onCanPlayThrough);
+            audio.removeEventListener('error', onError);
+            audio.removeEventListener('loadstart', onLoadStart);
+            // Don't revoke blob URL - it's cached and will be reused
+            audio.src = '';
+            audio.load(); // Clear the audio element
+          };
+          
+          const onCanPlayThrough = () => {
+            cleanup();
+            resolve();
+          };
+          
+          const onError = () => {
+            cleanup();
+            resolve();
+          };
+          
+          const onLoadStart = () => {
+            // Audio loading started successfully
+          };
+          
+          // Add event listeners
+          audio.addEventListener('canplaythrough', onCanPlayThrough);
+          audio.addEventListener('error', onError);
+          audio.addEventListener('loadstart', onLoadStart);
+          
+          // Set source and start loading
+          audio.src = blobUrl;
+          audio.load();
+        });
+      });
+
+    await Promise.all(audioPromises);
+  }, [getCachedBlobUrl]);
+
+  // Cleanup audio cache on unmount
+  useEffect(() => {
+    const cache = audioCache.current;
+    return () => {
+      // Clean up all cached blob URLs
+      cache.forEach((blobUrl) => {
+        URL.revokeObjectURL(blobUrl);
+      });
+      cache.clear();
+    };
+  }, []);
 
   // Preload and cache all artist images
   const preloadArtistImages = useCallback(async (tracks: TrackType[]) => {
@@ -95,81 +227,127 @@ export default function HomePage() {
     setCachedImages(newCachedImages);
   }, []);
 
-  // Preload durations for all tracks (both local files and Google Drive URLs)
+  // Preload durations for all tracks with batching and caching
   const preloadTrackDurations = useCallback(async (tracks: TrackType[]) => {
-    // Mark all tracks as loading
-    const trackIds = tracks.map(track => track.id);
+    // Filter tracks that don't already have durations and aren't currently loading
+    const tracksToLoad = tracks.filter(track => {
+      const cacheKey = getTrackCacheKey(track);
+      return !trackDurations.has(cacheKey) && !loadingDurations.has(cacheKey);
+    });
+
+    if (tracksToLoad.length === 0) return;
+
+    // Mark tracks as loading
+    const cacheKeys = tracksToLoad.map(track => getTrackCacheKey(track));
     setLoadingDurations(prev => {
       const updated = new Set(prev);
-      trackIds.forEach(id => updated.add(id));
+      cacheKeys.forEach(key => updated.add(key));
       return updated;
     });
 
-    const durationPromises = tracks.map(track => {
-      return new Promise<{ trackId: string; duration: number }>((resolve) => {
-        let audioSrc: string | undefined;
-        
-        if (track.file) {
-          // Local file - create blob URL
-          audioSrc = URL.createObjectURL(track.file);
-        } else if (track.googleDriveUrl) {
-          // Google Drive URL - use directly
-          audioSrc = track.googleDriveUrl;
-        } else if (track.url) {
-          // Generic URL
-          audioSrc = track.url;
-        }
-        
-        if (audioSrc) {
-          const audio = new Audio();
+    // Load durations in batches of 3 with 100ms delay between batches
+    const batchSize = 3;
+    const batches = [];
+    for (let i = 0; i < tracksToLoad.length; i += batchSize) {
+      batches.push(tracksToLoad.slice(i, i + batchSize));
+    }
+
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      
+      const batchPromises = batch.map(track => {
+        return new Promise<{ cacheKey: string; duration: number }>((resolve) => {
+          const cacheKey = getTrackCacheKey(track);
+          let audioSrc: string | undefined;
           
-          audio.addEventListener('loadedmetadata', () => {
-            const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-            // Only revoke blob URLs, not Drive URLs
-            if (track.file && audioSrc?.startsWith('blob:')) {
-              URL.revokeObjectURL(audioSrc);
-            }
-            resolve({ trackId: track.id, duration });
-          });
+          if (track.file) {
+            // Local file - create blob URL
+            audioSrc = URL.createObjectURL(track.file);
+          } else if (track.googleDriveUrl) {
+            // Google Drive URL - use directly
+            audioSrc = track.googleDriveUrl;
+          } else if (track.url) {
+            // Generic URL
+            audioSrc = track.url;
+          }
           
-          audio.addEventListener('error', () => {
-            // Only revoke blob URLs, not Drive URLs
-            if (track.file && audioSrc?.startsWith('blob:')) {
-              URL.revokeObjectURL(audioSrc);
-            }
-            resolve({ trackId: track.id, duration: 0 });
-          });
-          
-          audio.src = audioSrc;
-        } else {
-          resolve({ trackId: track.id, duration: 0 });
+          if (audioSrc) {
+            const audio = new Audio();
+            
+            // Set timeout to prevent hanging
+            const timeout = setTimeout(() => {
+              audio.src = '';
+              if (track.file && audioSrc?.startsWith('blob:')) {
+                URL.revokeObjectURL(audioSrc);
+              }
+              resolve({ cacheKey, duration: 0 });
+            }, 10000); // 10 second timeout
+            
+            audio.addEventListener('loadedmetadata', () => {
+              clearTimeout(timeout);
+              const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+              // Only revoke blob URLs, not Drive URLs
+              if (track.file && audioSrc?.startsWith('blob:')) {
+                URL.revokeObjectURL(audioSrc);
+              }
+              resolve({ cacheKey, duration });
+            });
+            
+            audio.addEventListener('error', () => {
+              clearTimeout(timeout);
+              // Only revoke blob URLs, not Drive URLs
+              if (track.file && audioSrc?.startsWith('blob:')) {
+                URL.revokeObjectURL(audioSrc);
+              }
+              resolve({ cacheKey, duration: 0 });
+            });
+            
+            audio.src = audioSrc;
+          } else {
+            resolve({ cacheKey, duration: 0 });
+          }
+        });
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Update durations progressively
+      const newDurations = new Map<string, number>();
+      batchResults.forEach(({ cacheKey, duration }) => {
+        if (duration > 0) {
+          newDurations.set(cacheKey, duration);
         }
       });
-    });
+      
+      setTrackDurations(prev => {
+        const updated = new Map(prev);
+        newDurations.forEach((duration, cacheKey) => {
+          updated.set(cacheKey, duration);
+        });
+        return updated;
+      });
 
-    const results = await Promise.all(durationPromises);
-    const newDurations = new Map<string, number>();
-    results.forEach(({ trackId, duration }) => {
-      if (duration > 0) {
-        newDurations.set(trackId, duration);
+      // Save to cache after each batch
+      setTrackDurations(currentDurations => {
+        saveDurationsToCache(currentDurations);
+        return currentDurations;
+      });
+
+      // Remove batch from loading state
+      setLoadingDurations(prev => {
+        const updated = new Set(prev);
+        batchResults.forEach(({ cacheKey }) => {
+          updated.delete(cacheKey);
+        });
+        return updated;
+      });
+
+      // Add delay between batches (except for the last batch)
+      if (batchIndex < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-    });
-    
-    setTrackDurations(prev => {
-      const updated = new Map(prev);
-      newDurations.forEach((duration, trackId) => {
-        updated.set(trackId, duration);
-      });
-      return updated;
-    });
-
-    // Remove tracks from loading state
-    setLoadingDurations(prev => {
-      const updated = new Set(prev);
-      trackIds.forEach(id => updated.delete(id));
-      return updated;
-    });
-  }, []);
+    }
+  }, [trackDurations, loadingDurations, getTrackCacheKey, saveDurationsToCache]);
 
   const handleFilesSelected = useCallback((files: FileList | null) => {
     if (!files) return;
@@ -195,15 +373,16 @@ export default function HomePage() {
     // Reset shuffle state when new tracks are loaded
     setShuffleState(resetShuffleState());
 
-    // Preload durations and artist images for all tracks
+    // Preload durations, audio files, and artist images for all tracks
     preloadTrackDurations(next);
+    preloadAudioFiles(next);
     preloadArtistImages(next);
 
     // Derive folder name when picking a directory (webkitRelativePath available)
     const first = files[0] as File & { webkitRelativePath?: string };
     const folderName = extractFolderName(first);
     setSelectedFolderName(folderName);
-  }, [preloadTrackDurations, preloadArtistImages]);
+  }, [preloadTrackDurations, preloadAudioFiles, preloadArtistImages]);
 
   // Directory picker (supported in Chromium-based browsers)
   const handleFolderPick = useCallback(async () => {
@@ -282,7 +461,8 @@ export default function HomePage() {
 
 
   const totalDuration = tracks.reduce((total, track) => {
-    const duration = trackDurations.get(track.id) || 0;
+    const cacheKey = getTrackCacheKey(track);
+    const duration = trackDurations.get(cacheKey) || 0;
     return total + duration;
   }, 0);
 
@@ -316,8 +496,9 @@ export default function HomePage() {
                 setSelectedFolderName(folderName);
               }
               
-              // Preload durations and artist images for Google Drive tracks
+              // Preload durations, audio files, and artist images for Google Drive tracks
               preloadTrackDurations(picked);
+              preloadAudioFiles(picked);
               preloadArtistImages(picked);
             }}
             collapsed={sidebarCollapsed}
@@ -407,8 +588,9 @@ export default function HomePage() {
                           setSelectedFolderName(folderName);
                         }
                         
-                        // Preload durations and artist images for Google Drive tracks
+                        // Preload durations, audio files, and artist images for Google Drive tracks
                         preloadTrackDurations(picked);
+                        preloadAudioFiles(picked);
                         preloadArtistImages(picked);
                       }}
                     />
@@ -434,7 +616,8 @@ export default function HomePage() {
               <div className="playlist">
                 {tracks.map((track, i) => {
                   const trackInfo = parseTrackName(track.name);
-                  const duration = trackDurations.get(track.id) || 0;
+                  const cacheKey = getTrackCacheKey(track);
+                  const duration = trackDurations.get(cacheKey) || 0;
                   return (
                     <div 
                       key={track.id}
@@ -504,7 +687,7 @@ export default function HomePage() {
                         <div className="track-artist">{trackInfo.artist}</div>
                       </div>
                       <div className="track-duration">
-                        {loadingDurations.has(track.id) ? (
+                        {loadingDurations.has(cacheKey) ? (
                           <div className="duration-spinner">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M21 12a9 9 0 11-6.219-8.56"/>
@@ -550,6 +733,7 @@ export default function HomePage() {
                 isRepeated={isRepeated}
                 onDurationLoaded={handleDurationLoaded}
                 cachedImages={cachedImages}
+                getCachedBlobUrl={getCachedBlobUrl}
               />
             )}
           </div>

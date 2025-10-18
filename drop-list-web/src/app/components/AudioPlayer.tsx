@@ -1,7 +1,7 @@
 // src/components/AudioPlayer.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
 import { formatDuration } from '../../utils/time';
@@ -23,6 +23,7 @@ type Props = {
     handleRepeatToggle: () => void;
     onDurationLoaded?: (trackId: string, duration: number) => void;
     cachedImages?: Map<string, string>;
+    getCachedBlobUrl?: (track: TrackType) => string | undefined;
 };
 
 export default function AudioPlayer({
@@ -40,6 +41,7 @@ export default function AudioPlayer({
     handleRepeatToggle,
     onDurationLoaded,
     cachedImages,
+    getCachedBlobUrl,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const trackTitleRef = useRef<HTMLDivElement>(null);
@@ -49,41 +51,17 @@ export default function AudioPlayer({
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
     const [shouldScroll, setShouldScroll] = useState<boolean>(false);
 
-    // State to hold the blob URL
-    const [blobUrl, setBlobUrl] = useState<string | null>(null);
-
     // Memoize source: prefer remote URLs over local blob
     const src = useMemo(() => {
         if (!track) return undefined;
         if (track.googleDriveUrl) return track.googleDriveUrl;
         if (track.url) return track.url;
         if (track.file) {
-            // Always create a new blob URL for each file to avoid race conditions
-            const newBlobUrl = URL.createObjectURL(track.file);
-            setBlobUrl(newBlobUrl);
-            return newBlobUrl;
+            // Use cached blob URL from parent component
+            return getCachedBlobUrl?.(track) || undefined;
         }
         return undefined;
-    }, [track?.id, track?.file]); // Only depend on track ID and file, not blobUrl
-
-    // Clean up blob URL when track changes
-    useEffect(() => {
-        const currentBlobUrl = blobUrl;
-        return () => {
-            if (currentBlobUrl) {
-                URL.revokeObjectURL(currentBlobUrl);
-            }
-        };
-    }, [track?.id]); // Clean up when track ID changes
-
-    // Clean up blob URL when component unmounts
-    useEffect(() => {
-        return () => {
-            if (blobUrl) {
-                URL.revokeObjectURL(blobUrl);
-            }
-        };
-    }, []); // Only run on unmount
+    }, [track?.id, track?.file, getCachedBlobUrl]); // Depend on cached blob URL function
 
 
     useEffect(() => {
@@ -93,15 +71,73 @@ export default function AudioPlayer({
     }, [volume]);
 
 
+    // Track event listeners for cleanup
+    const eventListenersRef = useRef<(() => void)[]>([]);
+    
+    // Track document event listeners with unique IDs
+    const documentEventListenersRef = useRef<Map<string, () => void>>(new Map());
+    
+    // Cleanup all event listeners
+    const cleanupEventListeners = useCallback(() => {
+        eventListenersRef.current.forEach(cleanup => cleanup());
+        eventListenersRef.current = [];
+    }, []);
+    
+    // Cleanup all document event listeners
+    const cleanupDocumentEventListeners = useCallback(() => {
+        documentEventListenersRef.current.forEach(cleanup => cleanup());
+        documentEventListenersRef.current.clear();
+    }, []);
+
+    // Audio cleanup on unmount
+    useEffect(() => {
+        return () => {
+            const audio = audioRef.current;
+            if (audio) {
+                audio.pause();
+                audio.src = '';
+                audio.load();
+            }
+            cleanupEventListeners();
+            cleanupDocumentEventListeners();
+        };
+    }, [cleanupEventListeners, cleanupDocumentEventListeners]);
+
+    // Audio state validation and play/pause handling
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
+        
+        // Clean up any existing event listeners
+        cleanupEventListeners();
+        
         if (isPlaying) {
-            audio.play().catch(() => { });
+            // Check if audio is ready before playing
+            if (audio.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+                audio.play().catch((error) => {
+                    console.error('Audio play failed:', error);
+                    onPlayPauseToggle(); // Reset state on failure
+                });
+            } else {
+                // Wait for audio to be ready
+                const handleCanPlay = () => {
+                    audio.removeEventListener('canplay', handleCanPlay);
+                    audio.play().catch((error) => {
+                        console.error('Audio play failed after ready:', error);
+                        onPlayPauseToggle();
+                    });
+                };
+                audio.addEventListener('canplay', handleCanPlay);
+                
+                // Track this event listener for cleanup
+                eventListenersRef.current.push(() => {
+                    audio.removeEventListener('canplay', handleCanPlay);
+                });
+            }
         } else {
             audio.pause();
         }
-    }, [isPlaying, src]);
+    }, [isPlaying, src, cleanupEventListeners]);
 
     // Parse track info early so it can be used in useEffects
     const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
@@ -164,11 +200,30 @@ export default function AudioPlayer({
             const audio = audioRef.current;
             if (audio) {
                 audio.currentTime = 0;
-                audio.play().catch((error) => {
-                    console.error('Failed to restart track in repeat mode:', error);
-                    // If restart fails, fall back to normal behavior
-                    onEnded();
-                });
+                
+                // Check if audio is ready before restarting
+                if (audio.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+                    audio.play().catch((error) => {
+                        console.error('Failed to restart track in repeat mode:', error);
+                        // If restart fails, fall back to normal behavior
+                        onEnded();
+                    });
+                } else {
+                    // Wait for audio to be ready before restarting
+                    const handleCanPlay = () => {
+                        audio.removeEventListener('canplay', handleCanPlay);
+                        audio.play().catch((error) => {
+                            console.error('Failed to restart track after ready:', error);
+                            onEnded();
+                        });
+                    };
+                    audio.addEventListener('canplay', handleCanPlay);
+                    
+                    // Track this event listener for cleanup
+                    eventListenersRef.current.push(() => {
+                        audio.removeEventListener('canplay', handleCanPlay);
+                    });
+                }
             }
         } else {
             // Normal behavior: go to next track
@@ -353,13 +408,25 @@ export default function AudioPlayer({
                                     updateProgress(e.clientX);
                                 };
                                 
+                                // Generate unique ID for this drag session
+                                const listenerId = `progress-${Date.now()}-${Math.random()}`;
+                                
                                 const handleMouseUp = () => {
                                     document.removeEventListener('mousemove', handleMouseMove);
                                     document.removeEventListener('mouseup', handleMouseUp);
+                                    
+                                    // Remove from tracking using unique ID
+                                    documentEventListenersRef.current.delete(listenerId);
                                 };
                                 
                                 document.addEventListener('mousemove', handleMouseMove);
                                 document.addEventListener('mouseup', handleMouseUp);
+                                
+                                // Track these event listeners with unique ID
+                                documentEventListenersRef.current.set(listenerId, () => {
+                                    document.removeEventListener('mousemove', handleMouseMove);
+                                    document.removeEventListener('mouseup', handleMouseUp);
+                                });
                             }}
                             onClick={(e) => {
                                 if (!duration) return;
@@ -406,13 +473,25 @@ export default function AudioPlayer({
                                 updateVolume(e.clientX);
                             };
                             
+                            // Generate unique ID for this drag session
+                            const listenerId = `volume-${Date.now()}-${Math.random()}`;
+                            
                             const handleMouseUp = () => {
                                 document.removeEventListener('mousemove', handleMouseMove);
                                 document.removeEventListener('mouseup', handleMouseUp);
+                                
+                                // Remove from tracking using unique ID
+                                documentEventListenersRef.current.delete(listenerId);
                             };
                             
                             document.addEventListener('mousemove', handleMouseMove);
                             document.addEventListener('mouseup', handleMouseUp);
+                            
+                            // Track these event listeners with unique ID
+                            documentEventListenersRef.current.set(listenerId, () => {
+                                document.removeEventListener('mousemove', handleMouseMove);
+                                document.removeEventListener('mouseup', handleMouseUp);
+                            });
                         }}
                         onClick={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -444,6 +523,19 @@ export default function AudioPlayer({
                         src: audio.src,
                         trackId: track?.id
                     });
+                    
+                    // Reset playing state on error
+                    onPlayPauseToggle();
+                    
+                    // Try to recover by reloading the audio
+                    if (audio.error && audio.error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+                        console.warn('Audio source not supported, trying to reload...');
+                        setTimeout(() => {
+                            if (audio.src) {
+                                audio.load();
+                            }
+                        }, 1000);
+                    }
                 }}
             />
         </div>
