@@ -641,6 +641,12 @@
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   filter: blur(0.15px);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: scale(1.04);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  }
 }
 
 .artist-placeholder {
