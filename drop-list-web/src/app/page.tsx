@@ -19,6 +19,14 @@ import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
 import './layout.scss';
 
+enum KeyboardShortcuts {
+  SPACE = 'Space',
+  ARROW_LEFT = 'ArrowLeft',
+  ARROW_RIGHT = 'ArrowRight',
+  ARROW_UP = 'ArrowUp',
+  ARROW_DOWN = 'ArrowDown',
+}
+
 export default function HomePage() {
   const [tracks, setTracks] = useState<TrackType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -465,6 +473,49 @@ export default function HomePage() {
     const duration = trackDurations.get(cacheKey) || 0;
     return total + duration;
   }, 0);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle shortcuts when no input is focused
+      if (document.activeElement?.tagName === 'INPUT' || 
+          document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      switch (e.code) {
+        case KeyboardShortcuts.SPACE:
+          e.preventDefault();
+          if (tracks.length > 0) {
+            setIsPlaying(!isPlaying);
+          }
+          break;
+        // case KeyboardShortcuts.ARROW_LEFT:
+        //   e.preventDefault();
+        //   if (tracks.length > 0) {
+        //     handlePrev();
+        //   }
+        //   break;
+        // case KeyboardShortcuts.ARROW_RIGHT:
+        //   e.preventDefault();
+        //   if (tracks.length > 0) {
+        //     handleNext();
+        //   }
+        //   break;
+        case KeyboardShortcuts.ARROW_UP:
+          e.preventDefault();
+          setVolume(prev => Math.min(1, prev + 0.1));
+          break;
+        case KeyboardShortcuts.ARROW_DOWN:
+          e.preventDefault();
+          setVolume(prev => Math.max(0, prev - 0.1));
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [tracks.length, isPlaying, handlePrev, handleNext]);
 
   return (
     <main className="pageRoot">
