@@ -367,8 +367,8 @@ export default function HomePage() {
       file: f,
     }));
     setTracks(next);
-    setCurrentIndex(0);
-    setIsPlaying(next.length > 0);
+    setCurrentIndex(-1);
+    setIsPlaying(false);
 
     // Reset shuffle state when new tracks are loaded
     setShuffleState(resetShuffleState());
@@ -485,8 +485,8 @@ export default function HomePage() {
               setCachedImages(new Map());
               
               setTracks(picked); // Replace tracks instead of concatenating
-              setCurrentIndex(0);
-              setIsPlaying(picked.length > 0);
+              setCurrentIndex(-1);
+              setIsPlaying(false);
               
               // Reset shuffle state when new tracks are loaded
               setShuffleState(resetShuffleState());
@@ -577,8 +577,8 @@ export default function HomePage() {
                         setCachedImages(new Map());
                         
                         setTracks(picked); // Replace tracks instead of concatenating
-                        setCurrentIndex(0);
-                        setIsPlaying(picked.length > 0);
+                        setCurrentIndex(-1);
+                        setIsPlaying(false);
                         
                         // Reset shuffle state when new tracks are loaded
                         setShuffleState(resetShuffleState());
@@ -716,26 +716,29 @@ export default function HomePage() {
               </div> */}
             </div>
 
-            {/* Fixed bottom audio bar via SCSS */}
-            {currentTrack && (
-              <AudioPlayer
-                track={currentTrack}
-                volume={volume}
-                onEnded={handleNext}
-                onVolumeChange={setVolume}
-                onPlayPauseToggle={() => setIsPlaying((p) => !p)}
-                isPlaying={isPlaying}
-                handlePrev={handlePrev}
-                handleNext={handleNext}
-                handleShuffleToggle={handleShuffleToggle}
-                handleRepeatToggle={handleRepeatToggle}
-                isShuffled={isShuffled}
-                isRepeated={isRepeated}
-                onDurationLoaded={handleDurationLoaded}
-                cachedImages={cachedImages}
-                getCachedBlobUrl={getCachedBlobUrl}
-              />
-            )}
+            {/* Fixed bottom audio bar with smooth appearance */}
+            <div className={`player-footer-transition ${currentTrack ? 'visible' : ''}`}>
+              {currentTrack && (
+                <AudioPlayer
+                  track={currentTrack}
+                  volume={volume}
+                  onEnded={handleNext}
+                  onVolumeChange={setVolume}
+                  onPlayPauseToggle={() => setIsPlaying((p) => !p)}
+                  onIsPlayingChange={(v) => setIsPlaying(v)}
+                  isPlaying={isPlaying}
+                  handlePrev={handlePrev}
+                  handleNext={handleNext}
+                  handleShuffleToggle={handleShuffleToggle}
+                  handleRepeatToggle={handleRepeatToggle}
+                  isShuffled={isShuffled}
+                  isRepeated={isRepeated}
+                  onDurationLoaded={handleDurationLoaded}
+                  cachedImages={cachedImages}
+                  getCachedBlobUrl={getCachedBlobUrl}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>

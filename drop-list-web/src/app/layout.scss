@@ -791,6 +791,27 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
+/* Smooth show/hide for footer container */
+.player-footer-transition {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  pointer-events: none; /* prevent blocking when hidden */
+  display: flex;
+  justify-content: center;
+  transition: opacity 220ms ease, transform 220ms ease;
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.player-footer-transition.visible {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .player-container {
   max-width: 1200px;
   margin: 0 auto;

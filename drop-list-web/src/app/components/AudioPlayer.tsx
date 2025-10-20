@@ -14,6 +14,7 @@ type Props = {
     onEnded: () => void;
     onVolumeChange: (v: number) => void;
     onPlayPauseToggle: () => void;
+    onIsPlayingChange?: (v: boolean) => void;
     isPlaying: boolean;
     isShuffled: boolean;
     isRepeated: boolean;
@@ -32,6 +33,7 @@ export default function AudioPlayer({
     onEnded,
     onVolumeChange,
     onPlayPauseToggle,
+    onIsPlayingChange,
     isPlaying,
     isShuffled,
     isRepeated,
@@ -138,6 +140,40 @@ export default function AudioPlayer({
             audio.pause();
         }
     }, [isPlaying, src, cleanupEventListeners]);
+
+    // Sync UI with actual audio state via play/pause events
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio || !onIsPlayingChange) return;
+
+        const handlePlay = () => onIsPlayingChange(true);
+        const handlePause = () => onIsPlayingChange(false);
+
+        audio.addEventListener('play', handlePlay);
+        audio.addEventListener('pause', handlePause);
+
+        return () => {
+            audio.removeEventListener('play', handlePlay);
+            audio.removeEventListener('pause', handlePause);
+        };
+    }, [onIsPlayingChange, src]);
+
+    // On tab becoming visible, reconcile UI state with element state
+    useEffect(() => {
+        if (!onIsPlayingChange) return;
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                const audio = audioRef.current;
+                if (!audio) return;
+                const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState >= 2;
+                if (isPlaying !== actuallyPlaying) {
+                    onIsPlayingChange(actuallyPlaying);
+                }
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, [onIsPlayingChange, isPlaying]);
 
     // Parse track info early so it can be used in useEffects
     const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
