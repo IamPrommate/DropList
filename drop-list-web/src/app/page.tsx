@@ -17,6 +17,7 @@ import {
 } from '../utils/shuffle';
 import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
+import { extractDominantColor, generateGradientFromColor, generateSidebarGradientFromColor, setInheritedColors } from '../utils/colorExtraction';
 import './layout.scss';
 
 enum KeyboardShortcuts {
@@ -55,6 +56,7 @@ export default function HomePage() {
   const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
+  const [dynamicBackground, setDynamicBackground] = useState<string>('');
   
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
@@ -181,6 +183,21 @@ export default function HomePage() {
       });
       cache.clear();
     };
+  }, []);
+
+  // Extract colors from album cover and update background
+  const updateBackgroundFromAlbumCover = useCallback(async (albumCoverUrl: string) => {
+    try {
+      const dominantColor = await extractDominantColor(albumCoverUrl);
+      const backgroundGradient = generateGradientFromColor(dominantColor);
+      
+      setDynamicBackground(backgroundGradient);
+      setInheritedColors(dominantColor);
+    } catch (error) {
+      console.warn('Failed to extract color from album cover:', error);
+      // Reset to default if extraction fails
+      setDynamicBackground('');
+    }
   }, []);
 
   // Preload and cache all artist images
@@ -518,7 +535,10 @@ export default function HomePage() {
   }, [tracks.length, isPlaying, handlePrev, handleNext]);
 
   return (
-    <main className="pageRoot">
+    <main 
+      className="pageRoot" 
+      style={dynamicBackground ? { background: dynamicBackground } : {}}
+    >
       <div suppressHydrationWarning>
         <div className="app-layout">
           {/* Left Sidebar */}
@@ -581,7 +601,15 @@ export default function HomePage() {
 
               <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
                 <div className="album-art">
-                  <div className="album-art-default"></div>
+                  {tracks.length > 0 && tracks[0]?.albumCoverUrl ? (
+                    <img 
+                      src={tracks[0].albumCoverUrl} 
+                      alt="Album Cover"
+                      className="album-cover-image"
+                    />
+                  ) : (
+                    <div className="album-art-default"></div>
+                  )}
                 </div>
                 <div className="info-section">
                   <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1>
@@ -643,6 +671,11 @@ export default function HomePage() {
                         preloadTrackDurations(picked);
                         preloadAudioFiles(picked);
                         preloadArtistImages(picked);
+                        
+                        // Extract colors from album cover if available
+                        if (picked.length > 0 && picked[0].albumCoverUrl) {
+                          updateBackgroundFromAlbumCover(picked[0].albumCoverUrl);
+                        }
                       }}
                     />
                   </div>

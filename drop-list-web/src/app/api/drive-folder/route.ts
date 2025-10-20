@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const CONFIG = {
   TRACKS_FOLDER: process.env.NEXT_PUBLIC_TRACKS_FOLDER || '', // Default: empty (root folder)
   ARTIST_FOLDER: process.env.NEXT_PUBLIC_ARTIST_FOLDER || 'artist', // Default: 'artist'
+  COVER_FOLDER: process.env.NEXT_PUBLIC_COVER_FOLDER || 'cover', // Default: 'cover'
 };
 
 // Helper function to fetch files from a subfolder
@@ -348,6 +349,108 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.log(`No "${CONFIG.ARTIST_FOLDER}" subfolder found - skipping image fetch`);
+    }
+    
+    // Look for cover subfolder and fetch cover images
+    let coverSubfolderId = null;
+    for (const row of folderTableRows || []) {
+      const idMatch = row.match(/data-id="([^"]+)"/);
+      if (!idMatch) continue;
+      
+      const folderId = idMatch[1];
+      const isFolder = row.includes('folder') || row.includes('📁') || row.includes('folder-icon');
+      
+      if (isFolder) {
+        const namePatterns = [
+          /<strong[^>]*>([^<]+)<\/strong>/i,
+          /data-title="([^"]+)"/i,
+          /aria-label="[^"]*([^"]+)[^"]*"/i,
+          /title="([^"]+)"/i
+        ];
+        
+        let folderName = null;
+        for (const pattern of namePatterns) {
+          const match = row.match(pattern);
+          if (match) {
+            folderName = match[1];
+            break;
+          }
+        }
+        
+        if (folderName && folderName.toLowerCase().includes(CONFIG.COVER_FOLDER.toLowerCase())) {
+          coverSubfolderId = folderId;
+          break;
+        }
+      }
+    }
+    
+    // Fetch images from cover subfolder
+    if (coverSubfolderId) {
+      console.log(`Found "${CONFIG.COVER_FOLDER}" subfolder:`, coverSubfolderId);
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const subfolderUrl = `https://drive.google.com/drive/folders/${coverSubfolderId}`;
+        const response = await fetch(subfolderUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          console.warn(`Failed to fetch "${CONFIG.COVER_FOLDER}" subfolder: ${response.statusText}`);
+        } else {
+          const subfolderHtml = await response.text();
+          const subfolderRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+          
+          if (subfolderRows) {
+            for (const row of subfolderRows) {
+              const idMatch = row.match(/data-id="([^"]+)"/);
+              if (!idMatch) continue;
+              
+              const fileId = idMatch[1];
+              const imageExts = Object.values(ImageExtension).join('|').replace(/\./g, '');
+              
+              const namePatterns = [
+                new RegExp(`<strong[^>]*>([^<]+\\.(${imageExts}))<\\/strong>`, 'i'),
+                new RegExp(`data-title="([^"]+\\.(${imageExts}))"`, 'i'),
+                new RegExp(`aria-label="[^"]*([^"]+\\.(${imageExts}))[^"]*"`, 'i'),
+                new RegExp(`title="([^"]+\\.(${imageExts}))"`, 'i')
+              ];
+              
+              let fileName = null;
+              for (const pattern of namePatterns) {
+                const match = row.match(pattern);
+                if (match) {
+                  fileName = match[1];
+                  break;
+                }
+              }
+              
+              const isImageFile = fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext));
+              
+              if (fileName && isImageFile && !seenIds.has(fileId)) {
+                seenIds.add(fileId);
+                files.push({ 
+                  id: fileId, 
+                  name: fileName,
+                  type: 'image',
+                  isCover: true // Mark as cover image
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Error fetching "${CONFIG.COVER_FOLDER}" subfolder:`, error);
+      }
+    } else {
+      console.log(`No "${CONFIG.COVER_FOLDER}" subfolder found - skipping cover fetch`);
     }
     
     console.log(`Total files found: ${files.length} (${files.filter(f => f.type === 'audio').length} audio, ${files.filter(f => f.type === 'image').length} images)`);

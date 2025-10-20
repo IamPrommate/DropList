@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Modal, Input, Space, Alert } from "antd";
 import type { TrackType } from "../lib/types";
-import { matchArtistImages } from "../../utils/track";
+import { matchArtistImages, findAlbumCover } from "../../utils/track";
 import { isAudioFile, isImageFile } from "../lib/common";
 import "./google-drive.scss";
 
@@ -139,6 +139,16 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           // Match artist images with tracks
           const artistImageMap = matchArtistImages(audioFiles, imageFiles);
           
+          // Find album cover
+          const albumCoverId = findAlbumCover(imageFiles);
+          let albumCoverUrl = undefined;
+          if (albumCoverId) {
+            albumCoverUrl = await buildStreamUrl(
+              albumCoverId,
+              useApiKey ? apiKey : null
+            );
+          }
+          
           // Process audio files in parallel for better performance
           const filePromises = audioFiles.map(async (file, i) => {
             const url = await buildStreamUrl(
@@ -161,6 +171,7 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
               name: file.name,
               googleDriveUrl: url,
               artistImageUrl,
+              albumCoverUrl,
             };
           });
 

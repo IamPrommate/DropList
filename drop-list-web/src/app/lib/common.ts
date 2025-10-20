@@ -43,3 +43,31 @@ export function getAudioExtensions(): string[] {
 export function getImageExtensions(): string[] {
   return Object.values(ImageExtension);
 }
+
+// Album cover file names (case insensitive)
+const ALBUM_COVER_NAMES = [
+  'cover',
+  'album',
+  'artwork',
+  'front',
+  'folder',
+  'albumart',
+  'album_art'
+];
+
+/**
+ * Check if an image file is an album cover based on filename
+ * @param fileName - The image file name to check
+ * @returns True if the file appears to be an album cover
+ */
+export function isAlbumCoverFile(fileName: string): boolean {
+  const lowerName = fileName.toLowerCase();
+  const nameWithoutExt = lowerName.replace(/\.[^/.]+$/, '');
+  
+  return ALBUM_COVER_NAMES.some(coverName => 
+    nameWithoutExt === coverName || 
+    nameWithoutExt.startsWith(coverName + '.') ||
+    nameWithoutExt.includes('_' + coverName) ||
+    nameWithoutExt.includes('-' + coverName)
+  );
+}

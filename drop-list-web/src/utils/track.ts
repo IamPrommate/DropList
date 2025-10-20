@@ -1,4 +1,4 @@
-import { isAudioFile, isImageFile } from '../app/lib/common';
+import { isAudioFile, isImageFile, isAlbumCoverFile } from '../app/lib/common';
 
 export interface ParsedTrackInfo {
   title: string;
@@ -132,4 +132,26 @@ export function matchArtistImages(
   });
   
   return imageMap;
+}
+
+/**
+ * Find album cover image from a list of image files
+ * @param imageFiles - Array of image file objects
+ * @returns The ID of the album cover image, or null if not found
+ */
+export function findAlbumCover(imageFiles: { id: string; name: string; isCover?: boolean }[]): string | null {
+  // First, try to find files marked as cover images from the cover folder
+  const coverFile = imageFiles.find(image => image.isCover);
+  if (coverFile) {
+    return coverFile.id;
+  }
+  
+  // Fallback: try to find files with common album cover names
+  const namedCoverFile = imageFiles.find(image => isAlbumCoverFile(image.name));
+  if (namedCoverFile) {
+    return namedCoverFile.id;
+  }
+  
+  // If no specific cover file found, return null
+  return null;
 }
