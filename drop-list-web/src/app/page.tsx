@@ -649,7 +649,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {currentTrack && (<Divider />)}
+              {/* {currentTrack && (<Divider />)} */}
 
               {tracks.length > 0 && (
                 <div className="playlist-controls">
