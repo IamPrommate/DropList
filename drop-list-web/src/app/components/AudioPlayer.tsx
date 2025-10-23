@@ -454,12 +454,12 @@ export default function AudioPlayer({
                         <div 
                             className="progress-bar"
                             onMouseDown={(e) => {
-                                if (!displayDuration) return;
+                                if (!duration) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const updateProgress = (clientX: number) => {
                                     const clickX = clientX - rect.left;
                                     const percentage = Math.max(0, Math.min(1, clickX / rect.width));
-                                    const newTime = percentage * displayDuration;
+                                    const newTime = percentage * duration;
                                     setCurrentTime(newTime);
                                     if (audioRef.current) {
                                         audioRef.current.currentTime = newTime;
