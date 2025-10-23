@@ -184,19 +184,6 @@ export default function HomePage() {
     };
   }, []);
 
-  // Fast Refresh detection and cleanup
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-      if ((module as any).hot) {
-        (module as any).hot.accept(() => {
-          console.log('Fast Refresh detected - clearing track selection');
-          setCurrentIndex(-1);
-          setIsPlaying(false);
-        });
-      }
-    }
-  }, []);
-
   // Preload and cache all artist images
   const preloadArtistImages = useCallback(async (tracks: TrackType[]) => {
     // Add all tracks with artist images to loading set
