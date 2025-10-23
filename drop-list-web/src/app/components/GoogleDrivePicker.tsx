@@ -5,6 +5,7 @@ import { Modal, Input, Space, Alert } from "antd";
 import type { TrackType } from "../lib/types";
 import { matchArtistImages } from "../../utils/track";
 import { isAudioFile, isImageFile, FileType } from "../lib/common";
+import { Cloud } from "lucide-react";
 import "./google-drive.scss";
 
 type Props = {
@@ -200,30 +201,12 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
     <>
       {variant === 'dropdown' ? (
         <div className="dropdown-item" onClick={() => setOpen(true)}>
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M12 5v14m-7-7h14"></path>
-          </svg>
+          <Cloud size={16} />
           Add from Google Drive
         </div>
       ) : (
         <button className="add-btn-ggd" onClick={() => setOpen(true)}>
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M12 5v14m-7-7h14"></path>
-          </svg>
+          <Cloud size={20} />
           Add from Google Drive
         </button>
       )}

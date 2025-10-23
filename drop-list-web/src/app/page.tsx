@@ -17,6 +17,7 @@ import {
 } from '../utils/shuffle';
 import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
+import { Music, Play, Pause, Plus, Cloud, FolderOpen } from 'lucide-react';
 import './layout.scss';
 
 enum KeyboardShortcuts {
@@ -601,20 +602,12 @@ export default function HomePage() {
                           }
                         }}
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                          {isPlaying ? (
-                            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
-                          ) : (
-                            <path d="M8 5v14l11-7z"></path>
-                          )}
-                        </svg>
+                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
                         {isPlaying ? 'Pause' : 'Play'}
                       </button>
                     )}
                     <button className="add-btn" onClick={handleFolderPick}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 5v14m-7-7h14"></path>
-                      </svg>
+                      <FolderOpen size={20} />
                       Add from local
                     </button>
                     <GoogleDrivePicker
@@ -712,17 +705,13 @@ export default function HomePage() {
                               />
                               {loadingImages.has(track.id) && (
                                 <div className="artist-image-spinner">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                                  </svg>
+                                  <Music size={12} />
                                 </div>
                               )}
                             </>
                           ) : (
                             <div className="artist-placeholder">
-                              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                              </svg>
+                              <Music size={24} />
                             </div>
                           )}
                         </div>
@@ -740,9 +729,7 @@ export default function HomePage() {
                       <div className="track-duration">
                         {loadingDurations.has(cacheKey) ? (
                           <div className="duration-spinner">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                            </svg>
+                            <Music size={12} />
                           </div>
                         ) : (
                           formatDuration(duration)

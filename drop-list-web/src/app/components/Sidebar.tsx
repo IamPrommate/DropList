@@ -3,6 +3,7 @@
 import { Dropdown } from 'antd';
 import { TrackType } from '../lib/types';
 import GoogleDrivePicker from './GoogleDrivePicker';
+import { Music, Plus, FolderOpen } from 'lucide-react';
 
 interface SidebarProps {
   selectedFolderName: string | null;
@@ -56,9 +57,7 @@ export default function Sidebar({
                       key: 'local',
                       label: (
                         <div className="dropdown-item" onClick={onFolderPick}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 5v14m-7-7h14"></path>
-                          </svg>
+                          <FolderOpen size={16} />
                           Add from local
                         </div>
                       ),
@@ -78,9 +77,7 @@ export default function Sidebar({
                 placement="bottomLeft"
               >
                 <button className="sidebar-add-main-btn">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14m-7-7h14"></path>
-                  </svg>
+                  <Plus size={16} />
                   Add Music
                 </button>
               </Dropdown>
@@ -90,11 +87,7 @@ export default function Sidebar({
                 {selectedFolderName && (
                   <div className="playlist-item active">
                     <div className="playlist-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M9 18V5l12-2v13"></path>
-                        <circle cx="6" cy="18" r="3"></circle>
-                        <circle cx="18" cy="16" r="3"></circle>
-                      </svg>
+                      <Music size={16} />
                     </div>
                     <div className="playlist-info">
                       <div className="playlist-name">{selectedFolderName}</div>
@@ -105,11 +98,7 @@ export default function Sidebar({
                 {!selectedFolderName && tracks.length === 0 && (
                   <div className="playlist-empty">
                     <div className="empty-icon">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M9 18V5l12-2v13"></path>
-                        <circle cx="6" cy="18" r="3"></circle>
-                        <circle cx="18" cy="16" r="3"></circle>
-                      </svg>
+                      <Music size={24} />
                     </div>
                     <div className="empty-text">No playlists yet</div>
                     <div className="empty-subtext">Add music to create your first playlist</div>

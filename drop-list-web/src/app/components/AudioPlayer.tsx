@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
+import { Play, Pause, Music } from 'lucide-react';
 import { formatDuration } from '../../utils/time';
 import { parseTrackName } from '../../utils/track';
 import ScrollingText from './ScrollingText';
@@ -318,16 +319,12 @@ export default function AudioPlayer({
                                     }}
                                 />
                                 <div className="artist-image-spinner">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                                    </svg>
+                                    <Music size={20} />
                                 </div>
                             </>
                         ) : null}
                         <div className={`player-album-art-fallback ${track?.artistImageUrl ? '' : 'show'}`}>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                          </svg>
+                          <Music size={24} />
                         </div>
                     </div>
                     <div className="player-text">
@@ -390,7 +387,7 @@ export default function AudioPlayer({
                             onClick={onPlayPauseToggle} 
                             disabled={!track}
                         >
-                            {isPlaying ? <PauseOutlined /> : <CaretRightOutlined />}
+                            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
                         </button>
                         <button 
                             className="control-btn" 
