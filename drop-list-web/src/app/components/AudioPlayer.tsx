@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
-import { Play, Pause, Music } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 import { formatDuration } from '../../utils/time';
 import { parseTrackName } from '../../utils/track';
 import ScrollingText from './ScrollingText';
@@ -92,19 +92,46 @@ export default function AudioPlayer({
         documentEventListenersRef.current.clear();
     }, []);
 
-    // Audio cleanup on unmount
+    // Audio cleanup on unmount and fast refresh
     useEffect(() => {
         return () => {
             const audio = audioRef.current;
             if (audio) {
+                // Stop all audio operations
                 audio.pause();
+                audio.currentTime = 0;
                 audio.src = '';
                 audio.load();
+                
+                // Clear all event listeners
+                audio.removeEventListener('canplay', () => {});
+                audio.removeEventListener('play', () => {});
+                audio.removeEventListener('pause', () => {});
+                audio.removeEventListener('ended', () => {});
+                audio.removeEventListener('loadedmetadata', () => {});
+                audio.removeEventListener('timeupdate', () => {});
+                audio.removeEventListener('error', () => {});
             }
             cleanupEventListeners();
             cleanupDocumentEventListeners();
         };
     }, [cleanupEventListeners, cleanupDocumentEventListeners]);
+
+    // Handle fast refresh by stopping audio immediately when component unmounts
+    useEffect(() => {
+        return () => {
+            // Immediate cleanup for fast refresh
+            const audio = audioRef.current;
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+                audio.src = '';
+                audio.load();
+            }
+        };
+    }, []); // Empty dependency array means this runs on every unmount
+
+    // Fast refresh test #2 - triggering another refresh
 
     // Audio state validation and play/pause handling
     useEffect(() => {
@@ -319,12 +346,16 @@ export default function AudioPlayer({
                                     }}
                                 />
                                 <div className="artist-image-spinner">
-                                    <Music size={20} />
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                                    </svg>
                                 </div>
                             </>
                         ) : null}
                         <div className={`player-album-art-fallback ${track?.artistImageUrl ? '' : 'show'}`}>
-                          <Music size={24} />
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                          </svg>
                         </div>
                     </div>
                     <div className="player-text">
@@ -423,12 +454,12 @@ export default function AudioPlayer({
                         <div 
                             className="progress-bar"
                             onMouseDown={(e) => {
-                                if (!duration) return;
+                                if (!displayDuration) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const updateProgress = (clientX: number) => {
                                     const clickX = clientX - rect.left;
                                     const percentage = Math.max(0, Math.min(1, clickX / rect.width));
-                                    const newTime = percentage * duration;
+                                    const newTime = percentage * displayDuration;
                                     setCurrentTime(newTime);
                                     if (audioRef.current) {
                                         audioRef.current.currentTime = newTime;

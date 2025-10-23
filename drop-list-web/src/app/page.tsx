@@ -17,7 +17,7 @@ import {
 } from '../utils/shuffle';
 import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
-import { Music, Play, Pause, Plus, Cloud, FolderOpen } from 'lucide-react';
+import { Play, Pause, Plus, Cloud, FolderOpen } from 'lucide-react';
 import './layout.scss';
 
 enum KeyboardShortcuts {
@@ -184,6 +184,19 @@ export default function HomePage() {
     };
   }, []);
 
+  // Fast Refresh detection and cleanup
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+      if ((module as any).hot) {
+        (module as any).hot.accept(() => {
+          console.log('Fast Refresh detected - clearing track selection');
+          setCurrentIndex(-1);
+          setIsPlaying(false);
+        });
+      }
+    }
+  }, []);
+
   // Preload and cache all artist images
   const preloadArtistImages = useCallback(async (tracks: TrackType[]) => {
     // Add all tracks with artist images to loading set
@@ -283,18 +296,22 @@ export default function HomePage() {
           if (audioSrc) {
             const audio = new Audio();
             
-            // Set timeout to prevent hanging
+            // Safari-specific improvements
+            audio.preload = 'metadata';
+            audio.crossOrigin = 'anonymous';
+            
+            // Set timeout to prevent hanging - longer timeout for Safari
             const timeout = setTimeout(() => {
               audio.src = '';
               if (track.file && audioSrc?.startsWith('blob:')) {
                 URL.revokeObjectURL(audioSrc);
               }
               resolve({ cacheKey, duration: 0 });
-            }, 10000); // 10 second timeout
+            }, 15000); // 15 second timeout for Safari compatibility
             
             audio.addEventListener('loadedmetadata', () => {
               clearTimeout(timeout);
-              const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+              const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
               // Only revoke blob URLs, not Drive URLs
               if (track.file && audioSrc?.startsWith('blob:')) {
                 URL.revokeObjectURL(audioSrc);
@@ -302,8 +319,9 @@ export default function HomePage() {
               resolve({ cacheKey, duration });
             });
             
-            audio.addEventListener('error', () => {
+            audio.addEventListener('error', (e) => {
               clearTimeout(timeout);
+              console.warn(`Failed to load duration for track ${track.name}:`, e);
               // Only revoke blob URLs, not Drive URLs
               if (track.file && audioSrc?.startsWith('blob:')) {
                 URL.revokeObjectURL(audioSrc);
@@ -705,13 +723,17 @@ export default function HomePage() {
                               />
                               {loadingImages.has(track.id) && (
                                 <div className="artist-image-spinner">
-                                  <Music size={12} />
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                                  </svg>
                                 </div>
                               )}
                             </>
                           ) : (
                             <div className="artist-placeholder">
-                              <Music size={24} />
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                              </svg>
                             </div>
                           )}
                         </div>
@@ -729,10 +751,18 @@ export default function HomePage() {
                       <div className="track-duration">
                         {loadingDurations.has(cacheKey) ? (
                           <div className="duration-spinner">
-                            <Music size={12} />
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                            </svg>
                           </div>
-                        ) : (
+                        ) : trackDurations.has(cacheKey) ? (
                           formatDuration(duration)
+                        ) : (
+                          <div className="duration-spinner">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                            </svg>
+                          </div>
                         )}
                       </div>
                       <div className="track-menu">
