@@ -1,4 +1,4 @@
-import { AudioExtension, ImageExtension } from '@/app/lib/common';
+import { AudioExtension, ImageExtension, FileType } from '@/app/lib/common';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Configurable folder names from environment variables
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
           files.push({ 
             id: fileId, 
             name: fileName,
-            type: isAudioFile ? 'audio' : 'image'
+            type: isAudioFile ? FileType.AUDIO : FileType.IMAGE
           });
         }
       }
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
                 subfolderFiles.push({ 
                   id: fileId, 
                   name: fileName,
-                  type: 'image',
+                  type: FileType.IMAGE,
                   source: 'artist-subfolder'
                 });
               }
@@ -350,7 +350,7 @@ export async function POST(request: NextRequest) {
       console.log(`No "${CONFIG.ARTIST_FOLDER}" subfolder found - skipping image fetch`);
     }
     
-    console.log(`Total files found: ${files.length} (${files.filter(f => f.type === 'audio').length} audio, ${files.filter(f => f.type === 'image').length} images)`);
+    console.log(`Total files found: ${files.length} (${files.filter(f => f.type === FileType.AUDIO).length} audio, ${files.filter(f => f.type === FileType.IMAGE).length} images)`);
     
     if (files.length === 0) {
       return NextResponse.json({ 

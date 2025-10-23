@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Modal, Input, Space, Alert } from "antd";
 import type { TrackType } from "../lib/types";
 import { matchArtistImages } from "../../utils/track";
-import { isAudioFile, isImageFile } from "../lib/common";
+import { isAudioFile, isImageFile, FileType } from "../lib/common";
 import "./google-drive.scss";
 
 type Props = {
@@ -133,8 +133,8 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           const currentFolderName = folderData.folderName;
           
           // Separate audio and image files using enums
-          const audioFiles = files.filter((file) => isAudioFile(file.name));
-          const imageFiles = files.filter((file) => isImageFile(file.name));
+          const audioFiles = files.filter((file) => isAudioFile(file.name) && (file as any).type === FileType.AUDIO);
+          const imageFiles = files.filter((file) => isImageFile(file.name) && (file as any).type === FileType.IMAGE);
           
           // Match artist images with tracks
           const artistImageMap = matchArtistImages(audioFiles, imageFiles);
