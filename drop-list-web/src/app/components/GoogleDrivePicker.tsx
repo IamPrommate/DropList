@@ -202,12 +202,12 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
       {variant === 'dropdown' ? (
         <div className="dropdown-item" onClick={() => setOpen(true)}>
           <Cloud size={16} />
-          Add from Google Drive
+          Add From Google Drive
         </div>
       ) : (
         <button className="add-btn-ggd" onClick={() => setOpen(true)}>
           <Cloud size={20} />
-          Add from Google Drive
+          Add From Google Drive
         </button>
       )}
       <Modal

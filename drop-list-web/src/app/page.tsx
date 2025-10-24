@@ -1,10 +1,12 @@
 // src/app/page.tsx
 'use client';
 
+import '@ant-design/v5-patch-for-react-19';
 import { useCallback, useState, useRef, useEffect } from 'react';
 import AudioPlayer from './components/AudioPlayer';
+import PlaylistHeader from './components/PlaylistHeader';
 import { TrackType } from './lib/types';
-import { Divider, Switch} from 'antd';
+import { Divider, Switch } from 'antd';
 import GoogleDrivePicker from './components/GoogleDrivePicker';
 import Sidebar from './components/Sidebar';
 import { 
@@ -17,7 +19,6 @@ import {
 } from '../utils/shuffle';
 import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
-import { Play, Pause, Plus, Cloud, FolderOpen } from 'lucide-react';
 import './layout.scss';
 
 enum KeyboardShortcuts {
@@ -585,67 +586,24 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
-                <div className="album-art">
-                  <div className="album-art-default"></div>
-                </div>
-                <div className="info-section">
-                  <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1>
-                  <p className="subtitle">
-                    {tracks.length > 0 
-                      ? `${tracks.length} tracks, ${formatDuration(totalDuration)}`
-                      : 'Ready to drop?'
-                    }
-                  </p>
-                  <div className="buttons">
-                    {tracks.length > 0 && (
-                      <button 
-                        className="play-btn"
-                        onClick={() => {
-                          if (tracks.length > 0) {
-                            setIsPlaying(!isPlaying);
-                          }
-                        }}
-                      >
-                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                        {isPlaying ? 'Pause' : 'Play'}
-                      </button>
-                    )}
-                    <button className="add-btn" onClick={handleFolderPick}>
-                      <FolderOpen size={20} />
-                      Add from local
-                    </button>
-                    <GoogleDrivePicker
-                      onPicked={(picked, folderName) => {
-                        // Clean up previous cached images
-                        cachedImages.forEach(url => {
-                          if (url.startsWith('blob:')) {
-                            URL.revokeObjectURL(url);
-                          }
-                        });
-                        setCachedImages(new Map());
-                        
-                        setTracks(picked); // Replace tracks instead of concatenating
-                        setCurrentIndex(-1);
-                        setIsPlaying(false);
-                        
-                        // Reset shuffle state when new tracks are loaded
-                        setShuffleState(resetShuffleState());
-                        
-                        // Set folder name if provided
-                        if (folderName) {
-                          setSelectedFolderName(folderName);
-                        }
-                        
-                        // Preload durations, audio files, and artist images for Google Drive tracks
-                        preloadTrackDurations(picked);
-                        preloadAudioFiles(picked);
-                        preloadArtistImages(picked);
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
+              <PlaylistHeader
+                tracks={tracks}
+                selectedFolderName={selectedFolderName}
+                totalDuration={totalDuration}
+                isPlaying={isPlaying}
+                currentIndex={currentIndex}
+                onPlayPause={() => {
+                  if (tracks.length > 0) {
+                    setIsPlaying(!isPlaying);
+                  }
+                }}
+                onPlayFirst={() => {
+                  if (tracks.length > 0) {
+                    setCurrentIndex(0);
+                    setIsPlaying(true);
+                  }
+                }}
+              />
 
               {/* {currentTrack && (<Divider />)} */}
 

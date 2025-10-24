@@ -58,7 +58,7 @@ export default function Sidebar({
                       label: (
                         <div className="dropdown-item" onClick={onFolderPick}>
                           <FolderOpen size={16} />
-                          Add from local
+                          Add From Local
                         </div>
                       ),
                     },
