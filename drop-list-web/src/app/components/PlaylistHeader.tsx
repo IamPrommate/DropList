@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download } from 'lucide-react';
+import { Play, Pause, Download, Cloud, File } from 'lucide-react';
 import { Progress } from 'antd';
 import { formatDuration } from '../../utils/time';
 import JSZip from 'jszip';
@@ -193,12 +193,20 @@ export default function PlaylistHeader({
         <div className="album-art-default"></div>
       </div>
       <div className="info-section">
-        <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1>
+        <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1> 
         <p className="subtitle">
-          {tracks.length > 0 
-            ? `${tracks.length} tracks, ${formatDuration(totalDuration)}`
-            : 'Ready to drop?'
-          }
+          {tracks.length > 0 ? (
+            <>
+              {tracks.length} tracks, {formatDuration(totalDuration)}
+              {tracks.some(track => track.googleDriveUrl) ? (
+                <Cloud size={16} style={{ marginLeft: '8px', opacity: 0.8 }} />
+              ) : (
+                <File size={16} style={{ marginLeft: '8px', opacity: 0.8 }} />
+              )}
+            </>
+          ) : (
+            'Ready to drop?'
+          )}
         </p>
         <div className="buttons">
           {tracks.length > 0 && (
