@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const CONFIG = {
   TRACKS_FOLDER: process.env.NEXT_PUBLIC_TRACKS_FOLDER || '', // Default: empty (root folder)
   ARTIST_FOLDER: process.env.NEXT_PUBLIC_ARTIST_FOLDER || 'artist', // Default: 'artist'
+  COVER_FOLDER: process.env.NEXT_PUBLIC_COVER_FOLDER || 'cover', // Default: 'cover'
 };
 
 // Helper function to fetch files from a subfolder
@@ -74,8 +75,9 @@ export async function POST(request: NextRequest) {
     // From the terminal output, I can see the structure has data-id attributes
     const tableRows = html.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
     
-    // Look for "artist" subfolder specifically - try multiple approaches
+    // Look for "artist" and "cover" subfolders specifically - try multiple approaches
     let artistSubfolderId = null;
+    let coverSubfolderId = null;
     
     
     // Approach 1: Look for folder links in table rows (same as files)
@@ -109,11 +111,18 @@ export async function POST(request: NextRequest) {
           }
           
           
-          // Check for artist folder (configurable)
-          if (folderName && folderName.toLowerCase().includes(CONFIG.ARTIST_FOLDER.toLowerCase())) {
+          // Check for artist folder (configurable) - exact match or case-insensitive
+          if (folderName && folderName.toLowerCase().trim() === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
             artistSubfolderId = folderId;
-            break;
           }
+          
+          // Check for cover folder (configurable) - exact match or case-insensitive
+          if (folderName && folderName.toLowerCase().trim() === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
+            coverSubfolderId = folderId;
+          }
+          
+          // Break if both found
+          if (artistSubfolderId && coverSubfolderId) break;
         }
       }
     }
@@ -137,10 +146,17 @@ export async function POST(request: NextRequest) {
             console.log('Checking subfolder link:', link.substring(0, 100) + '...');
             console.log('Link text match:', linkTextMatch ? linkTextMatch[1] : 'No text found');
             
-            if (linkTextMatch && linkTextMatch[1].toLowerCase().includes(CONFIG.ARTIST_FOLDER.toLowerCase())) {
-              artistSubfolderId = subfolderId;
-              console.log(`Found "${CONFIG.ARTIST_FOLDER}" subfolder:`, subfolderId);
-              break;
+            if (linkTextMatch) {
+              const linkText = linkTextMatch[1].toLowerCase().trim();
+              if (linkText === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
+                artistSubfolderId = subfolderId;
+                console.log(`Found "${CONFIG.ARTIST_FOLDER}" subfolder:`, subfolderId);
+              }
+              if (linkText === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
+                coverSubfolderId = subfolderId;
+                console.log(`Found "${CONFIG.COVER_FOLDER}" subfolder:`, subfolderId);
+              }
+              if (artistSubfolderId && coverSubfolderId) break;
             }
           }
         }
@@ -350,17 +366,77 @@ export async function POST(request: NextRequest) {
       console.log(`No "${CONFIG.ARTIST_FOLDER}" subfolder found - skipping image fetch`);
     }
     
+    // Get the first cover image (single album cover for the whole playlist)
+    let albumCoverUrl = null;
+    
+    // Fetch cover images from cover subfolder if it exists
+    if (coverSubfolderId) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const subfolderUrl = `https://drive.google.com/drive/folders/${coverSubfolderId}`;
+        const response = await fetch(subfolderUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const subfolderHtml = await response.text();
+          const subfolderTableRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+          if (subfolderTableRows) {
+            // Get the first image file
+            const imageExts = Object.values(ImageExtension).join('|').replace(/\./g, '');
+            for (const row of subfolderTableRows) {
+              const idMatch = row.match(/data-id="([^"]+)"/);
+              if (!idMatch) continue;
+              
+              const fileId = idMatch[1];
+              const namePatterns = [
+                new RegExp(`<strong[^>]*>([^<]+\\.(${imageExts}))<\\/strong>`, 'i'),
+                new RegExp(`data-title="([^"]+\\.(${imageExts}))"`, 'i'),
+                new RegExp(`aria-label="[^"]*([^"]+\\.(${imageExts}))[^"]*"`, 'i'),
+                new RegExp(`title="([^"]+\\.(${imageExts}))"`, 'i')
+              ];
+              
+              let fileName = null;
+              for (const pattern of namePatterns) {
+                const match = row.match(pattern);
+                if (match) {
+                  fileName = match[1];
+                  break;
+                }
+              }
+              
+              // Found first cover image
+              if (fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext))) {
+                albumCoverUrl = `/api/drive-file?id=${fileId}`;
+                break;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Error fetching "${CONFIG.COVER_FOLDER}" subfolder:`, error);
+      }
+    }
+    
     console.log(`Total files found: ${files.length} (${files.filter(f => f.type === FileType.AUDIO).length} audio, ${files.filter(f => f.type === FileType.IMAGE).length} images)`);
     
     if (files.length === 0) {
       return NextResponse.json({ 
         error: 'No files found in folder or folder not publicly accessible',
         files: [],
-        folderName
+        folderName,
+        albumCoverUrl
       });
     }
     
-    return NextResponse.json({ files, folderName });
+    return NextResponse.json({ files, folderName, albumCoverUrl });
     
   } catch (error) {
     console.error('Error fetching folder:', error);
@@ -373,7 +449,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       error: errorMessage,
       files: [],
-      folderName: 'Google Drive Folder'
+      folderName: 'Google Drive Folder',
+      albumCoverUrl: null
     }, { status: 500 });
   }
 }

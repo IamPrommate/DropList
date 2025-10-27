@@ -3,6 +3,7 @@ import { Play, Pause, Download, Cloud, File } from 'lucide-react';
 import { Progress } from 'antd';
 import { formatDuration } from '../../utils/time';
 import JSZip from 'jszip';
+import { extractDominantColor, lightenColor, darkenColor, saturateColor, shiftHue, hexToRgba, rgbToHsl, hexToRgb } from '../../utils/color';
 
 interface TrackType {
   id: string;
@@ -18,6 +19,7 @@ interface PlaylistHeaderProps {
   totalDuration: number;
   isPlaying: boolean;
   currentIndex: number;
+  albumCoverUrl?: string | null;
   onPlayPause: () => void;
   onPlayFirst: () => void;
 }
@@ -28,12 +30,93 @@ export default function PlaylistHeader({
   totalDuration,
   isPlaying,
   currentIndex,
+  albumCoverUrl,
   onPlayPause,
   onPlayFirst,
 }: PlaylistHeaderProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const downloadAbortController = useRef<AbortController | null>(null);
+  const [isAlbumCoverLoading, setIsAlbumCoverLoading] = useState(!!albumCoverUrl);
+  
+  // Extract and apply dynamic colors when album cover loads
+  useEffect(() => {
+    if (albumCoverUrl) {
+      setIsAlbumCoverLoading(true);
+      
+      extractDominantColor(albumCoverUrl)
+        .then((dominantColor) => {
+          console.log('Extracted dominant color:', dominantColor);
+          
+          // Generate shades for TYPE 1 variables with 10% saturation boost
+          // Start: extracted color darkened by 5% + 10% saturation
+          const gradientStart = saturateColor(lightenColor(dominantColor, 10), 50);
+          // Middle: 30% darker than start + 10% saturation
+          const gradientMiddle = saturateColor(darkenColor(dominantColor, 35), 50);
+          // End is always fixed
+          const gradientEnd = '#1f1f2e';
+          
+          // Apply to background gradient
+          document.documentElement.style.setProperty('--bg-gradient-start', gradientStart);
+          document.documentElement.style.setProperty('--bg-gradient-middle', gradientMiddle);
+          document.documentElement.style.setProperty('--bg-gradient-end', gradientEnd);
+          
+          // Apply to switch colors
+          document.documentElement.style.setProperty('--switch-bg', hexToRgba(lightenColor(dominantColor, 25), 0.3));
+          document.documentElement.style.setProperty('--switch-border', hexToRgba(lightenColor(dominantColor, 25), 0.5));
+          document.documentElement.style.setProperty('--switch-checked-bg', hexToRgba(lightenColor(dominantColor, 25), 0.8));
+          document.documentElement.style.setProperty('--switch-checked-border', lightenColor(dominantColor, 25));
+          document.documentElement.style.setProperty('--switch-hover', hexToRgba(lightenColor(dominantColor, 25), 0.4));
+          document.documentElement.style.setProperty('--switch-checked-hover', hexToRgba(lightenColor(dominantColor, 25), 0.9));
+          
+          console.log('Applied TYPE 1 colors:', { dominantColor, gradientStart, gradientMiddle, gradientEnd });
+          
+          // TYPE 2: Apply hue angle shift to primary gradient colors
+          // Original middle color: #a855f7 (purple)
+          // We need to calculate the hue shift from purple to extracted color
+          const originalMiddle = '#a855f7';
+          
+          // Get hues for original middle color and extracted color
+          const [origR, origG, origB] = hexToRgb(originalMiddle);
+          const originalHue = rgbToHsl(origR, origG, origB);
+          const [extR, extG, extB] = hexToRgb(dominantColor);
+          const extractedHue = rgbToHsl(extR, extG, extB);
+          
+          // Calculate hue angle difference
+          let hueShift = extractedHue[0] - originalHue[0];
+          
+          // Normalize the shift
+          if (hueShift > 180) hueShift -= 360;
+          if (hueShift < -180) hueShift += 360;
+          
+          // Apply same hue shift to all primary gradient colors
+          const originalColors = {
+            start: '#ec4899',
+            middle: '#a855f7',
+            end: '#3b82f6',
+            hoverStart: '#f472b6',
+            hoverMiddle: '#c084fc',
+            hoverEnd: '#60a5fa'
+          };
+          
+          // Shift all colors by the same hue angle
+          document.documentElement.style.setProperty('--primary-gradient-start', shiftHue(originalColors.start, hueShift));
+          document.documentElement.style.setProperty('--primary-gradient-middle', shiftHue(originalColors.middle, hueShift));
+          document.documentElement.style.setProperty('--primary-gradient-end', shiftHue(originalColors.end, hueShift));
+          document.documentElement.style.setProperty('--primary-gradient-hover-start', shiftHue(originalColors.hoverStart, hueShift));
+          document.documentElement.style.setProperty('--primary-gradient-hover-middle', shiftHue(originalColors.hoverMiddle, hueShift));
+          document.documentElement.style.setProperty('--primary-gradient-hover-end', shiftHue(originalColors.hoverEnd, hueShift));
+          
+          console.log('Applied TYPE 2 hue shift:', { hueShift, originalHue: originalHue[0], extractedHue: extractedHue[0] });
+        })
+        .catch((error) => {
+          console.error('Failed to extract color:', error);
+        })
+        .finally(() => {
+          setIsAlbumCoverLoading(false);
+        });
+    }
+  }, [albumCoverUrl]);
 
   // Extract file ID from Google Drive URL
   const extractFileId = (url: string): string | null => {
@@ -190,7 +273,33 @@ export default function PlaylistHeader({
   return (
     <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
       <div className="album-art">
-        <div className="album-art-default"></div>
+        {albumCoverUrl ? (
+          <>
+            <img 
+              src={albumCoverUrl} 
+              alt="Album Cover"
+              className="album-art-image"
+              onLoad={() => setIsAlbumCoverLoading(false)}
+              onError={(e) => {
+                // Fall back to default if image fails to load
+                setIsAlbumCoverLoading(false);
+                e.currentTarget.style.display = 'none';
+                const defaultDiv = e.currentTarget.nextElementSibling?.nextElementSibling;
+                if (defaultDiv) {
+                  (defaultDiv as HTMLElement).style.display = 'flex';
+                }
+              }}
+            />
+            {isAlbumCoverLoading && (
+              <div className="album-art-spinner">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                </svg>
+              </div>
+            )}
+          </>
+        ) : null}
+        <div className="album-art-default" style={{ display: albumCoverUrl ? 'none' : 'flex' }}></div>
       </div>
       <div className="info-section">
         <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1> 

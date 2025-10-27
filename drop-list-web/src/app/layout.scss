@@ -22,7 +22,7 @@
   --text-secondary: #d1d5db;
   --text-muted: #9ca3af;
   --text-subtle: #6b7280;
-  --text-artist: #818897;
+  --text-artist: #969eb1;
   
   /* Border Colors */
   --border-primary: rgba(255, 255, 255, 0.1);
@@ -52,7 +52,7 @@
   --switch-checked-hover: rgba(168, 85, 247, 0.9);
   
   /* Track Colors */
-  --track-active-bg: rgba(255, 255, 255, 0.13);
+  --track-active-bg: rgba(193, 191, 191, 0.13);
   --track-active-border: #22c55e;
   --track-active-shadow: rgba(34, 197, 94, 0.1);
   --track-hover-bg: rgba(255, 255, 255, 0.07);
@@ -523,11 +523,33 @@
   overflow: hidden;
 }
 
+.album-art-spinner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  background: var(--overlay-dark);
+  border-radius: 8px;
+  z-index: 10;
+  
+  svg {
+    animation: spin 1s linear infinite;
+  }
+}
+
 .album-art-default {
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .info-section {
@@ -746,7 +768,7 @@
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(2px);
   border: 1px solid transparent;
   
   &::before {

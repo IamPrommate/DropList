@@ -9,7 +9,7 @@ import { Cloud } from "lucide-react";
 import "./google-drive.scss";
 
 type Props = {
-  onPicked: (tracks: TrackType[], folderName?: string) => void;
+  onPicked: (tracks: TrackType[], folderName?: string, albumCoverUrl?: string | null) => void;
   variant?: 'button' | 'dropdown';
 };
 
@@ -45,7 +45,7 @@ async function buildStreamUrl(
 // Use server-side API to fetch folder contents (no CORS issues)
 async function fetchFolderFiles(
   folderId: string
-): Promise<{ files: { id: string; name: string }[]; folderName?: string; error?: string }> {
+): Promise<{ files: { id: string; name: string }[]; folderName?: string; albumCoverUrl?: string | null; error?: string }> {
   try {
     console.log("Fetching folder via server API:", folderId);
 
@@ -67,11 +67,11 @@ async function fetchFolderFiles(
     const data = await response.json();
 
     if (data.error) {
-      return { files: [], folderName: data.folderName, error: data.error };
+      return { files: [], folderName: data.folderName, albumCoverUrl: data.albumCoverUrl || null, error: data.error };
     }
 
     console.log("Successfully found files:", data.files);
-    return { files: data.files, folderName: data.folderName };
+    return { files: data.files, folderName: data.folderName, albumCoverUrl: data.albumCoverUrl || null };
   } catch (error) {
     console.error("Error fetching folder:", error);
 
@@ -113,6 +113,7 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
 
     const tracks: TrackType[] = [];
     let folderName: string | undefined;
+    let playlistAlbumCoverUrl: string | null = null;
     let lastError: string | undefined;
 
     for (const line of lines) {
@@ -129,16 +130,21 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
             continue; // Skip this folder but continue with others
           }
 
-          // Extract files array and folder name
+          // Extract files array, folder name, and album cover URL
           const files = folderData.files || [];
           const currentFolderName = folderData.folderName;
+          const albumCoverUrl = (folderData as any).albumCoverUrl || null;
           
           // Separate audio and image files using enums
           const audioFiles = files.filter((file) => isAudioFile(file.name) && (file as any).type === FileType.AUDIO);
-          const imageFiles = files.filter((file) => isImageFile(file.name) && (file as any).type === FileType.IMAGE);
+          const artistImages = files.filter((file) => 
+            isImageFile(file.name) && 
+            (file as any).type === FileType.IMAGE && 
+            (file as any).source === 'artist-subfolder'
+          );
           
           // Match artist images with tracks
-          const artistImageMap = matchArtistImages(audioFiles, imageFiles);
+          const artistImageMap = matchArtistImages(audioFiles, artistImages);
           
           // Process audio files in parallel for better performance
           const filePromises = audioFiles.map(async (file, i) => {
@@ -168,9 +174,14 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           const folderTracks = await Promise.all(filePromises);
           tracks.push(...folderTracks);
           
-          // Store folder name for the first folder processed
+          // Store folder name and album cover for the first folder processed
           if (currentFolderName && !folderName) {
             folderName = currentFolderName;
+          }
+          
+          // Set the album cover URL for this playlist
+          if (albumCoverUrl) {
+            playlistAlbumCoverUrl = albumCoverUrl;
           }
         } else {
           console.log("Invalid folder link:", line);
@@ -187,7 +198,7 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
     }
 
     if (tracks.length > 0) {
-      onPicked(tracks, folderName);
+      onPicked(tracks, folderName, playlistAlbumCoverUrl);
       setOpen(false);
       setRaw("");
     } else {

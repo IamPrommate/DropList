@@ -57,6 +57,7 @@ export default function HomePage() {
   const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
+  const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
@@ -533,7 +534,7 @@ export default function HomePage() {
             selectedFolderName={selectedFolderName}
             tracks={tracks}
             onFolderPick={handleFolderPick}
-            onGoogleDrivePicked={(picked, folderName) => {
+            onGoogleDrivePicked={(picked, folderName, coverUrl) => {
               // Clean up previous cached images
               cachedImages.forEach(url => {
                 if (url.startsWith('blob:')) {
@@ -553,6 +554,9 @@ export default function HomePage() {
               if (folderName) {
                 setSelectedFolderName(folderName);
               }
+              
+              // Set album cover URL
+              setAlbumCoverUrl(coverUrl || null);
               
               // Preload durations, audio files, and artist images for Google Drive tracks
               preloadTrackDurations(picked);
@@ -592,6 +596,7 @@ export default function HomePage() {
                 totalDuration={totalDuration}
                 isPlaying={isPlaying}
                 currentIndex={currentIndex}
+                albumCoverUrl={albumCoverUrl}
                 onPlayPause={() => {
                   if (tracks.length > 0) {
                     setIsPlaying(!isPlaying);
