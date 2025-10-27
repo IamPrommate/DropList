@@ -20,6 +20,7 @@ interface PlaylistHeaderProps {
   isPlaying: boolean;
   currentIndex: number;
   albumCoverUrl?: string | null;
+  showCoverImage?: boolean;
   onPlayPause: () => void;
   onPlayFirst: () => void;
 }
@@ -31,6 +32,7 @@ export default function PlaylistHeader({
   isPlaying,
   currentIndex,
   albumCoverUrl,
+  showCoverImage = true,
   onPlayPause,
   onPlayFirst,
 }: PlaylistHeaderProps) {
@@ -41,7 +43,7 @@ export default function PlaylistHeader({
   
   // Extract and apply dynamic colors when album cover loads
   useEffect(() => {
-    if (albumCoverUrl) {
+    if (albumCoverUrl && showCoverImage) {
       setIsAlbumCoverLoading(true);
       
       extractDominantColor(albumCoverUrl)
@@ -50,7 +52,7 @@ export default function PlaylistHeader({
           
           // Generate shades for TYPE 1 variables with 10% saturation boost
           // Start: extracted color darkened by 5% + 10% saturation
-          const gradientStart = saturateColor(lightenColor(dominantColor, 10), 50);
+          const gradientStart = saturateColor(darkenColor(dominantColor, 20), 50);
           // Middle: 30% darker than start + 10% saturation
           const gradientMiddle = saturateColor(darkenColor(dominantColor, 35), 50);
           // End is always fixed
@@ -115,8 +117,27 @@ export default function PlaylistHeader({
         .finally(() => {
           setIsAlbumCoverLoading(false);
         });
+    } else if (!showCoverImage) {
+      // Reset to default purple colors when cover is hidden
+      document.documentElement.style.setProperty('--bg-gradient-start', '#5b21b6');
+      document.documentElement.style.setProperty('--bg-gradient-middle', '#581c87');
+      document.documentElement.style.setProperty('--bg-gradient-end', '#1f1f2e');
+      
+      document.documentElement.style.setProperty('--switch-bg', 'rgba(168, 85, 247, 0.3)');
+      document.documentElement.style.setProperty('--switch-border', 'rgba(168, 85, 247, 0.5)');
+      document.documentElement.style.setProperty('--switch-checked-bg', 'rgba(168, 85, 247, 0.8)');
+      document.documentElement.style.setProperty('--switch-checked-border', '#a855f7');
+      document.documentElement.style.setProperty('--switch-hover', 'rgba(168, 85, 247, 0.4)');
+      document.documentElement.style.setProperty('--switch-checked-hover', 'rgba(168, 85, 247, 0.9)');
+      
+      document.documentElement.style.setProperty('--primary-gradient-start', '#ec4899');
+      document.documentElement.style.setProperty('--primary-gradient-middle', '#a855f7');
+      document.documentElement.style.setProperty('--primary-gradient-end', '#3b82f6');
+      document.documentElement.style.setProperty('--primary-gradient-hover-start', '#f472b6');
+      document.documentElement.style.setProperty('--primary-gradient-hover-middle', '#c084fc');
+      document.documentElement.style.setProperty('--primary-gradient-hover-end', '#60a5fa');
     }
-  }, [albumCoverUrl]);
+  }, [albumCoverUrl, showCoverImage]);
 
   // Extract file ID from Google Drive URL
   const extractFileId = (url: string): string | null => {
@@ -273,7 +294,7 @@ export default function PlaylistHeader({
   return (
     <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
       <div className="album-art">
-        {albumCoverUrl ? (
+        {albumCoverUrl && showCoverImage ? (
           <>
             <img 
               src={albumCoverUrl} 
@@ -299,7 +320,7 @@ export default function PlaylistHeader({
             )}
           </>
         ) : null}
-        <div className="album-art-default" style={{ display: albumCoverUrl ? 'none' : 'flex' }}></div>
+        <div className="album-art-default" style={{ display: (albumCoverUrl && showCoverImage) ? 'none' : 'flex' }}></div>
       </div>
       <div className="info-section">
         <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1> 

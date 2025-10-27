@@ -57,6 +57,7 @@ export default function HomePage() {
   const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
+  const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   
   // Shuffle state
@@ -577,6 +578,16 @@ export default function HomePage() {
                   </svg>
                 </button> */}
                 <div className="header-right">
+                  {tracks.length > 0 && (
+                    <div className="image-toggle-control">
+                      <span className="toggle-label">Show cover image</span>
+                      <Switch 
+                        checked={showCoverImage}
+                        onChange={setShowCoverImage}
+                        size="small"
+                      />
+                    </div>
+                  )}
                   {/* <button className="header-btn">Listen</button>
                   <button className="header-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{display: 'inline', marginRight: '4px'}}>
@@ -597,6 +608,7 @@ export default function HomePage() {
                 isPlaying={isPlaying}
                 currentIndex={currentIndex}
                 albumCoverUrl={albumCoverUrl}
+                showCoverImage={showCoverImage}
                 onPlayPause={() => {
                   if (tracks.length > 0) {
                     setIsPlaying(!isPlaying);
