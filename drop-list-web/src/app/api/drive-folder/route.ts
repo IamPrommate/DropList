@@ -1,16 +1,77 @@
 import { AudioExtension, ImageExtension, FileType } from '@/app/lib/common';
 import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
 
 // Configurable folder names from environment variables
 const CONFIG = {
-  TRACKS_FOLDER: process.env.NEXT_PUBLIC_TRACKS_FOLDER || '', // Default: empty (root folder)
+  TRACKS_FOLDER: process.env.NEXT_PUBLIC_TRACKS_FOLDER || 'track', // Default: empty (root folder)
   ARTIST_FOLDER: process.env.NEXT_PUBLIC_ARTIST_FOLDER || 'artist', // Default: 'artist'
   COVER_FOLDER: process.env.NEXT_PUBLIC_COVER_FOLDER || 'cover', // Default: 'cover'
 };
 
-// Helper function to fetch files from a subfolder
-async function fetchTracksFromSubfolder(folderId: string) {
+// Initialize Google Drive API client
+function getDriveClient() {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+  
+  return google.drive({
+    version: 'v3',
+    auth: apiKey,
+  });
+}
+
+// Fetch all files from a folder using Drive API with pagination
+async function fetchFilesFromFolderAPI(folderId: string): Promise<Array<{ id: string; name: string; mimeType: string }>> {
+  const drive = getDriveClient();
+  if (!drive) {
+    throw new Error('Google Drive API key not configured');
+  }
+
+  const allFiles: Array<{ id: string; name: string; mimeType: string }> = [];
+  let pageToken: string | null | undefined = null;
+
+  do {
+    console.log(`🔍 DEBUG: Fetching files from folder ${folderId}, pageToken: ${pageToken || 'null'}`);
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response: any = await drive.files.list({
+      q: `'${folderId}' in parents and trashed=false`,
+      fields: 'nextPageToken, files(id, name, mimeType)',
+      pageSize: 1000, // Maximum allowed
+      pageToken: pageToken || undefined,
+      orderBy: 'name',
+    });
+
+    if (response.data.files) {
+      allFiles.push(...response.data.files.map((file: { id?: string | null; name?: string | null; mimeType?: string | null }) => ({
+        id: file.id!,
+        name: file.name!,
+        mimeType: file.mimeType || '',
+      })));
+      console.log(`📄 DEBUG: Got ${response.data.files.length} files (total so far: ${allFiles.length})`);
+    }
+
+    pageToken = response.data.nextPageToken || null;
+  } while (pageToken);
+
+  console.log(`✅ DEBUG: Total files fetched: ${allFiles.length}`);
+  return allFiles;
+}
+
+// Helper function to fetch files from a subfolder (using API if available, fallback to HTML)
+async function fetchTracksFromSubfolder(folderId: string): Promise<Array<{ id: string; name: string; mimeType: string }> | null> {
   try {
+    // Try API first if available
+    const drive = getDriveClient();
+    if (drive) {
+      console.log(`🔍 DEBUG: Using Drive API for subfolder ${folderId}`);
+      return await fetchFilesFromFolderAPI(folderId);
+    }
+
+    // Fallback to HTML scraping
+    console.log(`🔍 DEBUG: Using HTML scraping for subfolder ${folderId} (no API key)`);
     const subfolderUrl = `https://drive.google.com/drive/folders/${folderId}`;
     const response = await fetch(subfolderUrl, {
       headers: {
@@ -24,7 +85,22 @@ async function fetchTracksFromSubfolder(folderId: string) {
     }
 
     const html = await response.text();
-    return html.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+    const tableRows = html.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+    
+    // Convert HTML rows to file objects (basic conversion)
+    if (tableRows) {
+      return tableRows.map(row => {
+        const idMatch = row.match(/data-id="([^"]+)"/);
+        const nameMatch = row.match(/data-title="([^"]+)"/) || row.match(/<strong[^>]*>([^<]+)<\/strong>/);
+        return {
+          id: idMatch ? idMatch[1] : '',
+          name: nameMatch ? nameMatch[1] : '',
+          mimeType: '',
+        };
+      }).filter(f => f.id);
+    }
+    
+    return null;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.warn('Error fetching tracks subfolder:', errorMessage);
@@ -40,166 +116,166 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
     }
 
-    const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
-    
-    // Fetch the folder page from server-side (no CORS issues)
-    const response = await fetch(folderUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch folder: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-    
-    // Extract folder name from the HTML
+    const drive = getDriveClient();
     let folderName = 'Google Drive Folder';
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    if (titleMatch) {
-      // Remove various Google Drive suffixes (English, Thai, etc.)
-      folderName = titleMatch[1]
-        .replace(/\s*-\s*Google\s+Drive\s*$/i, '')
-        .replace(/\s*-\s*Google\s+ไดรฟ์\s*$/i, '')
-        .replace(/\s*-\s*Google\s*$/i, '')
-        .trim();
+    let rootFiles: Array<{ id: string; name: string; mimeType: string }> = [];
+    let useAPI = false;
+
+    // Try using Drive API first if available
+    if (drive) {
+      try {
+        console.log('🔍 DEBUG: Using Drive API for root folder');
+        useAPI = true;
+        
+        // Get folder name
+        const folderResponse = await drive.files.get({
+          fileId: folderId,
+          fields: 'name',
+        });
+        if (folderResponse.data.name) {
+          folderName = folderResponse.data.name;
+        }
+
+        // Get all files with pagination
+        rootFiles = await fetchFilesFromFolderAPI(folderId);
+        console.log(`✅ DEBUG: API fetched ${rootFiles.length} files from root folder`);
+      } catch (apiError) {
+        console.warn('⚠️ DEBUG: Drive API failed, falling back to HTML scraping:', apiError);
+        useAPI = false;
+      }
+    }
+
+    // Fallback to HTML scraping if API not available or failed
+    if (!useAPI) {
+      console.log('🔍 DEBUG: Using HTML scraping for root folder');
+      const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+      
+      const response = await fetch(folderUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch folder: ${response.statusText}`);
+      }
+
+      const html = await response.text();
+      
+      // Extract folder name from the HTML
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleMatch) {
+        folderName = titleMatch[1]
+          .replace(/\s*-\s*Google\s+Drive\s*$/i, '')
+          .replace(/\s*-\s*Google\s+ไดรฟ์\s*$/i, '')
+          .replace(/\s*-\s*Google\s*$/i, '')
+          .trim();
+      }
+      
+      // Parse the HTML table structure for file information
+      const tableRows = html.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+      
+      if (tableRows) {
+        rootFiles = tableRows.map(row => {
+          const idMatch = row.match(/data-id="([^"]+)"/);
+          const nameMatch = row.match(/data-title="([^"]+)"/) || row.match(/<strong[^>]*>([^<]+)<\/strong>/);
+          return {
+            id: idMatch ? idMatch[1] : '',
+            name: nameMatch ? nameMatch[1] : '',
+            mimeType: '',
+          };
+        }).filter(f => f.id);
+      }
     }
     
-    // Parse the HTML table structure for file information
+    // Parse the files
     const files = [];
     const seenIds = new Set();
     
-    // Look for the HTML table rows that contain file information
-    // From the terminal output, I can see the structure has data-id attributes
-    const tableRows = html.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+    // Look for "artist" and "cover" subfolders
+    let artistSubfolderId: string | null = null;
+    let coverSubfolderId: string | null = null;
+    let tracksFolderId: string | null = null;
     
-    // Look for "artist" and "cover" subfolders specifically - try multiple approaches
-    let artistSubfolderId = null;
-    let coverSubfolderId = null;
-    
-    
-    // Approach 1: Look for folder links in table rows (same as files)
-    const folderTableRows = html.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
-    if (folderTableRows) {
-      for (const row of folderTableRows) {
-        const idMatch = row.match(/data-id="([^"]+)"/);
-        if (!idMatch) continue;
-        
-        const folderId = idMatch[1];
-        
-        // Look for folder indicators in the row
-        const isFolder = row.includes('folder') || row.includes('📁') || row.includes('folder-icon');
-        
-        if (isFolder) {
-          // Try to extract folder name from various patterns
-          const namePatterns = [
-            /<strong[^>]*>([^<]+)<\/strong>/i,
-            /data-title="([^"]+)"/i,
-            /aria-label="[^"]*([^"]+)[^"]*"/i,
-            /title="([^"]+)"/i
-          ];
-          
-          let folderName = null;
-          for (const pattern of namePatterns) {
-            const match = row.match(pattern);
-            if (match) {
-              folderName = match[1];
-              break;
-            }
+    // Find subfolders from root files
+    if (useAPI && drive) {
+      // Using API - check mimeType to identify folders
+      for (const file of rootFiles) {
+        if (file.mimeType === 'application/vnd.google-apps.folder') {
+          const fileName = file.name.toLowerCase().trim();
+          if (fileName === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
+            artistSubfolderId = file.id;
+            console.log(`Found "${CONFIG.ARTIST_FOLDER}" subfolder via API:`, file.id);
           }
-          
-          
-          // Check for artist folder (configurable) - exact match or case-insensitive
-          if (folderName && folderName.toLowerCase().trim() === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
-            artistSubfolderId = folderId;
+          if (fileName === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
+            coverSubfolderId = file.id;
+            console.log(`Found "${CONFIG.COVER_FOLDER}" subfolder via API:`, file.id);
           }
-          
-          // Check for cover folder (configurable) - exact match or case-insensitive
-          if (folderName && folderName.toLowerCase().trim() === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
-            coverSubfolderId = folderId;
+          if (CONFIG.TRACKS_FOLDER && fileName.includes(CONFIG.TRACKS_FOLDER.toLowerCase())) {
+            tracksFolderId = file.id;
+            console.log(`Found "${CONFIG.TRACKS_FOLDER}" subfolder via API:`, file.id);
           }
-          
-          // Break if both found
-          if (artistSubfolderId && coverSubfolderId) break;
         }
       }
-    }
-    
-    // Approach 2: Look for direct folder links (fallback)
-    if (!artistSubfolderId) {
-      const subfolderLinks = html.match(/<a[^>]*href="[^"]*\/folders\/([a-zA-Z0-9_-]{20,})[^"]*"[^>]*>/g)?.filter(link => 
-        !link.includes('accounts.google.com') && !link.includes('ServiceLogin')
-      );
+    } else {
+      // Using HTML scraping - parse from HTML
+      // We need to fetch HTML again for subfolder detection if not already done
+      const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+      const htmlResponse = await fetch(folderUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
       
-      if (subfolderLinks) {
-        console.log('Found subfolder links:', subfolderLinks.length);
+      if (htmlResponse.ok) {
+        const html = await htmlResponse.text();
+        const folderTableRows = html.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
         
-        for (const link of subfolderLinks) {
-          const idMatch = link.match(/\/folders\/([a-zA-Z0-9_-]{20,})/);
-          if (idMatch) {
-            const subfolderId = idMatch[1];
+        if (folderTableRows) {
+          for (const row of folderTableRows) {
+            const idMatch = row.match(/data-id="([^"]+)"/);
+            if (!idMatch) continue;
             
-            // Check if this link contains "artist" in the text (folder name)
-            const linkTextMatch = link.match(/>([^<]+)</);
-            console.log('Checking subfolder link:', link.substring(0, 100) + '...');
-            console.log('Link text match:', linkTextMatch ? linkTextMatch[1] : 'No text found');
+            const fileId = idMatch[1];
+            const isFolder = row.includes('folder') || row.includes('📁') || row.includes('folder-icon');
             
-            if (linkTextMatch) {
-              const linkText = linkTextMatch[1].toLowerCase().trim();
-              if (linkText === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
-                artistSubfolderId = subfolderId;
-                console.log(`Found "${CONFIG.ARTIST_FOLDER}" subfolder:`, subfolderId);
+            if (isFolder) {
+              const namePatterns = [
+                /<strong[^>]*>([^<]+)<\/strong>/i,
+                /data-title="([^"]+)"/i,
+                /aria-label="[^"]*([^"]+)[^"]*"/i,
+                /title="([^"]+)"/i
+              ];
+              
+              let subfolderName = null;
+              for (const pattern of namePatterns) {
+                const match = row.match(pattern);
+                if (match) {
+                  subfolderName = match[1];
+                  break;
+                }
               }
-              if (linkText === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
-                coverSubfolderId = subfolderId;
-                console.log(`Found "${CONFIG.COVER_FOLDER}" subfolder:`, subfolderId);
+              
+              if (subfolderName) {
+                const normalizedName = subfolderName.toLowerCase().trim();
+                if (normalizedName === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
+                  artistSubfolderId = fileId;
+                }
+                if (normalizedName === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
+                  coverSubfolderId = fileId;
+                }
+                if (CONFIG.TRACKS_FOLDER && normalizedName.includes(CONFIG.TRACKS_FOLDER.toLowerCase())) {
+                  tracksFolderId = fileId;
+                }
               }
-              if (artistSubfolderId && coverSubfolderId) break;
             }
           }
         }
-      } else {
-        console.log('No subfolder links found in HTML');
       }
     }
     
     // Determine if we should look for tracks in a subfolder or root
-    let tracksFolderId = null;
     if (CONFIG.TRACKS_FOLDER && CONFIG.TRACKS_FOLDER.trim() !== '') {
-      // Look for tracks subfolder
-      for (const row of folderTableRows || []) {
-        const idMatch = row.match(/data-id="([^"]+)"/);
-        if (!idMatch) continue;
-        
-        const folderId = idMatch[1];
-        const isFolder = row.includes('folder') || row.includes('📁') || row.includes('folder-icon');
-        
-        if (isFolder) {
-          const namePatterns = [
-            /<strong[^>]*>([^<]+)<\/strong>/i,
-            /data-title="([^"]+)"/i,
-            /aria-label="[^"]*([^"]+)[^"]*"/i,
-            /title="([^"]+)"/i
-          ];
-          
-          let folderName = null;
-          for (const pattern of namePatterns) {
-            const match = row.match(pattern);
-            if (match) {
-              folderName = match[1];
-              break;
-            }
-          }
-          
-          if (folderName && folderName.toLowerCase().includes(CONFIG.TRACKS_FOLDER.toLowerCase())) {
-            tracksFolderId = folderId;
-            break;
-          }
-        }
-      }
-      
       // Strict check: if tracks folder is specified but not found, fail
       if (!tracksFolderId) {
         console.warn(`Tracks folder "${CONFIG.TRACKS_FOLDER}" not found`);
@@ -211,8 +287,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Process files from tracks folder or root (strict - no fallback)
-    let filesToProcess = null;
+    // Process files from tracks folder or root
+    let filesToProcess: Array<{ id: string; name: string; mimeType: string }> | null = null;
     if (tracksFolderId) {
       filesToProcess = await fetchTracksFromSubfolder(tracksFolderId);
       if (!filesToProcess) {
@@ -225,139 +301,94 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.log('Looking for tracks in root folder...');
-      filesToProcess = tableRows;
+      filesToProcess = rootFiles;
     }
     
     if (filesToProcess) {
       console.log('Processing files from:', tracksFolderId ? `"${CONFIG.TRACKS_FOLDER}" subfolder` : 'root folder');
       
-      for (const row of filesToProcess) {
-        // Extract file ID from data-id attribute
-        const idMatch = row.match(/data-id="([^"]+)"/);
-        if (!idMatch) continue;
+      for (const file of filesToProcess) {
+        const fileId = file.id;
+        const fileName = file.name;
         
-        const fileId = idMatch[1];
-        
-        // Look for the filename in the row - it's usually in a strong tag or title attribute
-        const audioExts = Object.values(AudioExtension).join('|').replace(/\./g, '');
-        const imageExts = Object.values(ImageExtension).join('|').replace(/\./g, '');
-        const allExts = `${audioExts}|${imageExts}`;
-        
-        const namePatterns = [
-          new RegExp(`<strong[^>]*>([^<]+\\.(${allExts}))<\\/strong>`, 'i'),
-          new RegExp(`data-title="([^"]+\\.(${allExts}))"`, 'i'),
-          new RegExp(`aria-label="[^"]*([^"]+\\.(${allExts}))[^"]*"`, 'i'),
-          new RegExp(`title="([^"]+\\.(${allExts}))"`, 'i')
-        ];
-        
-        let fileName = null;
-        for (const pattern of namePatterns) {
-          const match = row.match(pattern);
-          if (match) {
-            fileName = match[1];
-            break;
-          }
-        }
+        // Skip if already seen
+        if (seenIds.has(fileId)) continue;
         
         // Check if it's an audio or image file using enums
         const isAudioFile = fileName && Object.values(AudioExtension).some(ext => fileName.toLowerCase().endsWith(ext));
         const isImageFile = fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext));
         
-        if (fileName && (isAudioFile || isImageFile) && !seenIds.has(fileId)) {
+        // Also check mimeType if available (from API)
+        const isAudioMimeType = file.mimeType && file.mimeType.startsWith('audio/');
+        const isImageMimeType = file.mimeType && file.mimeType.startsWith('image/');
+        
+        if (fileName && (isAudioFile || isAudioMimeType || isImageFile || isImageMimeType) && !seenIds.has(fileId)) {
           seenIds.add(fileId);
           files.push({ 
             id: fileId, 
             name: fileName,
-            type: isAudioFile ? FileType.AUDIO : FileType.IMAGE
+            type: (isAudioFile || isAudioMimeType) ? FileType.AUDIO : FileType.IMAGE
           });
         }
       }
     }
     
-    console.log('Found files from HTML table:', files.length, files);
-    
-    // Fallback: Look for files in HTML attributes if regex parsing failed
-    if (files.length === 0) {
-      console.log('Trying HTML attribute parsing as fallback...');
-      const filePattern = /data-id="([a-zA-Z0-9_-]{20,})"[^>]*data-title="([^"]+)"/g;
-      let match;
-      while ((match = filePattern.exec(html)) !== null) {
-        const id = match[1];
-        const name = match[2];
-        
-        if (!seenIds.has(id) && name && name.trim()) {
-          seenIds.add(id);
-          files.push({ id, name: name.trim() });
-        }
-      }
-    }
+    console.log('Found files:', files.length, files);
     
     // Fetch images from artist subfolder only (performance optimized)
     if (artistSubfolderId) {
-      
       try {
-        // Add timeout to prevent hanging requests
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        let artistFiles: Array<{ id: string; name: string; mimeType: string }> | null = null;
         
-        const subfolderUrl = `https://drive.google.com/drive/folders/${artistSubfolderId}`;
-        const response = await fetch(subfolderUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-          },
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          console.warn(`Failed to fetch "artist" subfolder: ${response.statusText}`);
+        if (useAPI && drive) {
+          // Use API
+          artistFiles = await fetchFilesFromFolderAPI(artistSubfolderId);
         } else {
-          const subfolderHtml = await response.text();
-          const subfolderFiles = [];
+          // Fallback to HTML scraping
+          const subfolderUrl = `https://drive.google.com/drive/folders/${artistSubfolderId}`;
+          const response = await fetch(subfolderUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
           
-          // Parse subfolder for image files only
-          const subfolderTableRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
-          if (subfolderTableRows) {
-            for (const row of subfolderTableRows) {
-              const idMatch = row.match(/data-id="([^"]+)"/);
-              if (!idMatch) continue;
-              
-              const fileId = idMatch[1];
-              
-              // Look for image files only in the artist subfolder using enums
-              const imageExts = Object.values(ImageExtension).join('|').replace(/\./g, '');
-              const namePatterns = [
-                new RegExp(`<strong[^>]*>([^<]+\\.(${imageExts}))<\\/strong>`, 'i'),
-                new RegExp(`data-title="([^"]+\\.(${imageExts}))"`, 'i'),
-                new RegExp(`aria-label="[^"]*([^"]+\\.(${imageExts}))[^"]*"`, 'i'),
-                new RegExp(`title="([^"]+\\.(${imageExts}))"`, 'i')
-              ];
-              
-              let fileName = null;
-              for (const pattern of namePatterns) {
-                const match = row.match(pattern);
-                if (match) {
-                  fileName = match[1];
-                  break;
-                }
-              }
-              
-              if (fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext)) && !seenIds.has(fileId)) {
-                seenIds.add(fileId);
-                subfolderFiles.push({ 
-                  id: fileId, 
-                  name: fileName,
-                  type: FileType.IMAGE,
-                  source: 'artist-subfolder'
-                });
-              }
+          if (response.ok) {
+            const subfolderHtml = await response.text();
+            const subfolderTableRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+            
+            if (subfolderTableRows) {
+              artistFiles = subfolderTableRows.map(row => {
+                const idMatch = row.match(/data-id="([^"]+)"/);
+                const nameMatch = row.match(/data-title="([^"]+)"/) || row.match(/<strong[^>]*>([^<]+)<\/strong>/);
+                return {
+                  id: idMatch ? idMatch[1] : '',
+                  name: nameMatch ? nameMatch[1] : '',
+                  mimeType: '',
+                };
+              }).filter(f => f.id);
             }
           }
-          
-          files.push(...subfolderFiles);
         }
         
+        if (artistFiles) {
+          const subfolderFiles = [];
+          for (const file of artistFiles) {
+            const fileName = file.name;
+            const isImageFile = fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext));
+            const isImageMimeType = file.mimeType && file.mimeType.startsWith('image/');
+            
+            if ((isImageFile || isImageMimeType) && !seenIds.has(file.id)) {
+              seenIds.add(file.id);
+              subfolderFiles.push({ 
+                id: file.id, 
+                name: fileName,
+                type: FileType.IMAGE,
+                source: 'artist-subfolder'
+              });
+            }
+          }
+          files.push(...subfolderFiles);
+        }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.warn(`Error fetching "${CONFIG.ARTIST_FOLDER}" subfolder:`, errorMessage);
@@ -372,51 +403,48 @@ export async function POST(request: NextRequest) {
     // Fetch cover images from cover subfolder if it exists
     if (coverSubfolderId) {
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        let coverFiles: Array<{ id: string; name: string; mimeType: string }> | null = null;
         
-        const subfolderUrl = `https://drive.google.com/drive/folders/${coverSubfolderId}`;
-        const response = await fetch(subfolderUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-          },
-          signal: controller.signal
-        });
+        if (useAPI && drive) {
+          // Use API
+          coverFiles = await fetchFilesFromFolderAPI(coverSubfolderId);
+        } else {
+          // Fallback to HTML scraping
+          const subfolderUrl = `https://drive.google.com/drive/folders/${coverSubfolderId}`;
+          const response = await fetch(subfolderUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
+          
+          if (response.ok) {
+            const subfolderHtml = await response.text();
+            const subfolderTableRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+            
+            if (subfolderTableRows) {
+              coverFiles = subfolderTableRows.map(row => {
+                const idMatch = row.match(/data-id="([^"]+)"/);
+                const nameMatch = row.match(/data-title="([^"]+)"/) || row.match(/<strong[^>]*>([^<]+)<\/strong>/);
+                return {
+                  id: idMatch ? idMatch[1] : '',
+                  name: nameMatch ? nameMatch[1] : '',
+                  mimeType: '',
+                };
+              }).filter(f => f.id);
+            }
+          }
+        }
         
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-          const subfolderHtml = await response.text();
-          const subfolderTableRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
-          if (subfolderTableRows) {
-            // Get the first image file
-            const imageExts = Object.values(ImageExtension).join('|').replace(/\./g, '');
-            for (const row of subfolderTableRows) {
-              const idMatch = row.match(/data-id="([^"]+)"/);
-              if (!idMatch) continue;
-              
-              const fileId = idMatch[1];
-              const namePatterns = [
-                new RegExp(`<strong[^>]*>([^<]+\\.(${imageExts}))<\\/strong>`, 'i'),
-                new RegExp(`data-title="([^"]+\\.(${imageExts}))"`, 'i'),
-                new RegExp(`aria-label="[^"]*([^"]+\\.(${imageExts}))[^"]*"`, 'i'),
-                new RegExp(`title="([^"]+\\.(${imageExts}))"`, 'i')
-              ];
-              
-              let fileName = null;
-              for (const pattern of namePatterns) {
-                const match = row.match(pattern);
-                if (match) {
-                  fileName = match[1];
-                  break;
-                }
-              }
-              
-              // Found first cover image
-              if (fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext))) {
-                albumCoverUrl = `/api/drive-file?id=${fileId}`;
-                break;
-              }
+        if (coverFiles) {
+          // Get the first image file
+          for (const file of coverFiles) {
+            const fileName = file.name;
+            const isImageFile = fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext));
+            const isImageMimeType = file.mimeType && file.mimeType.startsWith('image/');
+            
+            if (isImageFile || isImageMimeType) {
+              albumCoverUrl = `/api/drive-file?id=${file.id}`;
+              break;
             }
           }
         }

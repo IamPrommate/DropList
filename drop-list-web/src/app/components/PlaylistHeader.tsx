@@ -71,6 +71,15 @@ export default function PlaylistHeader({
           document.documentElement.style.setProperty('--switch-hover', hexToRgba(lightenColor(dominantColor, 25), 0.4));
           document.documentElement.style.setProperty('--switch-checked-hover', hexToRgba(lightenColor(dominantColor, 25), 0.9));
           
+          // Apply to shadow colors for consistent theming
+          const [r, g, b] = hexToRgb(dominantColor);
+          document.documentElement.style.setProperty('--shadow-primary', `rgba(${r}, ${g}, ${b}, 0.25)`);
+          document.documentElement.style.setProperty('--shadow-primary-glow', `rgba(${r}, ${g}, ${b}, 0.35)`);
+          document.documentElement.style.setProperty('--playlist-active-shadow', `rgba(${r}, ${g}, ${b}, 0.15)`);
+          
+          // Apply to player border for consistent theming
+          document.documentElement.style.setProperty('--player-border', hexToRgba(lightenColor(dominantColor, 25), 0.2));
+          
           console.log('Applied TYPE 1 colors:', { dominantColor, gradientStart, gradientMiddle, gradientEnd });
           
           // TYPE 2: Apply hue angle shift to primary gradient colors
@@ -129,6 +138,14 @@ export default function PlaylistHeader({
       document.documentElement.style.setProperty('--switch-checked-border', '#a855f7');
       document.documentElement.style.setProperty('--switch-hover', 'rgba(168, 85, 247, 0.4)');
       document.documentElement.style.setProperty('--switch-checked-hover', 'rgba(168, 85, 247, 0.9)');
+      
+      // Reset shadow colors to default
+      document.documentElement.style.setProperty('--shadow-primary', 'rgba(168, 85, 247, 0.2)');
+      document.documentElement.style.setProperty('--shadow-primary-glow', 'rgba(236, 72, 153, 0.3)');
+      document.documentElement.style.setProperty('--playlist-active-shadow', 'rgba(236, 72, 153, 0.15)');
+      
+      // Reset player border to default
+      document.documentElement.style.setProperty('--player-border', 'rgba(255, 255, 255, 0.1)');
       
       document.documentElement.style.setProperty('--primary-gradient-start', '#ec4899');
       document.documentElement.style.setProperty('--primary-gradient-middle', '#a855f7');
