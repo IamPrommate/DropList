@@ -6,6 +6,7 @@ export type TrackType = {
     url?: string; // generic URL source
     googleDriveUrl?: string; // direct streaming URL from Google Drive
     artistImageUrl?: string; // Google Drive URL for artist image
+    stageViewVideoUrl?: string; // Google Drive URL for stage view video (per artist)
   };
   
   export type PlaylistType = {

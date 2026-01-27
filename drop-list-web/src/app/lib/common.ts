@@ -2,7 +2,8 @@
 
 export enum FileType {
   AUDIO = 'audio',
-  IMAGE = 'image'
+  IMAGE = 'image',
+  VIDEO = 'video',
 }
 
 export enum AudioExtension {
@@ -23,6 +24,12 @@ export enum ImageExtension {
   SVG = '.svg'
 }
 
+export enum VideoExtension {
+  MP4 = '.mp4',
+  MOV = '.mov',
+  WEBM = '.webm',
+}
+
 // Helper functions to check file types
 export function isAudioFile(fileName: string): boolean {
   const lowerName = fileName.toLowerCase();
@@ -32,6 +39,11 @@ export function isAudioFile(fileName: string): boolean {
 export function isImageFile(fileName: string): boolean {
   const lowerName = fileName.toLowerCase();
   return Object.values(ImageExtension).some(ext => lowerName.endsWith(ext));
+}
+
+export function isVideoFile(fileName: string): boolean {
+  const lowerName = fileName.toLowerCase();
+  return Object.values(VideoExtension).some(ext => lowerName.endsWith(ext));
 }
 
 // Get all audio extensions as array

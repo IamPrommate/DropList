@@ -135,16 +135,21 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           const currentFolderName = folderData.folderName;
           const albumCoverUrl = (folderData as any).albumCoverUrl || null;
           
-          // Separate audio and image files using enums
+          // Separate audio, image, and video files using enums
           const audioFiles = files.filter((file) => isAudioFile(file.name) && (file as any).type === FileType.AUDIO);
           const artistImages = files.filter((file) => 
             isImageFile(file.name) && 
             (file as any).type === FileType.IMAGE && 
             (file as any).source === 'artist-subfolder'
           );
+          const artistVideos = files.filter((file) =>
+            (file as any).type === FileType.VIDEO &&
+            (file as any).source === 'video-subfolder'
+          );
           
-          // Match artist images with tracks
+          // Match artist images and videos with tracks based on naming
           const artistImageMap = matchArtistImages(audioFiles, artistImages);
+          const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
           
           // Process audio files in parallel for better performance
           const filePromises = audioFiles.map(async (file, i) => {
@@ -163,11 +168,22 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
               );
             }
 
+            // Get stage view video URL if available
+            let stageViewVideoUrl = undefined;
+            const videoId = artistVideoMap.get(file.id);
+            if (videoId) {
+              stageViewVideoUrl = await buildStreamUrl(
+                videoId,
+                useApiKey ? apiKey : null
+              );
+            }
+
             return {
               id: `${Date.now()}_${file.id}_${i}`,
               name: file.name,
               googleDriveUrl: url,
               artistImageUrl,
+              stageViewVideoUrl,
             };
           });
 

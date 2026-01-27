@@ -1,4 +1,4 @@
-import { AudioExtension, ImageExtension, FileType } from '@/app/lib/common';
+import { AudioExtension, ImageExtension, VideoExtension, FileType } from '@/app/lib/common';
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 
@@ -7,6 +7,7 @@ const CONFIG = {
   TRACKS_FOLDER: process.env.NEXT_PUBLIC_TRACKS_FOLDER || 'track', // Default: empty (root folder)
   ARTIST_FOLDER: process.env.NEXT_PUBLIC_ARTIST_FOLDER || 'artist', // Default: 'artist'
   COVER_FOLDER: process.env.NEXT_PUBLIC_COVER_FOLDER || 'cover', // Default: 'cover'
+  VIDEO_FOLDER: process.env.NEXT_PUBLIC_VIDEO_FOLDER || 'video', // Default: 'video'
 };
 
 // Initialize Google Drive API client
@@ -192,10 +193,11 @@ export async function POST(request: NextRequest) {
     const files = [];
     const seenIds = new Set();
     
-    // Look for "artist" and "cover" subfolders
+    // Look for "artist", "cover" and "video" subfolders
     let artistSubfolderId: string | null = null;
     let coverSubfolderId: string | null = null;
     let tracksFolderId: string | null = null;
+    let videoSubfolderId: string | null = null;
     
     // Find subfolders from root files
     if (useAPI && drive) {
@@ -210,6 +212,10 @@ export async function POST(request: NextRequest) {
           if (fileName === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
             coverSubfolderId = file.id;
             console.log(`Found "${CONFIG.COVER_FOLDER}" subfolder via API:`, file.id);
+          }
+          if (fileName === CONFIG.VIDEO_FOLDER.toLowerCase().trim()) {
+            videoSubfolderId = file.id;
+            console.log(`Found "${CONFIG.VIDEO_FOLDER}" subfolder via API:`, file.id);
           }
           if (CONFIG.TRACKS_FOLDER && fileName.includes(CONFIG.TRACKS_FOLDER.toLowerCase())) {
             tracksFolderId = file.id;
@@ -263,6 +269,9 @@ export async function POST(request: NextRequest) {
                 }
                 if (normalizedName === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
                   coverSubfolderId = fileId;
+                }
+                if (normalizedName === CONFIG.VIDEO_FOLDER.toLowerCase().trim()) {
+                  videoSubfolderId = fileId;
                 }
                 if (CONFIG.TRACKS_FOLDER && normalizedName.includes(CONFIG.TRACKS_FOLDER.toLowerCase())) {
                   tracksFolderId = fileId;
@@ -395,6 +404,66 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.log(`No "${CONFIG.ARTIST_FOLDER}" subfolder found - skipping image fetch`);
+    }
+    
+    // Fetch videos from video subfolder only (for Stage View)
+    if (videoSubfolderId) {
+      try {
+        let videoFiles: Array<{ id: string; name: string; mimeType: string }> | null = null;
+        
+        if (useAPI && drive) {
+          videoFiles = await fetchFilesFromFolderAPI(videoSubfolderId);
+        } else {
+          const subfolderUrl = `https://drive.google.com/drive/folders/${videoSubfolderId}`;
+          const response = await fetch(subfolderUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
+          
+          if (response.ok) {
+            const subfolderHtml = await response.text();
+            const subfolderTableRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
+            
+            if (subfolderTableRows) {
+              videoFiles = subfolderTableRows.map(row => {
+                const idMatch = row.match(/data-id="([^"]+)"/);
+                const nameMatch = row.match(/data-title="([^"]+)"/) || row.match(/<strong[^>]*>([^<]+)<\/strong>/);
+                return {
+                  id: idMatch ? idMatch[1] : '',
+                  name: nameMatch ? nameMatch[1] : '',
+                  mimeType: '',
+                };
+              }).filter(f => f.id);
+            }
+          }
+        }
+        
+        if (videoFiles) {
+          const subfolderFiles = [];
+          for (const file of videoFiles) {
+            const fileName = file.name;
+            const isVideoFile = fileName && Object.values(VideoExtension).some(ext => fileName.toLowerCase().endsWith(ext));
+            const isVideoMimeType = file.mimeType && file.mimeType.startsWith('video/');
+            
+            if ((isVideoFile || isVideoMimeType) && !seenIds.has(file.id)) {
+              seenIds.add(file.id);
+              subfolderFiles.push({
+                id: file.id,
+                name: fileName,
+                type: FileType.VIDEO,
+                source: 'video-subfolder'
+              });
+            }
+          }
+          files.push(...subfolderFiles);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(`Error fetching "${CONFIG.VIDEO_FOLDER}" subfolder:`, errorMessage);
+      }
+    } else {
+      console.log(`No "${CONFIG.VIDEO_FOLDER}" subfolder found - skipping video fetch`);
     }
     
     // Get the first cover image (single album cover for the whole playlist)

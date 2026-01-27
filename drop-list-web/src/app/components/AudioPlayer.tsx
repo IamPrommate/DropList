@@ -26,6 +26,8 @@ type Props = {
     onDurationLoaded?: (trackId: string, duration: number) => void;
     cachedImages?: Map<string, string>;
     getCachedBlobUrl?: (track: TrackType) => string | undefined;
+    isStageViewOpen?: boolean;
+    onToggleStageView?: () => void;
 };
 
 export default function AudioPlayer({
@@ -45,6 +47,8 @@ export default function AudioPlayer({
     onDurationLoaded,
     cachedImages,
     getCachedBlobUrl,
+    isStageViewOpen,
+    onToggleStageView,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const trackTitleRef = useRef<HTMLDivElement>(null);
@@ -446,6 +450,16 @@ export default function AudioPlayer({
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                             </svg>
+                        </button>
+                        <button
+                            className={`control-btn stage-view-toggle-btn ${isStageViewOpen ? 'active' : ''}`}
+                            type="button"
+                            onClick={onToggleStageView}
+                            disabled={!track || !onToggleStageView}
+                            aria-pressed={!!isStageViewOpen}
+                            aria-label="Toggle Stage View"
+                        >
+                            V
                         </button>
                     </div>
                     

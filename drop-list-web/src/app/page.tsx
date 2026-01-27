@@ -20,6 +20,7 @@ import {
 import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
 import './layout.scss';
+import StageViewPanel from './components/StageViewPanel';
 
 enum KeyboardShortcuts {
   SPACE = 'Space',
@@ -27,6 +28,7 @@ enum KeyboardShortcuts {
   ARROW_RIGHT = 'ArrowRight',
   ARROW_UP = 'ArrowUp',
   ARROW_DOWN = 'ArrowDown',
+  KEY_V = 'KeyV',
 }
 
 export default function HomePage() {
@@ -59,6 +61,7 @@ export default function HomePage() {
   const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
   const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
+  const [isStageViewOpen, setIsStageViewOpen] = useState(true);
   
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
@@ -519,12 +522,24 @@ export default function HomePage() {
           e.preventDefault();
           setVolume(prev => Math.max(0, prev - 0.1));
           break;
+        case KeyboardShortcuts.KEY_V:
+          if (tracks.length > 0 && currentTrack?.stageViewVideoUrl) {
+            e.preventDefault();
+            setIsStageViewOpen(prev => {
+              const next = !prev;
+              if (next && !sidebarCollapsed) {
+                setSidebarCollapsed(true);
+              }
+              return next;
+            });
+          }
+          break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [tracks.length, isPlaying, handlePrev, handleNext]);
+  }, [tracks.length, isPlaying, handlePrev, handleNext, currentTrack, sidebarCollapsed]);
 
   return (
     <main className="pageRoot">
@@ -565,12 +580,29 @@ export default function HomePage() {
               preloadArtistImages(picked);
             }}
             collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+            onToggleCollapse={() => {
+              setSidebarCollapsed(prev => {
+                const next = !prev;
+                // When sidebar is opened, hide Stage View
+                if (!next) {
+                  setIsStageViewOpen(false);
+                }
+                return next;
+              });
+            }}
           />
 
           {/* Main Content */}
           <div className="main-wrapper">
-            <div className="container">
+            <div
+              className={
+                `container ${
+                  currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen
+                    ? 'container-stage-view-open'
+                    : 'container-centered'
+                }`
+              }
+            >
               <div className="header">
                 {/* <button className="back-btn">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -655,6 +687,14 @@ export default function HomePage() {
                         
                         setCurrentIndex(i);
                         setIsPlaying(true);
+                        // When selecting a new track with video, ensure Stage View is shown
+                        if (track.stageViewVideoUrl) {
+                          setIsStageViewOpen(true);
+                          // Also collapse sidebar so layout matches Stage View
+                          if (!sidebarCollapsed) {
+                            setSidebarCollapsed(true);
+                          }
+                        }
                       }}
                     >
                       <div className="track-number">{i + 1}</div>
@@ -746,6 +786,11 @@ export default function HomePage() {
               </div> */}
             </div>
 
+            {/* Stage View – fixed on the right, uses Google Drive video */}
+            {currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen && (
+              <StageViewPanel track={currentTrack} />
+            )}
+
             {/* Fixed bottom audio bar with smooth appearance */}
             <div className={`player-footer-transition ${currentTrack ? 'visible' : ''}`}>
               {currentTrack && (
@@ -766,6 +811,18 @@ export default function HomePage() {
                   onDurationLoaded={handleDurationLoaded}
                   cachedImages={cachedImages}
                   getCachedBlobUrl={getCachedBlobUrl}
+                  isStageViewOpen={isStageViewOpen}
+                  onToggleStageView={() => {
+                    if (currentTrack?.stageViewVideoUrl) {
+                      setIsStageViewOpen(prev => {
+                        const next = !prev;
+                        if (next && !sidebarCollapsed) {
+                          setSidebarCollapsed(true);
+                        }
+                        return next;
+                      });
+                    }
+                  }}
                 />
               )}
             </div>
