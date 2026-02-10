@@ -6,8 +6,7 @@ import { useCallback, useState, useRef, useEffect } from 'react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
 import { TrackType } from './lib/types';
-import { Divider, Switch } from 'antd';
-import GoogleDrivePicker from './components/GoogleDrivePicker';
+import { Switch } from 'antd';
 import Sidebar from './components/Sidebar';
 import { 
   ShuffleState, 

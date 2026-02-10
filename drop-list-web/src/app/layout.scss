@@ -478,6 +478,104 @@
   color: var(--text-subtle);
 }
 
+/* Sidebar auth (Google sign-in) */
+.sidebar-auth {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.sidebar-auth-signed-in {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sidebar-auth-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.sidebar-auth-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.sidebar-auth-avatar-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.sidebar-auth-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-auth-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-auth-email {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-auth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--border-secondary);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--btn-secondary-hover);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+  }
+}
+
+.sidebar-auth-sign-in {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-tertiary);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+}
+
 .sidebar-toggle {
   background: transparent !important;
   border: none !important;
@@ -1092,6 +1190,7 @@
   &:hover {
     background: var(--overlay-medium);
   }
+
 }
 
 .track-item:hover .track-menu {

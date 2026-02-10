@@ -1,9 +1,10 @@
 "use client";
 
 import { Dropdown } from 'antd';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { TrackType } from '../lib/types';
 import GoogleDrivePicker from './GoogleDrivePicker';
-import { Music, Plus, FolderOpen } from 'lucide-react';
+import { Music, Plus, FolderOpen, LogIn, LogOut } from 'lucide-react';
 
 interface SidebarProps {
   selectedFolderName: string | null;
@@ -22,6 +23,8 @@ export default function Sidebar({
   collapsed,
   onToggleCollapse,
 }: SidebarProps) {
+  const { data: session, status } = useSession();
+
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-content">
@@ -103,6 +106,53 @@ export default function Sidebar({
                     <div className="empty-text">No playlists yet</div>
                     <div className="empty-subtext">Add music to create your first playlist</div>
                   </div>
+                )}
+              </div>
+
+              {/* Google sign-in / account */}
+              <div className="sidebar-auth">
+                {status === 'loading' ? null : session ? (
+                  <div className="sidebar-auth-signed-in">
+                    <div className="sidebar-auth-user">
+                      {session.user?.image ? (
+                        <img
+                          src={session.user.image}
+                          alt=""
+                          className="sidebar-auth-avatar"
+                        />
+                      ) : (
+                        <div className="sidebar-auth-avatar-placeholder">
+                          {(session.user?.name || session.user?.email || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="sidebar-auth-info">
+                        <span className="sidebar-auth-name">
+                          {session.user?.name || 'Signed in'}
+                        </span>
+                        {session.user?.email && (
+                          <span className="sidebar-auth-email">{session.user.email}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="sidebar-auth-btn"
+                      onClick={() => signOut()}
+                      title="Sign out"
+                    >
+                      <LogOut size={16} />
+                      Sign out
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="sidebar-auth-btn sidebar-auth-sign-in"
+                    onClick={() => signIn('google')}
+                  >
+                    <LogIn size={16} />
+                    Sign in with Google
+                  </button>
                 )}
               </div>
             </div>

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import "antd/dist/reset.css";
 import { ConfigProvider, App as AntdApp, theme } from "antd";
+import Providers from "./components/Providers";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -26,9 +27,11 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${inter.variable} antialiased`}
       >
-        <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm }}>
-          <AntdApp>{children}</AntdApp>
-        </ConfigProvider>
+        <Providers>
+          <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm }}>
+            <AntdApp>{children}</AntdApp>
+          </ConfigProvider>
+        </Providers>
       </body>
     </html>
   );
