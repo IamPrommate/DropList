@@ -9,7 +9,7 @@ import { Cloud } from "lucide-react";
 import "./google-drive.scss";
 
 type Props = {
-  onPicked: (tracks: TrackType[], folderName?: string, albumCoverUrl?: string | null) => void;
+  onPicked: (tracks: TrackType[], folderName?: string, albumCoverUrl?: string | null, driveFolderId?: string | null) => void;
   variant?: 'button' | 'dropdown';
 };
 
@@ -114,6 +114,7 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
     const tracks: TrackType[] = [];
     let folderName: string | undefined;
     let playlistAlbumCoverUrl: string | null = null;
+    let firstDriveFolderId: string | null = null;
     let lastError: string | undefined;
 
     for (const line of lines) {
@@ -190,12 +191,13 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           const folderTracks = await Promise.all(filePromises);
           tracks.push(...folderTracks);
           
-          // Store folder name and album cover for the first folder processed
+          // Store folder ID, name and album cover for the first folder processed
+          if (!firstDriveFolderId) {
+            firstDriveFolderId = folderId;
+          }
           if (currentFolderName && !folderName) {
             folderName = currentFolderName;
           }
-          
-          // Set the album cover URL for this playlist
           if (albumCoverUrl) {
             playlistAlbumCoverUrl = albumCoverUrl;
           }
@@ -214,7 +216,7 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
     }
 
     if (tracks.length > 0) {
-      onPicked(tracks, folderName, playlistAlbumCoverUrl);
+      onPicked(tracks, folderName, playlistAlbumCoverUrl, firstDriveFolderId);
       setOpen(false);
       setRaw("");
     } else {

@@ -18,3 +18,29 @@ export type TrackType = {
     isRepeated: boolean;
     volume: number; // 0..1
   };
+
+  /** Per-track play count (หนึ่งแทร็กใน playCount) */
+  export type PlayStatsEntry = {
+    count: number;
+    lastPlayedAt?: string; // ISO
+    name?: string;
+  };
+
+  /** โครงเดิมของ play-only (ใช้ใน logic merge) */
+  export type PlayStatsData = {
+    version: number;
+    updatedAt: string;
+    plays: Record<string, PlayStatsEntry>;
+  };
+
+  /**
+   * ไฟล์เดียวที่เก็บทุกอย่างที่ DropList บันทึกลง Drive
+   * อนาคตเพิ่ม listeningTime, liked ฯลฯ ในนี้ได้
+   */
+  export type DroplistData = {
+    version: number;
+    updatedAt: string; // ISO
+    playCount: Record<string, PlayStatsEntry>;
+    // listeningTime?: { totalSeconds: number; ... };
+    // liked?: { ... };
+  };

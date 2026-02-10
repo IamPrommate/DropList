@@ -28,6 +28,8 @@ type Props = {
     getCachedBlobUrl?: (track: TrackType) => string | undefined;
     isStageViewOpen?: boolean;
     onToggleStageView?: () => void;
+    /** Called once when playback actually starts (for play-count stats) */
+    onTrackPlayed?: (track: TrackType) => void;
 };
 
 export default function AudioPlayer({
@@ -49,6 +51,7 @@ export default function AudioPlayer({
     getCachedBlobUrl,
     isStageViewOpen,
     onToggleStageView,
+    onTrackPlayed,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const trackTitleRef = useRef<HTMLDivElement>(null);
@@ -173,12 +176,24 @@ export default function AudioPlayer({
         }
     }, [isPlaying, src, cleanupEventListeners]);
 
+    // Report play once per track start (for stats), and sync UI with play/pause
+    const hasReportedPlayRef = useRef(false);
+    useEffect(() => {
+        hasReportedPlayRef.current = false;
+    }, [track?.id, src]);
+
     // Sync UI with actual audio state via play/pause events
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio || !onIsPlayingChange) return;
 
-        const handlePlay = () => onIsPlayingChange(true);
+        const handlePlay = () => {
+            onIsPlayingChange(true);
+            if (track && onTrackPlayed && !hasReportedPlayRef.current) {
+                hasReportedPlayRef.current = true;
+                onTrackPlayed(track);
+            }
+        };
         const handlePause = () => onIsPlayingChange(false);
 
         audio.addEventListener('play', handlePlay);
@@ -188,7 +203,7 @@ export default function AudioPlayer({
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
         };
-    }, [onIsPlayingChange, src]);
+    }, [onIsPlayingChange, onTrackPlayed, track, src]);
 
     // On tab becoming visible, reconcile UI state with element state
     useEffect(() => {

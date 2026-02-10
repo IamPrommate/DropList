@@ -3,6 +3,7 @@
 
 import '@ant-design/v5-patch-for-react-19';
 import { useCallback, useState, useRef, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
 import { TrackType } from './lib/types';
@@ -61,6 +62,8 @@ export default function HomePage() {
   const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   const [isStageViewOpen, setIsStageViewOpen] = useState(true);
+  /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
+  const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
   
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
@@ -69,6 +72,7 @@ export default function HomePage() {
     recentlyPlayed: []
   });
 
+  const { data: session } = useSession();
   const currentTrack = tracks[currentIndex];
 
   // Save durations to localStorage cache
@@ -98,6 +102,24 @@ export default function HomePage() {
     // Fallback to track ID
     return track.id;
   }, []);
+
+  const handleTrackPlayed = useCallback(
+    (track: TrackType) => {
+      if (!session?.user || !currentDriveFolderId) return;
+      const trackKey = getTrackCacheKey(track);
+      const trackName = track.name;
+      fetch('/api/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackKey,
+          trackName,
+          driveFolderId: currentDriveFolderId,
+        }),
+      }).catch(() => {});
+    },
+    [getTrackCacheKey, session?.user, currentDriveFolderId]
+  );
 
   // Audio cache for blob URLs - prevents memory leaks
   const audioCache = useRef<Map<string, string>>(new Map());
@@ -388,6 +410,7 @@ export default function HomePage() {
     setTracks(next);
     setCurrentIndex(-1);
     setIsPlaying(false);
+    setCurrentDriveFolderId(null); // Local playlist: no Drive folder for stats
 
     // Reset shuffle state when new tracks are loaded
     setShuffleState(resetShuffleState());
@@ -549,7 +572,7 @@ export default function HomePage() {
             selectedFolderName={selectedFolderName}
             tracks={tracks}
             onFolderPick={handleFolderPick}
-            onGoogleDrivePicked={(picked, folderName, coverUrl) => {
+            onGoogleDrivePicked={(picked, folderName, coverUrl, driveFolderId) => {
               // Clean up previous cached images
               cachedImages.forEach(url => {
                 if (url.startsWith('blob:')) {
@@ -561,6 +584,7 @@ export default function HomePage() {
               setTracks(picked); // Replace tracks instead of concatenating
               setCurrentIndex(-1);
               setIsPlaying(false);
+              setCurrentDriveFolderId(driveFolderId ?? null);
               
               // Reset shuffle state when new tracks are loaded
               setShuffleState(resetShuffleState());
@@ -811,6 +835,7 @@ export default function HomePage() {
                   cachedImages={cachedImages}
                   getCachedBlobUrl={getCachedBlobUrl}
                   isStageViewOpen={isStageViewOpen}
+                  onTrackPlayed={handleTrackPlayed}
                   onToggleStageView={() => {
                     if (currentTrack?.stageViewVideoUrl) {
                       setIsStageViewOpen(prev => {

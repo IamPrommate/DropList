@@ -10,7 +10,7 @@ interface SidebarProps {
   selectedFolderName: string | null;
   tracks: TrackType[];
   onFolderPick: () => void;
-  onGoogleDrivePicked: (picked: TrackType[], folderName?: string, albumCoverUrl?: string | null) => void;
+  onGoogleDrivePicked: (picked: TrackType[], folderName?: string, albumCoverUrl?: string | null, driveFolderId?: string | null) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
