@@ -815,7 +815,7 @@ export default function HomePage() {
             )}
 
             {/* Fixed bottom audio bar with smooth appearance */}
-            <div className={`player-footer-transition ${currentTrack ? 'visible' : ''}`}>
+            <div className={`player-footer-transition ${currentTrack ? 'visible' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}>
               {currentTrack && (
                 <AudioPlayer
                   track={currentTrack}
