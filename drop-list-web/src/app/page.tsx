@@ -3,7 +3,7 @@
 
 import '@ant-design/v5-patch-for-react-19';
 import { useCallback, useState, useRef, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
 import { TrackType } from './lib/types';
@@ -21,6 +21,7 @@ import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
 import './layout.scss';
 import StageViewPanel from './components/StageViewPanel';
+import { LogIn, LogOut } from 'lucide-react';
 
 enum KeyboardShortcuts {
   SPACE = 'Space',
@@ -72,8 +73,33 @@ export default function HomePage() {
     recentlyPlayed: []
   });
 
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
+  const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
+  const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
+
+  const openAuthDropdown = useCallback(() => {
+    if (authDropdownCloseTimeoutRef.current) {
+      clearTimeout(authDropdownCloseTimeoutRef.current);
+      authDropdownCloseTimeoutRef.current = null;
+    }
+    setAuthDropdownOpen(true);
+  }, []);
+
+  const scheduleCloseAuthDropdown = useCallback(() => {
+    authDropdownCloseTimeoutRef.current = setTimeout(() => {
+      setAuthDropdownOpen(false);
+      authDropdownCloseTimeoutRef.current = null;
+    }, 200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (authDropdownCloseTimeoutRef.current) {
+        clearTimeout(authDropdownCloseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Save durations to localStorage cache
   const saveDurationsToCache = useCallback((durations: Map<string, number>) => {
@@ -617,6 +643,56 @@ export default function HomePage() {
 
           {/* Main Content */}
           <div className="main-wrapper">
+            {/* Auth – positioned absolute to main-wrapper top-right */}
+            <div className="header-auth">
+              {sessionStatus === 'loading' ? null : session ? (
+                <div
+                  className={`header-auth-logged-in${authDropdownOpen ? ' is-open' : ''}`}
+                >
+                  <div
+                    className="header-auth-avatar-wrap"
+                    onMouseEnter={openAuthDropdown}
+                    onMouseLeave={scheduleCloseAuthDropdown}
+                  >
+                    {session.user?.image ? (
+                      <img
+                        src={session.user.image}
+                        alt=""
+                        className="header-auth-avatar"
+                      />
+                    ) : (
+                      <div className="header-auth-avatar-placeholder">
+                        {(session.user?.name || session.user?.email || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div
+                    className="header-auth-dropdown"
+                    onMouseEnter={openAuthDropdown}
+                    onMouseLeave={scheduleCloseAuthDropdown}
+                  >
+                    <button
+                      type="button"
+                      className="header-auth-sign-out-btn"
+                      onClick={() => signOut()}
+                    >
+                      <LogOut size={18} strokeWidth={2} />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="header-auth-btn header-auth-sign-in"
+                  onClick={() => signIn('google')}
+                >
+                  <LogIn size={18} strokeWidth={2} />
+                  Sign in with Google
+                </button>
+              )}
+            </div>
+
             <div
               className={
                 `container ${
@@ -627,12 +703,7 @@ export default function HomePage() {
               }
             >
               <div className="header">
-                {/* <button className="back-btn">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M15 19l-7-7 7-7"></path>
-                  </svg>
-                </button> */}
-                <div className="header-right">
+                <div className="header-left">
                   {tracks.length > 0 && (
                     <div className="image-toggle-control">
                       <span className="toggle-label">Show cover image</span>
@@ -643,16 +714,6 @@ export default function HomePage() {
                       />
                     </div>
                   )}
-                  {/* <button className="header-btn">Listen</button>
-                  <button className="header-btn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{display: 'inline', marginRight: '4px'}}>
-                      <circle cx="11" cy="11" r="8"></circle>
-                      <path d="m21 21-4.35-4.35"></path>
-                    </svg>
-                    Manage
-                  </button> */}
-                  {/* <button className="header-btn" onClick={handleFolderPick}>+ Add</button> */}
-                  {/* <button className="share-btn">Share</button> */}
                 </div>
               </div>
 
