@@ -659,6 +659,15 @@ export default function HomePage() {
                         src={session.user.image}
                         alt=""
                         className="header-auth-avatar"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          // Replace broken image with placeholder
+                          const target = e.currentTarget;
+                          const placeholder = document.createElement('div');
+                          placeholder.className = 'header-auth-avatar-placeholder';
+                          placeholder.textContent = (session.user?.name || session.user?.email || '?').charAt(0).toUpperCase();
+                          target.parentNode?.replaceChild(placeholder, target);
+                        }}
                       />
                     ) : (
                       <div className="header-auth-avatar-placeholder">
