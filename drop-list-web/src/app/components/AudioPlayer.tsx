@@ -30,6 +30,8 @@ type Props = {
     onToggleStageView?: () => void;
     /** Called once when playback actually starts (for play-count stats) */
     onTrackPlayed?: (track: TrackType) => void;
+    /** Called on time update with progress 0–1 */
+    onProgressUpdate?: (progress: number) => void;
 };
 
 export default function AudioPlayer({
@@ -52,6 +54,7 @@ export default function AudioPlayer({
     isStageViewOpen,
     onToggleStageView,
     onTrackPlayed,
+    onProgressUpdate,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const trackTitleRef = useRef<HTMLDivElement>(null);
@@ -79,7 +82,6 @@ export default function AudioPlayer({
         if (!audio) return;
         audio.volume = volume;
     }, [volume]);
-
 
     // Track event listeners for cleanup
     const eventListenersRef = useRef<(() => void)[]>([]);
@@ -275,6 +277,9 @@ export default function AudioPlayer({
         const audio = audioRef.current;
         if (!audio) return;
         setCurrentTime(audio.currentTime || 0);
+        if (onProgressUpdate && audio.duration > 0) {
+            onProgressUpdate(audio.currentTime / audio.duration);
+        }
     };
 
     const handleEnded = () => {
@@ -544,11 +549,15 @@ export default function AudioPlayer({
 
                 {/* Volume Control */}
                 <div className="volume-control">
-                    <button className="volume-btn">
+                    <button className="volume-btn" title={`Volume: ${Math.round(volumePercentage)}%`}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
                         </svg>
                     </button>
+                    <div 
+                        className="volume-slider-wrap"
+                    >
+                    <div className="volume-tooltip">{Math.round(volumePercentage)}%</div>
                     <div 
                         className="volume-slider"
                         style={{ width: '117px' }}
@@ -597,6 +606,7 @@ export default function AudioPlayer({
                             className="volume-slider-fill" 
                             style={{ width: `${volumePercentage}%` }}
                         ></div>
+                    </div>
                     </div>
                 </div>
             </div>

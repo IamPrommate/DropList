@@ -39,6 +39,8 @@ export default function HomePage() {
   const [isRepeated, setIsRepeated] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
   // Initialize trackDurations from localStorage
   const [trackDurations, setTrackDurations] = useState<Map<string, number>>(() => {
@@ -465,6 +467,7 @@ export default function HomePage() {
 
   const handleNext = useCallback(() => {
     if (tracks.length === 0) return;
+    setPlaybackProgress(0);
     
     if (isShuffled) {
       const result = getNextShuffleTrack(tracks, currentIndex, shuffleState);
@@ -481,6 +484,7 @@ export default function HomePage() {
 
   const handlePrev = useCallback(() => {
     if (tracks.length === 0) return;
+    setPlaybackProgress(0);
     if (isShuffled) {
       const result = getPrevShuffleTrack(tracks, currentIndex, shuffleState);
       if (result) {
@@ -533,6 +537,17 @@ export default function HomePage() {
     const duration = trackDurations.get(cacheKey) || 0;
     return total + duration;
   }, 0);
+
+  // Scroll-to-top button visibility 
+  useEffect(() => {
+    const handleScroll = () => {
+      const halfHeight = (document.documentElement.scrollHeight - window.innerHeight) * 0.65;
+      setShowScrollTop(window.scrollY > halfHeight);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // initial check
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -778,6 +793,7 @@ export default function HomePage() {
                           setShuffleState(newShuffleState);
                         }
                         
+                        setPlaybackProgress(0);
                         setCurrentIndex(i);
                         setIsPlaying(true);
                         // When selecting a new track with video, ensure Stage View is shown
@@ -881,7 +897,7 @@ export default function HomePage() {
 
             {/* Stage View – fixed on the right, uses Google Drive video */}
             {currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen && (
-              <StageViewPanel track={currentTrack} />
+              <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
             )}
 
             {/* Fixed bottom audio bar with smooth appearance */}
@@ -906,6 +922,7 @@ export default function HomePage() {
                   getCachedBlobUrl={getCachedBlobUrl}
                   isStageViewOpen={isStageViewOpen}
                   onTrackPlayed={handleTrackPlayed}
+                  onProgressUpdate={setPlaybackProgress}
                   onToggleStageView={() => {
                     if (currentTrack?.stageViewVideoUrl) {
                       setIsStageViewOpen(prev => {
@@ -923,6 +940,17 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Scroll to top button */}
+      <button
+        className={`scroll-to-top ${showScrollTop ? 'visible' : ''}`}
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Scroll to top"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M18 15l-6-6-6 6" />
+        </svg>
+      </button>
     </main>
   );
 }
