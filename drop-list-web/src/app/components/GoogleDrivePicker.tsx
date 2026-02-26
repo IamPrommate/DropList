@@ -13,6 +13,13 @@ type Props = {
   variant?: 'button' | 'dropdown';
 };
 
+type DriveFolderFile = {
+  id: string;
+  name: string;
+  type?: FileType;
+  source?: 'root-folder' | 'artist-subfolder' | 'video-subfolder';
+};
+
 function extractDriveFolderId(input: string): string | null {
   // Supports: https://drive.google.com/drive/folders/FOLDER_ID?usp=share_link
   try {
@@ -45,7 +52,7 @@ async function buildStreamUrl(
 // Use server-side API to fetch folder contents (no CORS issues)
 async function fetchFolderFiles(
   folderId: string
-): Promise<{ files: { id: string; name: string }[]; folderName?: string; albumCoverUrl?: string | null; error?: string }> {
+): Promise<{ files: DriveFolderFile[]; folderName?: string; albumCoverUrl?: string | null; error?: string }> {
   try {
     console.log("Fetching folder via server API:", folderId);
 
@@ -134,18 +141,18 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           // Extract files array, folder name, and album cover URL
           const files = folderData.files || [];
           const currentFolderName = folderData.folderName;
-          const albumCoverUrl = (folderData as any).albumCoverUrl || null;
+          const albumCoverUrl = folderData.albumCoverUrl || null;
           
           // Separate audio, image, and video files using enums
-          const audioFiles = files.filter((file) => isAudioFile(file.name) && (file as any).type === FileType.AUDIO);
+          const audioFiles = files.filter((file) => isAudioFile(file.name) && file.type === FileType.AUDIO);
           const artistImages = files.filter((file) => 
             isImageFile(file.name) && 
-            (file as any).type === FileType.IMAGE && 
-            (file as any).source === 'artist-subfolder'
+            file.type === FileType.IMAGE && 
+            file.source === 'artist-subfolder'
           );
           const artistVideos = files.filter((file) =>
-            (file as any).type === FileType.VIDEO &&
-            (file as any).source === 'video-subfolder'
+            file.type === FileType.VIDEO &&
+            file.source === 'video-subfolder'
           );
           
           // Match artist images and videos with tracks based on naming

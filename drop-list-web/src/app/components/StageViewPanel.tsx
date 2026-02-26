@@ -21,9 +21,6 @@ type Props = {
 
 export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
   const videoSrc = track.stageViewVideoUrl;
-
-  if (!videoSrc) return null;
-
   const info = parseTrackName(track.name);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [shouldScroll, setShouldScroll] = useState(false);
@@ -64,6 +61,8 @@ export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
     const id = setTimeout(check, 150);
     return () => clearTimeout(id);
   }, [info.title, track.id]);
+
+  if (!videoSrc) return null;
 
   return (
     <div className="stage-view-panel">

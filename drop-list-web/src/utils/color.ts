@@ -253,14 +253,14 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
  */
 export function shiftHue(hex: string, angle: number): string {
   const [r, g, b] = hexToRgb(hex);
-  let [h, s, l] = rgbToHsl(r, g, b);
+  const [h, s, l] = rgbToHsl(r, g, b);
   
   // Shift hue
-  h = (h + angle) % 360;
-  if (h < 0) h += 360;
+  let shiftedHue = (h + angle) % 360;
+  if (shiftedHue < 0) shiftedHue += 360;
   
   // Convert back to RGB
-  const [newR, newG, newB] = hslToRgb(h, s, l);
+  const [newR, newG, newB] = hslToRgb(shiftedHue, s, l);
   return rgbToHex(newR, newG, newB);
 }
 
