@@ -21,6 +21,7 @@ import { formatDuration } from '../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../utils/track';
 import './layout.scss';
 import StageViewPanel from './components/StageViewPanel';
+import SleepTimerControl from './components/SleepTimerControl';
 import { LogIn, LogOut } from 'lucide-react';
 
 enum KeyboardShortcuts {
@@ -41,6 +42,9 @@ export default function HomePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [sleepTimerEndAt, setSleepTimerEndAt] = useState<number | null>(null);
+  const [sleepTimerExpired, setSleepTimerExpired] = useState(false);
+  const [sleepTimerNow, setSleepTimerNow] = useState<number>(() => Date.now());
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
   // Initialize trackDurations from localStorage
   const [trackDurations, setTrackDurations] = useState<Map<string, number>>(() => {
@@ -79,6 +83,21 @@ export default function HomePage() {
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
   const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
+  const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
+  const isSleepTimerActive = sleepTimerEndAt !== null;
+  const canUseSleepTimer = Boolean(currentTrack);
+
+  const clearSleepTimer = useCallback(() => {
+    setSleepTimerEndAt(null);
+    setSleepTimerExpired(false);
+  }, []);
+
+  const maybeCancelExpiredSleepTimerOnManualTrackChange = useCallback(() => {
+    // Requirement: if timer already expired and user manually changes track, go back to normal mode.
+    if (sleepTimerExpired) {
+      clearSleepTimer();
+    }
+  }, [sleepTimerExpired, clearSleepTimer]);
 
   const openAuthDropdown = useCallback(() => {
     if (authDropdownCloseTimeoutRef.current) {
@@ -467,6 +486,7 @@ export default function HomePage() {
 
   const handleNext = useCallback(() => {
     if (tracks.length === 0) return;
+    maybeCancelExpiredSleepTimerOnManualTrackChange();
     setPlaybackProgress(0);
     
     if (isShuffled) {
@@ -480,10 +500,11 @@ export default function HomePage() {
       setCurrentIndex(nextIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled, currentIndex, shuffleState]);
+  }, [tracks, isShuffled, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange]);
 
   const handlePrev = useCallback(() => {
     if (tracks.length === 0) return;
+    maybeCancelExpiredSleepTimerOnManualTrackChange();
     setPlaybackProgress(0);
     if (isShuffled) {
       const result = getPrevShuffleTrack(tracks, currentIndex, shuffleState);
@@ -496,7 +517,19 @@ export default function HomePage() {
       setCurrentIndex(prevIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled, currentIndex, shuffleState]);
+  }, [tracks, isShuffled, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange]);
+
+  const handleTrackEnded = useCallback(() => {
+    // Time is up: let current song finish, then stop and do not advance.
+    if (sleepTimerExpired) {
+      setIsPlaying(false);
+      setPlaybackProgress(0);
+      setCurrentIndex(-1); // clear active selection in playlist after sleep stop
+      clearSleepTimer();
+      return;
+    }
+    handleNext();
+  }, [sleepTimerExpired, clearSleepTimer, handleNext]);
 
   const handleShuffleToggle = useCallback(() => {
     setIsShuffled((s) => {
@@ -548,6 +581,25 @@ export default function HomePage() {
     handleScroll(); // initial check
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Sleep timer ticking
+  useEffect(() => {
+    if (!sleepTimerEndAt) return;
+    const id = setInterval(() => setSleepTimerNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [sleepTimerEndAt]);
+
+  // Sleep timer expiration: allow current song to finish, then stop.
+  useEffect(() => {
+    if (!sleepTimerEndAt || sleepTimerExpired) return;
+    if (sleepTimerNow >= sleepTimerEndAt) {
+      if (!currentTrack) {
+        clearSleepTimer();
+        return;
+      }
+      setSleepTimerExpired(true);
+    }
+  }, [sleepTimerNow, sleepTimerEndAt, sleepTimerExpired, currentTrack, clearSleepTimer]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -728,16 +780,34 @@ export default function HomePage() {
             >
               <div className="header">
                 <div className="header-left">
-                  {tracks.length > 0 && (
-                    <div className="image-toggle-control">
+                  <div className="image-toggle-control">
+                    {tracks.length > 0 && (
+                      <>
                       <span className="toggle-label">Show cover image</span>
                       <Switch 
                         checked={showCoverImage}
                         onChange={setShowCoverImage}
                         size="small"
                       />
-                    </div>
-                  )}
+                      </>
+                    )}
+                    <SleepTimerControl
+                      isActive={isSleepTimerActive}
+                      isExpiredWaiting={sleepTimerExpired}
+                      remainingMs={sleepTimerRemainingMs}
+                      disabled={!canUseSleepTimer}
+                      onSelectMinutes={(minutes) => {
+                        if (minutes === null) {
+                          clearSleepTimer();
+                          return;
+                        }
+                        const now = Date.now();
+                        setSleepTimerNow(now);
+                        setSleepTimerExpired(false);
+                        setSleepTimerEndAt(now + minutes * 60 * 1000);
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -756,6 +826,7 @@ export default function HomePage() {
                 }}
                 onPlayFirst={() => {
                   if (tracks.length > 0) {
+                    maybeCancelExpiredSleepTimerOnManualTrackChange();
                     setCurrentIndex(0);
                     setIsPlaying(true);
                   }
@@ -792,7 +863,7 @@ export default function HomePage() {
                           const newShuffleState = handleManualTrackSelection(tracks, i, shuffleState);
                           setShuffleState(newShuffleState);
                         }
-                        
+                        maybeCancelExpiredSleepTimerOnManualTrackChange();
                         setPlaybackProgress(0);
                         setCurrentIndex(i);
                         setIsPlaying(true);
@@ -906,7 +977,7 @@ export default function HomePage() {
                 <AudioPlayer
                   track={currentTrack}
                   volume={volume}
-                  onEnded={handleNext}
+                  onEnded={handleTrackEnded}
                   onVolumeChange={setVolume}
                   onPlayPauseToggle={() => setIsPlaying((p) => !p)}
                   onIsPlayingChange={(v) => setIsPlaying(v)}
@@ -921,6 +992,7 @@ export default function HomePage() {
                   cachedImages={cachedImages}
                   getCachedBlobUrl={getCachedBlobUrl}
                   isStageViewOpen={isStageViewOpen}
+                  isSleepTimerExpired={sleepTimerExpired}
                   onTrackPlayed={handleTrackPlayed}
                   onProgressUpdate={setPlaybackProgress}
                   onToggleStageView={() => {

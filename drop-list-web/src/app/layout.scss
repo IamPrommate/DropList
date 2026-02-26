@@ -631,6 +631,345 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 3.6rem;
+  position: relative;
+  z-index: 1200;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sleep-timer {
+  position: relative;
+}
+
+.sleep-timer-alt-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sleep-alt-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.sleep-alt-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+  user-select: none;
+}
+
+.sleep-alt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &.is-active {
+    color: var(--track-active-border);
+  }
+
+  &.is-expired {
+    color: #f59e0b;
+  }
+
+  &.is-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.15);
+  }
+
+  &.is-disabled:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* Alt 1: neon capsule */
+.sleep-alt-1 {
+  padding: 0.45rem 0.68rem;
+  border-radius: 999px;
+  border-color: transparent;
+  background: linear-gradient(145deg, rgba(17, 74, 49, 0.45), rgba(9, 44, 28, 0.45));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  &:hover {
+    border-color: transparent;
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+  }
+}
+
+.sleep-alt-main {
+  letter-spacing: 0.02em;
+}
+
+.sleep-alt-sub {
+  font-size: 0.67rem;
+  font-weight: 600;
+  opacity: 0.82;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* Alt 4: digital board */
+.sleep-alt-4 {
+  padding: 0.4rem 0.52rem;
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #07090f;
+  color: #9fffd6;
+  box-shadow: inset 0 0 10px rgba(10, 255, 163, 0.08);
+}
+
+.sleep-digital {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  min-width: 44px;
+  text-align: right;
+}
+
+.sleep-alt-4.is-off .sleep-digital {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.sleep-alt-4.is-expired .sleep-digital {
+  color: #f59e0b;
+}
+
+.sleep-alt-tag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+/* Alt 6: magma chip */
+.sleep-alt-6 {
+  padding: 0.42rem 0.62rem;
+  border-radius: 999px;
+  border-color: rgba(255, 132, 88, 0.32);
+  background: linear-gradient(145deg, rgba(65, 20, 16, 0.55), rgba(126, 42, 20, 0.45));
+  color: #ffd8cc;
+}
+
+.sleep-pill-status {
+  font-size: 0.61rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sleep-alt-6.is-active {
+  border-color: rgba(255, 168, 102, 0.55);
+  box-shadow: 0 6px 16px rgba(255, 106, 0, 0.24);
+}
+
+.sleep-alt-6.is-expired {
+  border-color: rgba(255, 209, 102, 0.7);
+  color: #ffe49a;
+}
+
+/* Alt 7: ocean tab */
+.sleep-alt-7 {
+  padding: 0.38rem 0.55rem;
+  border-radius: 10px;
+  border-color: rgba(98, 203, 255, 0.38);
+  background: rgba(16, 36, 56, 0.48);
+  color: #caf2ff;
+}
+
+.sleep-soft-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #90e7ff;
+  box-shadow: 0 0 0 4px rgba(144, 231, 255, 0.15);
+}
+
+.sleep-alt-7.is-off .sleep-soft-dot {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.sleep-alt-7.is-expired .sleep-soft-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+}
+
+/* Alt 8: aurora ghost */
+.sleep-alt-8 {
+  padding: 0.4rem 0.58rem;
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg, rgba(142, 74, 255, 0.2), rgba(0, 201, 255, 0.18));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #f3f6ff;
+}
+
+.sleep-alt-8.is-active {
+  border-color: rgba(122, 245, 193, 0.5);
+  background: linear-gradient(135deg, rgba(47, 112, 255, 0.26), rgba(12, 215, 181, 0.26));
+}
+
+.sleep-alt-8.is-expired {
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+/* Alt 9: guardian badge */
+.sleep-alt-9 {
+  padding: 0.4rem 0.5rem;
+  border-radius: 7px;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: #0f1319;
+  color: #e5e7eb;
+}
+
+.sleep-alt-9.is-active {
+  border-color: rgba(16, 185, 129, 0.6);
+  color: #a7f3d0;
+}
+
+.sleep-alt-9.is-expired {
+  border-color: rgba(245, 158, 11, 0.65);
+  color: #fcd34d;
+}
+
+/* Alt 10: alert ribbon */
+.sleep-alt-10 {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.02) 6px,
+    rgba(255, 255, 255, 0.07) 6px,
+    rgba(255, 255, 255, 0.07) 12px
+  );
+}
+
+.sleep-alt-10.is-active {
+  border-color: rgba(0, 255, 136, 0.45);
+  color: #bbf7d0;
+}
+
+.sleep-alt-10.is-expired {
+  border-color: rgba(245, 158, 11, 0.7);
+  color: #fcd34d;
+}
+
+.sleep-timer-menu {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  min-width: 230px;
+  border-radius: 12px;
+  border: 1px solid var(--border-primary);
+  background: rgba(15, 20, 25, 0.95);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  padding: 0.45rem;
+  z-index: 1400;
+}
+
+.sleep-timer-menu-caption {
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  padding: 0.2rem 0.38rem 0.3rem;
+}
+
+.sleep-timer-preset-row {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0 0.2rem 0.45rem;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+  }
+}
+
+.sleep-timer-preset {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.3rem 0.58rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+
+  &.is-selected {
+    color: #fff;
+    border-color: rgba(0, 255, 136, 0.5);
+    background: rgba(0, 255, 136, 0.16);
+  }
+}
+
+.sleep-timer-option {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.82rem;
+  font-weight: 500;
+
+  &:hover {
+    background: var(--overlay-medium);
+    color: var(--text-primary);
+  }
+
+  &.is-selected {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+  }
 }
 
 /* ===== Auth block – absolute top-right of main-wrapper ===== */

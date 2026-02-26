@@ -1,3 +1,8 @@
+import dayjs from 'dayjs';
+import duration from 'dayjs/plugin/duration';
+
+dayjs.extend(duration);
+
 /**
  * Format seconds into a human-readable time string
  * @param seconds - The number of seconds to format
@@ -5,11 +10,12 @@
  */
 export function formatDuration(seconds: number): string {
   if (!seconds || !Number.isFinite(seconds)) return '0:00';
-  
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  
+
+  const d = dayjs.duration(seconds, 'seconds');
+  const hours = Math.floor(d.asHours());
+  const minutes = d.minutes();
+  const secs = d.seconds();
+
   // If 1 hour or more, show as H:MM:SS
   if (hours > 0) {
     return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -27,17 +33,17 @@ export function formatDuration(seconds: number): string {
  */
 export function parseTimeString(timeString: string): number {
   const parts = timeString.split(':').map(part => parseInt(part, 10));
-  
+
   if (parts.length === 2) {
     // MM:SS format
     const [minutes, seconds] = parts;
-    return minutes * 60 + seconds;
+    return Math.floor(dayjs.duration({ minutes, seconds }).asSeconds());
   } else if (parts.length === 3) {
     // H:MM:SS format
     const [hours, minutes, seconds] = parts;
-    return hours * 3600 + minutes * 60 + seconds;
+    return Math.floor(dayjs.duration({ hours, minutes, seconds }).asSeconds());
   }
-  
+
   return 0;
 }
 
@@ -55,4 +61,16 @@ export function getTotalDuration<T>(
     const duration = getDuration(track);
     return total + (duration || 0);
   }, 0);
+}
+
+/**
+ * Format remaining milliseconds into MM:SS countdown text.
+ * Uses ceil so the timer counts naturally (30:00 -> 29:59 -> 29:58).
+ */
+export function formatCountdownMMSS(remainingMs: number): string {
+  const d = dayjs.duration(Math.max(0, remainingMs));
+  const totalSeconds = Math.ceil(d.asSeconds());
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }

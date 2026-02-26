@@ -32,6 +32,8 @@ type Props = {
     onTrackPlayed?: (track: TrackType) => void;
     /** Called on time update with progress 0–1 */
     onProgressUpdate?: (progress: number) => void;
+    /** True when sleep timer is in "finish this track then stop" mode */
+    isSleepTimerExpired?: boolean;
 };
 
 export default function AudioPlayer({
@@ -55,6 +57,7 @@ export default function AudioPlayer({
     onToggleStageView,
     onTrackPlayed,
     onProgressUpdate,
+    isSleepTimerExpired,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const trackTitleRef = useRef<HTMLDivElement>(null);
@@ -283,6 +286,12 @@ export default function AudioPlayer({
     };
 
     const handleEnded = () => {
+        // Sleep mode has expired: always defer to parent end handler
+        if (isSleepTimerExpired) {
+            onEnded();
+            return;
+        }
+
         if (isRepeated) {
             // If repeat is enabled, restart the current track
             const audio = audioRef.current;

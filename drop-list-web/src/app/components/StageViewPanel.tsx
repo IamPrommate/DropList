@@ -9,7 +9,7 @@ import ScrollingText from './ScrollingText';
 const isShowEqualizer = true;
 
 /** Toggle progress bar in Stage View */
-const isStageViewProgressBar = true;
+const isStageViewProgressBar = false;
 
 const TITLE_MAX_WIDTH_WITH_EQ = '230px';
 const TITLE_MAX_WIDTH_NO_EQ = '260px';
