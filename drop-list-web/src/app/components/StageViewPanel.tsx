@@ -17,9 +17,10 @@ const TITLE_MAX_WIDTH_NO_EQ = '260px';
 type Props = {
   track: TrackType;
   playbackProgress?: number;
+  className?: string;
 };
 
-export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
+export default function StageViewPanel({ track, playbackProgress = 0, className = '' }: Props) {
   const videoSrc = track.stageViewVideoUrl;
   const info = parseTrackName(track.name);
   const [isVideoReady, setIsVideoReady] = useState(false);
@@ -65,7 +66,7 @@ export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
   if (!videoSrc) return null;
 
   return (
-    <div className="stage-view-panel">
+    <div className={`stage-view-panel ${className}`.trim()}>
       <div className="stage-view-video-wrapper">
         {!isVideoReady && (
           <>

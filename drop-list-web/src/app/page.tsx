@@ -34,6 +34,8 @@ enum KeyboardShortcuts {
 }
 
 export default function HomePage() {
+  const STAGE_VIEW_AUTO_HIDE_DELTA_PX = 4;
+  const DEBUG_STAGE_VIEW_AUTO_HIDE = true;
   const [tracks, setTracks] = useState<TrackType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isShuffled, setIsShuffled] = useState(false);
@@ -69,6 +71,8 @@ export default function HomePage() {
   const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   const [isStageViewOpen, setIsStageViewOpen] = useState(true);
+  const [isStageViewAutoHidden, setIsStageViewAutoHidden] = useState(false);
+  const stageViewWidthBaselineRef = useRef<number | null>(null);
   /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
   const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
   
@@ -83,9 +87,17 @@ export default function HomePage() {
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
   const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
+  const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
+  const shouldRenderStageView = hasStageViewVideo && isStageViewOpen;
+  const isStageViewVisible = shouldRenderStageView && !isStageViewAutoHidden;
   const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
   const isSleepTimerActive = sleepTimerEndAt !== null;
   const canUseSleepTimer = Boolean(currentTrack);
+  const logStageViewAutoHide = useCallback((message: string, payload?: Record<string, unknown>) => {
+    if (!DEBUG_STAGE_VIEW_AUTO_HIDE) return;
+    if (typeof window === 'undefined') return;
+    console.log(`[StageView AutoHide] ${message}`, payload ?? {});
+  }, [DEBUG_STAGE_VIEW_AUTO_HIDE]);
 
   const clearSleepTimer = useCallback(() => {
     setSleepTimerEndAt(null);
@@ -113,6 +125,65 @@ export default function HomePage() {
       authDropdownCloseTimeoutRef.current = null;
     }, 200);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateStageViewAutoHide = () => {
+      if (!shouldRenderStageView) {
+        logStageViewAutoHide('disabled (stage view not renderable)', {
+          shouldRenderStageView,
+          isStageViewOpen,
+          hasStageViewVideo,
+        });
+        stageViewWidthBaselineRef.current = null;
+        setIsStageViewAutoHidden(false);
+        return;
+      }
+
+      const width = window.innerWidth;
+      if (stageViewWidthBaselineRef.current === null || width > stageViewWidthBaselineRef.current) {
+        stageViewWidthBaselineRef.current = width;
+        logStageViewAutoHide('baseline updated', {
+          width,
+          baseline: stageViewWidthBaselineRef.current,
+        });
+      }
+
+      const baseline = stageViewWidthBaselineRef.current;
+      const hideThreshold = baseline - STAGE_VIEW_AUTO_HIDE_DELTA_PX;
+      const nextAutoHidden = width <= hideThreshold;
+
+      logStageViewAutoHide('resize evaluated', {
+        width,
+        baseline,
+        hideThreshold,
+        delta: baseline - width,
+        nextAutoHidden,
+      });
+
+      setIsStageViewAutoHidden(nextAutoHidden);
+    };
+
+    updateStageViewAutoHide();
+    window.addEventListener('resize', updateStageViewAutoHide);
+
+    return () => {
+      window.removeEventListener('resize', updateStageViewAutoHide);
+    };
+  }, [
+    shouldRenderStageView,
+    isStageViewOpen,
+    hasStageViewVideo,
+    logStageViewAutoHide,
+  ]);
+
+  useEffect(() => {
+    logStageViewAutoHide('visibility changed', {
+      isStageViewAutoHidden,
+      isStageViewVisible,
+    });
+  }, [isStageViewAutoHidden, isStageViewVisible, logStageViewAutoHide]);
 
   useEffect(() => {
     return () => {
@@ -772,7 +843,7 @@ export default function HomePage() {
             <div
               className={
                 `container ${
-                  currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen
+                  isStageViewVisible
                     ? 'container-stage-view-open'
                     : 'container-centered'
                 }`
@@ -967,8 +1038,12 @@ export default function HomePage() {
             </div>
 
             {/* Stage View – fixed on the right, uses Google Drive video */}
-            {currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen && (
-              <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
+            {shouldRenderStageView && (
+              <StageViewPanel
+                track={currentTrack}
+                playbackProgress={playbackProgress}
+                className={isStageViewAutoHidden ? 'is-auto-hidden' : ''}
+              />
             )}
 
             {/* Fixed bottom audio bar with smooth appearance */}

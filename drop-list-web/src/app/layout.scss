@@ -43,12 +43,6 @@
   --btn-ggd-bg: rgba(15, 20, 25, 0.8);
   --btn-ggd-hover: rgba(15, 20, 25, 0.95);
 
-  /* Stage View responsive hide logic */
-  --layout-gutter: 2.25rem;
-  --sidebar-collapsed-width: 63px;
-  --stage-view-width: 320px;
-  --stage-view-min-content-width: 980px;
-  --stage-view-hide-buffer: 4px;
   
   /* Switch Colors */
   --switch-bg: rgba(168, 85, 247, 0.3);
@@ -1238,6 +1232,13 @@
   will-change: opacity, transform;
 }
 
+.stage-view-panel.is-auto-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(16px);
+}
+
 .stage-view-video-wrapper {
   position: relative;
   width: 100%;
@@ -1388,35 +1389,6 @@
 @media (min-width: 1024px) {
   .container-stage-view-open .playlist {
     margin-right: 0;
-  }
-}
-
-@media (max-width: calc(
-  var(--sidebar-collapsed-width) +
-  var(--layout-gutter) +
-  var(--stage-view-min-content-width) +
-  var(--layout-gutter) +
-  var(--stage-view-width) +
-  var(--layout-gutter) +
-  var(--stage-view-hide-buffer)
-)) {
-  .stage-view-panel {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateY(-50%) translateX(16px);
-  }
-
-  /* Keep Stage View enabled in state, but render layout like closed mode. */
-  .container-stage-view-open {
-    max-width: 1152px;
-    width: auto;
-    margin: 0 auto;
-    padding-right: 2.25rem;
-  }
-
-  .container-stage-view-open .playlist {
-    width: 90%;
   }
 }
 
