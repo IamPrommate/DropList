@@ -42,6 +42,13 @@
   --btn-toggle-hover: linear-gradient(135deg, var(--primary-gradient-hover-start), var(--primary-gradient-hover-middle), var(--primary-gradient-hover-end));
   --btn-ggd-bg: rgba(15, 20, 25, 0.8);
   --btn-ggd-hover: rgba(15, 20, 25, 0.95);
+
+  /* Stage View responsive hide logic */
+  --layout-gutter: 2.25rem;
+  --sidebar-collapsed-width: 63px;
+  --stage-view-width: 320px;
+  --stage-view-min-content-width: 980px;
+  --stage-view-hide-buffer: 4px;
   
   /* Switch Colors */
   --switch-bg: rgba(168, 85, 247, 0.3);
@@ -1384,7 +1391,15 @@
   }
 }
 
-@media (max-width: 1480px) {
+@media (max-width: calc(
+  var(--sidebar-collapsed-width) +
+  var(--layout-gutter) +
+  var(--stage-view-min-content-width) +
+  var(--layout-gutter) +
+  var(--stage-view-width) +
+  var(--layout-gutter) +
+  var(--stage-view-hide-buffer)
+)) {
   .stage-view-panel {
     opacity: 0;
     visibility: hidden;
