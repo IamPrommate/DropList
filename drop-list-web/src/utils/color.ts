@@ -3,8 +3,51 @@
  * @param imageUrl - URL of the image
  * @returns Promise with the dominant color as hex string
  */
+const DEFAULT_DOMINANT_COLOR = '#a855f7';
+const albumColorMemoryCache = new Map<string, string>();
+const LOCAL_CACHE_PREFIX = 'droplist:album-color:v2:';
+
+type ColorBucket = {
+  count: number;
+  rSum: number;
+  gSum: number;
+  bSum: number;
+};
+
+function getAlbumColorCacheKey(imageUrl: string): string {
+  try {
+    const url = new URL(imageUrl, typeof window !== 'undefined' ? window.location.origin : 'https://example.com');
+    const driveId = url.searchParams.get('id');
+    if (driveId) return `drive:${driveId}`;
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return imageUrl;
+  }
+}
+
+function readCachedAlbumColor(cacheKey: string): string | null {
+  const inMemory = albumColorMemoryCache.get(cacheKey);
+  if (inMemory) return inMemory;
+  if (typeof window === 'undefined') return null;
+  const fromStorage = window.localStorage.getItem(`${LOCAL_CACHE_PREFIX}${cacheKey}`);
+  if (!fromStorage) return null;
+  albumColorMemoryCache.set(cacheKey, fromStorage);
+  return fromStorage;
+}
+
+function writeCachedAlbumColor(cacheKey: string, color: string): void {
+  albumColorMemoryCache.set(cacheKey, color);
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(`${LOCAL_CACHE_PREFIX}${cacheKey}`, color);
+  }
+}
+
 export async function extractDominantColor(imageUrl: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+  const cacheKey = getAlbumColorCacheKey(imageUrl);
+  const cachedColor = readCachedAlbumColor(cacheKey);
+  if (cachedColor) return cachedColor;
+
+  return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     
@@ -15,7 +58,7 @@ export async function extractDominantColor(imageUrl: string): Promise<string> {
         const ctx = canvas.getContext('2d');
         
         if (!ctx) {
-          reject(new Error('Could not get canvas context'));
+          resolve(DEFAULT_DOMINANT_COLOR);
           return;
         }
         
@@ -31,11 +74,12 @@ export async function extractDominantColor(imageUrl: string): Promise<string> {
         const imageData = ctx.getImageData(0, 0, size, size);
         const data = imageData.data;
         
-        // Sample pixels with focus on center area
+        // Sample pixels and build quantized histogram for deterministic output across OS.
         const step = 2;
-        const colors: number[][] = [];
+        const buckets = new Map<string, ColorBucket>();
         const centerFocus = size / 2;
-        const centerRadius = size * 0.3; // Focus on center 30% of image
+        const centerRadius = size * 0.3;
+        const bucketSize = 16;
         
         for (let i = 0; i < data.length; i += step * 4) {
           const index = i / 4;
@@ -47,8 +91,8 @@ export async function extractDominantColor(imageUrl: string): Promise<string> {
             Math.pow(x - centerFocus, 2) + Math.pow(y - centerFocus, 2)
           );
           
-          // Weight pixels closer to center more heavily
-          const centerWeight = centerDist < centerRadius ? 2 : 1;
+          // Weight pixels closer to center slightly more.
+          const centerWeight = centerDist < centerRadius ? 1.6 : 1;
           
           const r = data[i];
           const g = data[i + 1];
@@ -58,25 +102,31 @@ export async function extractDominantColor(imageUrl: string): Promise<string> {
           const brightness = (r + g + b) / 3;
           
           // Skip transparent, too dark, or too bright pixels
-          if (a > 128 && brightness > 60 && brightness < 220) {
-            // Add color multiple times based on center weight
-            for (let w = 0; w < centerWeight; w++) {
-              colors.push([r, g, b]);
-            }
+          if (a > 128 && brightness > 45 && brightness < 230) {
+            const rQ = Math.floor(r / bucketSize);
+            const gQ = Math.floor(g / bucketSize);
+            const bQ = Math.floor(b / bucketSize);
+            const key = `${rQ},${gQ},${bQ}`;
+            const existing = buckets.get(key) ?? { count: 0, rSum: 0, gSum: 0, bSum: 0 };
+            existing.count += centerWeight;
+            existing.rSum += r * centerWeight;
+            existing.gSum += g * centerWeight;
+            existing.bSum += b * centerWeight;
+            buckets.set(key, existing);
           }
         }
         
         // Find the dominant color
-        const dominantColor = findDominantColor(colors);
-        
+        const dominantColor = findDominantColor(buckets);
+        writeCachedAlbumColor(cacheKey, dominantColor);
         resolve(dominantColor);
-      } catch (error) {
-        reject(error);
+      } catch {
+        resolve(DEFAULT_DOMINANT_COLOR);
       }
     };
     
     img.onerror = () => {
-      reject(new Error('Failed to load image'));
+      resolve(DEFAULT_DOMINANT_COLOR);
     };
     
     img.src = imageUrl;
@@ -84,43 +134,33 @@ export async function extractDominantColor(imageUrl: string): Promise<string> {
 }
 
 /**
- * Find the dominant color from an array of RGB values
+ * Find dominant color from quantized histogram.
  */
-function findDominantColor(colors: number[][]): string {
-  if (colors.length === 0) {
-    return '#a855f7'; // Default purple
+function findDominantColor(buckets: Map<string, ColorBucket>): string {
+  if (buckets.size === 0) {
+    return DEFAULT_DOMINANT_COLOR;
   }
   
-  // Use median approach to avoid outliers
-  // Sort colors by their "vibrancy" score and pick the median
-  const scoredColors = colors.map(([r, g, b]) => {
-    const saturation = getSaturation(r, g, b);
-    const brightness = (r + g + b) / 3;
-    
-    // Penalize yellow-dominated colors (high G, high R+G+B)
-    const yellowScore = (g + b) / 2;
-    const vibrancy = saturation * brightness * (1 - yellowScore / 255 * 0.3);
-    
-    return { r, g, b, vibrancy };
-  });
-  
-  // Sort by vibrancy and get median
-  scoredColors.sort((a, b) => b.vibrancy - a.vibrancy);
-  const median = scoredColors[Math.floor(scoredColors.length * 0.3)]; // Get 30th percentile (more vibrant)
-  
-  return rgbToHex(median.r, median.g, median.b);
-}
+  let best: (ColorBucket & { score: number }) | null = null;
+  for (const bucket of buckets.values()) {
+    const avgR = bucket.rSum / bucket.count;
+    const avgG = bucket.gSum / bucket.count;
+    const avgB = bucket.bSum / bucket.count;
+    const max = Math.max(avgR, avgG, avgB);
+    const min = Math.min(avgR, avgG, avgB);
+    const saturation = max === 0 ? 0 : (max - min) / max;
+    const score = bucket.count * (1 + saturation * 0.35);
+    if (!best || score > best.score) {
+      best = { ...bucket, score };
+    }
+  }
 
-/**
- * Calculate saturation of a color
- */
-function getSaturation(r: number, g: number, b: number): number {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const delta = max - min;
-  
-  if (max === 0) return 0;
-  return delta / max;
+  if (!best) return DEFAULT_DOMINANT_COLOR;
+  return rgbToHex(
+    Math.round(best.rSum / best.count),
+    Math.round(best.gSum / best.count),
+    Math.round(best.bSum / best.count)
+  );
 }
 
 /**
