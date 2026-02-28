@@ -34,6 +34,7 @@ enum KeyboardShortcuts {
 }
 
 export default function HomePage() {
+  const playlistRef = useRef<HTMLDivElement | null>(null);
   const [tracks, setTracks] = useState<TrackType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isShuffled, setIsShuffled] = useState(false);
@@ -69,6 +70,7 @@ export default function HomePage() {
   const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   const [isStageViewOpen, setIsStageViewOpen] = useState(true);
+  const [isStageViewAutoHidden, setIsStageViewAutoHidden] = useState(false);
   /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
   const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
   
@@ -83,6 +85,9 @@ export default function HomePage() {
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
   const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
+  const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
+  const shouldAttemptShowStageView = hasStageViewVideo && isStageViewOpen;
+  const shouldRenderStageView = shouldAttemptShowStageView && !isStageViewAutoHidden;
   const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
   const isSleepTimerActive = sleepTimerEndAt !== null;
   const canUseSleepTimer = Boolean(currentTrack);
@@ -121,6 +126,44 @@ export default function HomePage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!shouldAttemptShowStageView) {
+      setIsStageViewAutoHidden(false);
+      return;
+    }
+
+    const STAGE_VIEW_WIDTH = 320;
+    const STAGE_VIEW_RIGHT_GAP = 36;
+    const STAGE_VIEW_TO_PLAYLIST_GAP = 24;
+    const MIN_PLAYLIST_WIDTH_WITH_STAGE = 720;
+
+    const checkShouldAutoHide = () => {
+      if (window.innerWidth <= 1023) {
+        setIsStageViewAutoHidden(true);
+        return;
+      }
+
+      const playlistLeft = playlistRef.current?.getBoundingClientRect().left;
+      if (playlistLeft === undefined) {
+        setIsStageViewAutoHidden(false);
+        return;
+      }
+
+      const availablePlaylistWidth =
+        window.innerWidth -
+        STAGE_VIEW_RIGHT_GAP -
+        STAGE_VIEW_WIDTH -
+        STAGE_VIEW_TO_PLAYLIST_GAP -
+        playlistLeft;
+
+      setIsStageViewAutoHidden(availablePlaylistWidth < MIN_PLAYLIST_WIDTH_WITH_STAGE);
+    };
+
+    checkShouldAutoHide();
+    window.addEventListener('resize', checkShouldAutoHide);
+    return () => window.removeEventListener('resize', checkShouldAutoHide);
+  }, [shouldAttemptShowStageView, sidebarCollapsed]);
 
   // Save durations to localStorage cache
   const saveDurationsToCache = useCallback((durations: Map<string, number>) => {
@@ -772,7 +815,7 @@ export default function HomePage() {
             <div
               className={
                 `container ${
-                  currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen
+                  shouldRenderStageView
                     ? 'container-stage-view-open'
                     : 'container-centered'
                 }`
@@ -848,7 +891,7 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="playlist">
+              <div className="playlist" ref={playlistRef}>
                 {tracks.map((track, i) => {
                   const trackInfo = parseTrackName(track.name);
                   const cacheKey = getTrackCacheKey(track);
@@ -967,7 +1010,7 @@ export default function HomePage() {
             </div>
 
             {/* Stage View – fixed on the right, uses Google Drive video */}
-            {currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen && (
+            {shouldRenderStageView && (
               <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
             )}
 
