@@ -2,7 +2,7 @@
 'use client';
 
 import '@ant-design/v5-patch-for-react-19';
-import { useCallback, useState, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
@@ -87,7 +87,7 @@ export default function HomePage() {
   const currentTrack = tracks[currentIndex];
   const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
   const shouldAttemptShowStageView = hasStageViewVideo && isStageViewOpen;
-  const shouldRenderStageView = shouldAttemptShowStageView && !isStageViewAutoHidden;
+  const shouldReserveStageViewSpace = shouldAttemptShowStageView && !isStageViewAutoHidden;
   const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
   const isSleepTimerActive = sleepTimerEndAt !== null;
   const canUseSleepTimer = Boolean(currentTrack);
@@ -127,42 +127,64 @@ export default function HomePage() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shouldAttemptShowStageView) {
       setIsStageViewAutoHidden(false);
       return;
     }
 
-    const STAGE_VIEW_WIDTH = 320;
-    const STAGE_VIEW_RIGHT_GAP = 36;
-    const STAGE_VIEW_TO_PLAYLIST_GAP = 24;
-    const MIN_PLAYLIST_WIDTH_WITH_STAGE = 720;
+    const HIDE_ON_GAP_LESS_THAN = 0;
+    const SHOW_ON_GAP_AT_LEAST = 24;
 
+    let frameId: number | null = null;
     const checkShouldAutoHide = () => {
       if (window.innerWidth <= 1023) {
         setIsStageViewAutoHidden(true);
         return;
       }
 
-      const playlistLeft = playlistRef.current?.getBoundingClientRect().left;
-      if (playlistLeft === undefined) {
-        setIsStageViewAutoHidden(false);
+      const playlistEl = playlistRef.current;
+      const stageViewEl = document.querySelector('.stage-view-panel') as HTMLElement | null;
+      if (!playlistEl || !stageViewEl) {
         return;
       }
 
-      const availablePlaylistWidth =
-        window.innerWidth -
-        STAGE_VIEW_RIGHT_GAP -
-        STAGE_VIEW_WIDTH -
-        STAGE_VIEW_TO_PLAYLIST_GAP -
-        playlistLeft;
+      const playlistRect = playlistEl.getBoundingClientRect();
+      const stageViewRect = stageViewEl.getBoundingClientRect();
+      const gapBetweenPlaylistAndStage = stageViewRect.left - playlistRect.right;
 
-      setIsStageViewAutoHidden(availablePlaylistWidth < MIN_PLAYLIST_WIDTH_WITH_STAGE);
+      setIsStageViewAutoHidden((prev) => (
+        prev
+          ? gapBetweenPlaylistAndStage < SHOW_ON_GAP_AT_LEAST
+          : gapBetweenPlaylistAndStage < HIDE_ON_GAP_LESS_THAN
+      ));
     };
 
-    checkShouldAutoHide();
-    window.addEventListener('resize', checkShouldAutoHide);
-    return () => window.removeEventListener('resize', checkShouldAutoHide);
+    const scheduleCheck = () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      frameId = requestAnimationFrame(() => {
+        checkShouldAutoHide();
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleCheck();
+    });
+    if (playlistRef.current) {
+      resizeObserver.observe(playlistRef.current);
+    }
+
+    scheduleCheck();
+    window.addEventListener('resize', scheduleCheck);
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', scheduleCheck);
+    };
   }, [shouldAttemptShowStageView, sidebarCollapsed]);
 
   // Save durations to localStorage cache
@@ -815,7 +837,7 @@ export default function HomePage() {
             <div
               className={
                 `container ${
-                  shouldRenderStageView
+                  shouldReserveStageViewSpace
                     ? 'container-stage-view-open'
                     : 'container-centered'
                 }`
@@ -1010,8 +1032,10 @@ export default function HomePage() {
             </div>
 
             {/* Stage View – fixed on the right, uses Google Drive video */}
-            {shouldRenderStageView && (
-              <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
+            {shouldAttemptShowStageView && (
+              <div className={`stage-view-shell ${isStageViewAutoHidden ? 'is-auto-hidden' : ''}`}>
+                <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
+              </div>
             )}
 
             {/* Fixed bottom audio bar with smooth appearance */}

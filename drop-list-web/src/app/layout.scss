@@ -1200,6 +1200,14 @@
 }
 
 /* Stage View Panel – fixed on the right, does not overlap playlist */
+.stage-view-shell.is-auto-hidden {
+  .stage-view-panel {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
 .stage-view-panel {
   position: fixed;
   top: 50%;
@@ -1221,6 +1229,7 @@
   gap: 0.75rem;
   z-index: 900;
   overflow: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .stage-view-video-wrapper {
