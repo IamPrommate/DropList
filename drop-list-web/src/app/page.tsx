@@ -23,6 +23,7 @@ import './layout.scss';
 import StageViewPanel from './components/StageViewPanel';
 import SleepTimerControl from './components/SleepTimerControl';
 import { LogIn, LogOut } from 'lucide-react';
+import { useStageViewAutoHide } from './hooks/useStageViewAutoHide';
 
 enum KeyboardShortcuts {
   SPACE = 'Space',
@@ -34,7 +35,6 @@ enum KeyboardShortcuts {
 }
 
 export default function HomePage() {
-  const playlistRef = useRef<HTMLDivElement | null>(null);
   const [tracks, setTracks] = useState<TrackType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isShuffled, setIsShuffled] = useState(false);
@@ -70,7 +70,6 @@ export default function HomePage() {
   const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   const [isStageViewOpen, setIsStageViewOpen] = useState(true);
-  const [isStageViewAutoHidden, setIsStageViewAutoHidden] = useState(false);
   /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
   const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
   
@@ -87,6 +86,10 @@ export default function HomePage() {
   const currentTrack = tracks[currentIndex];
   const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
   const shouldAttemptShowStageView = hasStageViewVideo && isStageViewOpen;
+  const { playlistRef, isStageViewAutoHidden } = useStageViewAutoHide({
+    enabled: shouldAttemptShowStageView,
+    layoutDependency: sidebarCollapsed,
+  });
   const shouldReserveStageViewSpace = shouldAttemptShowStageView && !isStageViewAutoHidden;
   const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
   const isSleepTimerActive = sleepTimerEndAt !== null;
@@ -126,66 +129,6 @@ export default function HomePage() {
       }
     };
   }, []);
-
-  useLayoutEffect(() => {
-    if (!shouldAttemptShowStageView) {
-      setIsStageViewAutoHidden(false);
-      return;
-    }
-
-    const HIDE_ON_GAP_LESS_THAN = 0;
-    const SHOW_ON_GAP_AT_LEAST = 24;
-
-    let frameId: number | null = null;
-    const checkShouldAutoHide = () => {
-      if (window.innerWidth <= 1023) {
-        setIsStageViewAutoHidden(true);
-        return;
-      }
-
-      const playlistEl = playlistRef.current;
-      const stageViewEl = document.querySelector('.stage-view-panel') as HTMLElement | null;
-      if (!playlistEl || !stageViewEl) {
-        return;
-      }
-
-      const playlistRect = playlistEl.getBoundingClientRect();
-      const stageViewRect = stageViewEl.getBoundingClientRect();
-      const gapBetweenPlaylistAndStage = stageViewRect.left - playlistRect.right;
-
-      setIsStageViewAutoHidden((prev) => (
-        prev
-          ? gapBetweenPlaylistAndStage < SHOW_ON_GAP_AT_LEAST
-          : gapBetweenPlaylistAndStage < HIDE_ON_GAP_LESS_THAN
-      ));
-    };
-
-    const scheduleCheck = () => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
-      }
-      frameId = requestAnimationFrame(() => {
-        checkShouldAutoHide();
-      });
-    };
-
-    const resizeObserver = new ResizeObserver(() => {
-      scheduleCheck();
-    });
-    if (playlistRef.current) {
-      resizeObserver.observe(playlistRef.current);
-    }
-
-    scheduleCheck();
-    window.addEventListener('resize', scheduleCheck);
-    return () => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
-      }
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', scheduleCheck);
-    };
-  }, [shouldAttemptShowStageView, sidebarCollapsed]);
 
   // Save durations to localStorage cache
   const saveDurationsToCache = useCallback((durations: Map<string, number>) => {
