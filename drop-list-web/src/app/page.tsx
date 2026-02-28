@@ -2,7 +2,7 @@
 'use client';
 
 import '@ant-design/v5-patch-for-react-19';
-import { useCallback, useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
@@ -34,7 +34,6 @@ enum KeyboardShortcuts {
 }
 
 export default function HomePage() {
-  const playlistRef = useRef<HTMLDivElement | null>(null);
   const [tracks, setTracks] = useState<TrackType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isShuffled, setIsShuffled] = useState(false);
@@ -70,7 +69,6 @@ export default function HomePage() {
   const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   const [isStageViewOpen, setIsStageViewOpen] = useState(true);
-  const [isStageViewAutoHidden, setIsStageViewAutoHidden] = useState(false);
   /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
   const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
   
@@ -85,9 +83,6 @@ export default function HomePage() {
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
   const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
-  const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
-  const shouldAttemptShowStageView = hasStageViewVideo && isStageViewOpen;
-  const shouldReserveStageViewSpace = shouldAttemptShowStageView && !isStageViewAutoHidden;
   const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
   const isSleepTimerActive = sleepTimerEndAt !== null;
   const canUseSleepTimer = Boolean(currentTrack);
@@ -126,66 +121,6 @@ export default function HomePage() {
       }
     };
   }, []);
-
-  useLayoutEffect(() => {
-    if (!shouldAttemptShowStageView) {
-      setIsStageViewAutoHidden(false);
-      return;
-    }
-
-    const HIDE_ON_GAP_LESS_THAN = 0;
-    const SHOW_ON_GAP_AT_LEAST = 24;
-
-    let frameId: number | null = null;
-    const checkShouldAutoHide = () => {
-      if (window.innerWidth <= 1023) {
-        setIsStageViewAutoHidden(true);
-        return;
-      }
-
-      const playlistEl = playlistRef.current;
-      const stageViewEl = document.querySelector('.stage-view-panel') as HTMLElement | null;
-      if (!playlistEl || !stageViewEl) {
-        return;
-      }
-
-      const playlistRect = playlistEl.getBoundingClientRect();
-      const stageViewRect = stageViewEl.getBoundingClientRect();
-      const gapBetweenPlaylistAndStage = stageViewRect.left - playlistRect.right;
-
-      setIsStageViewAutoHidden((prev) => (
-        prev
-          ? gapBetweenPlaylistAndStage < SHOW_ON_GAP_AT_LEAST
-          : gapBetweenPlaylistAndStage < HIDE_ON_GAP_LESS_THAN
-      ));
-    };
-
-    const scheduleCheck = () => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
-      }
-      frameId = requestAnimationFrame(() => {
-        checkShouldAutoHide();
-      });
-    };
-
-    const resizeObserver = new ResizeObserver(() => {
-      scheduleCheck();
-    });
-    if (playlistRef.current) {
-      resizeObserver.observe(playlistRef.current);
-    }
-
-    scheduleCheck();
-    window.addEventListener('resize', scheduleCheck);
-    return () => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
-      }
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', scheduleCheck);
-    };
-  }, [shouldAttemptShowStageView, sidebarCollapsed]);
 
   // Save durations to localStorage cache
   const saveDurationsToCache = useCallback((durations: Map<string, number>) => {
@@ -837,7 +772,7 @@ export default function HomePage() {
             <div
               className={
                 `container ${
-                  shouldReserveStageViewSpace
+                  currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen
                     ? 'container-stage-view-open'
                     : 'container-centered'
                 }`
@@ -913,7 +848,7 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="playlist" ref={playlistRef}>
+              <div className="playlist">
                 {tracks.map((track, i) => {
                   const trackInfo = parseTrackName(track.name);
                   const cacheKey = getTrackCacheKey(track);
@@ -1032,10 +967,8 @@ export default function HomePage() {
             </div>
 
             {/* Stage View – fixed on the right, uses Google Drive video */}
-            {shouldAttemptShowStageView && (
-              <div className={`stage-view-shell ${isStageViewAutoHidden ? 'is-auto-hidden' : ''}`}>
-                <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
-              </div>
+            {currentTrack && currentTrack.stageViewVideoUrl && isStageViewOpen && (
+              <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
             )}
 
             {/* Fixed bottom audio bar with smooth appearance */}
