@@ -111,6 +111,7 @@ export default function AudioPlayer({
         resetAudioRetryState,
         handleAudioRecovered,
         handleAudioError,
+        shouldSuppressPauseSync,
     } = useAudioRetryRecovery({
         trackId: track?.id,
         isPlaying,
@@ -241,6 +242,10 @@ export default function AudioPlayer({
             }
         };
         const handlePause = () => {
+            if (shouldSuppressPauseSync(audio)) {
+                logAudioPlaybackDebug('native pause event suppressed during recovery');
+                return;
+            }
             logAudioPlaybackDebug('native pause event');
             onIsPlayingChange(false);
         };
@@ -252,7 +257,7 @@ export default function AudioPlayer({
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
         };
-    }, [onIsPlayingChange, onTrackPlayed, track, src, logAudioPlaybackDebug]);
+    }, [onIsPlayingChange, onTrackPlayed, track, src, logAudioPlaybackDebug, shouldSuppressPauseSync]);
 
     // Extra media-event diagnostics for "random pause" investigation.
     useEffect(() => {
@@ -298,6 +303,12 @@ export default function AudioPlayer({
                 if (!audio) return;
                 const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState >= 2;
                 if (isPlaying !== actuallyPlaying) {
+                    if (!actuallyPlaying && shouldSuppressPauseSync(audio)) {
+                        logAudioPlaybackDebug('visibility reconcile pause suppressed during recovery', {
+                            actuallyPlaying,
+                        });
+                        return;
+                    }
                     logAudioPlaybackDebug('visibility reconcile state', { actuallyPlaying });
                     onIsPlayingChange(actuallyPlaying);
                 }
@@ -305,7 +316,7 @@ export default function AudioPlayer({
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, [onIsPlayingChange, isPlaying, logAudioPlaybackDebug]);
+    }, [onIsPlayingChange, isPlaying, logAudioPlaybackDebug, shouldSuppressPauseSync]);
 
     // Parse track info early so it can be used in useEffects
     const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };

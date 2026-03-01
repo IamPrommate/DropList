@@ -12,6 +12,8 @@ type UseAudioRetryRecoveryArgs = {
   debug?: boolean;
 };
 
+const RECOVERY_PAUSE_SYNC_GRACE_MS = 2000;
+
 export function useAudioRetryRecovery({
   trackId,
   isPlaying,
@@ -25,6 +27,8 @@ export function useAudioRetryRecovery({
   const retryTrackKeyRef = useRef<string | null>(null);
   const intendedPlayingRef = useRef(isPlaying);
   const shouldResumeAfterRecoveryRef = useRef(false);
+  const isRecoveringRef = useRef(false);
+  const recoveryPauseSyncGraceUntilRef = useRef(0);
 
   const logAudioRetryDebug = useCallback((event: string, payload?: Record<string, unknown>) => {
     if (!debug) return;
@@ -43,6 +47,8 @@ export function useAudioRetryRecovery({
     audioLoadRetryCountRef.current = 0;
     retryTrackKeyRef.current = trackKey ?? null;
     shouldResumeAfterRecoveryRef.current = false;
+    isRecoveringRef.current = false;
+    recoveryPauseSyncGraceUntilRef.current = 0;
   }, [clearAudioRetryTimeout]);
 
   useEffect(() => {
@@ -73,6 +79,9 @@ export function useAudioRetryRecovery({
       && intendedPlayingRef.current;
 
     resetAudioRetryState(recoveredTrackId ?? trackId ?? audio.currentSrc ?? audio.src);
+    if (recoveredAfterRetries > 0) {
+      recoveryPauseSyncGraceUntilRef.current = Date.now() + RECOVERY_PAUSE_SYNC_GRACE_MS;
+    }
 
     if (shouldAutoResume) {
       logAudioRetryDebug('attempting auto-resume after recovery', {
@@ -144,6 +153,7 @@ export function useAudioRetryRecovery({
 
     audioLoadRetryCountRef.current += 1;
     const attempt = audioLoadRetryCountRef.current;
+    isRecoveringRef.current = true;
     console.warn(
       `Audio source load failed. Retrying ${attempt}/${maxRetryAttempts}...`,
       { src: audio.src, trackId: activeTrackId }
@@ -166,10 +176,35 @@ export function useAudioRetryRecovery({
     }, retryDelayMs);
   }, [handleNext, logAudioRetryDebug, maxRetryAttempts, resetAudioRetryState, retryDelayMs, trackId]);
 
+  const shouldSuppressPauseSync = useCallback((audio?: HTMLAudioElement | null) => {
+    if (!audio) return false;
+    const inRecoveryWindow =
+      isRecoveringRef.current || Date.now() < recoveryPauseSyncGraceUntilRef.current;
+    const suppress = inRecoveryWindow
+      && shouldResumeAfterRecoveryRef.current
+      && intendedPlayingRef.current
+      && Boolean(audio.src)
+      && !audio.ended;
+
+    if (suppress) {
+      logAudioRetryDebug('pause-sync suppressed during recovery window', {
+        trackId,
+        src: audio.currentSrc || audio.src,
+        inRecoveryWindow,
+        shouldResumeAfterRecovery: shouldResumeAfterRecoveryRef.current,
+        intendedPlaying: intendedPlayingRef.current,
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+      });
+    }
+    return suppress;
+  }, [logAudioRetryDebug, trackId]);
+
   return {
     clearAudioRetryTimeout,
     resetAudioRetryState,
     handleAudioRecovered,
     handleAudioError,
+    shouldSuppressPauseSync,
   };
 }
