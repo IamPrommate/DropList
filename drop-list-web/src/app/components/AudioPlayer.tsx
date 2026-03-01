@@ -64,6 +64,9 @@ export default function AudioPlayer({
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const trackTitleRef = useRef<HTMLDivElement>(null);
+    const manualPauseTogglePendingRef = useRef(false);
+    const unexpectedPauseResumeInFlightRef = useRef(false);
+    const pendingUnexpectedPauseResumeOnVisibleRef = useRef(false);
     const [duration, setDuration] = useState<number>(0);
     const [currentTime, setCurrentTime] = useState<number>(0);
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
@@ -133,6 +136,12 @@ export default function AudioPlayer({
             ...payload,
         });
     }, [track?.id, src, isPlaying]);
+
+    const handleUserPlayPauseClick = useCallback(() => {
+        manualPauseTogglePendingRef.current = true;
+        logAudioPlaybackDebug('user play/pause button clicked');
+        onPlayPauseToggle();
+    }, [onPlayPauseToggle, logAudioPlaybackDebug]);
 
     // Audio cleanup on unmount and fast refresh
     useEffect(() => {
@@ -225,6 +234,9 @@ export default function AudioPlayer({
     const hasReportedPlayRef = useRef(false);
     useEffect(() => {
         hasReportedPlayRef.current = false;
+        manualPauseTogglePendingRef.current = false;
+        unexpectedPauseResumeInFlightRef.current = false;
+        pendingUnexpectedPauseResumeOnVisibleRef.current = false;
         resetAudioRetryState(track?.id ?? src ?? null);
     }, [track?.id, src, resetAudioRetryState]);
 
@@ -235,6 +247,7 @@ export default function AudioPlayer({
 
         const handlePlay = () => {
             logAudioPlaybackDebug('native play event');
+            pendingUnexpectedPauseResumeOnVisibleRef.current = false;
             onIsPlayingChange(true);
             if (track && onTrackPlayed && !hasReportedPlayRef.current) {
                 hasReportedPlayRef.current = true;
@@ -246,6 +259,42 @@ export default function AudioPlayer({
                 logAudioPlaybackDebug('native pause event suppressed during recovery');
                 return;
             }
+
+            if (manualPauseTogglePendingRef.current) {
+                manualPauseTogglePendingRef.current = false;
+                logAudioPlaybackDebug('native pause event accepted (manual toggle)');
+                onIsPlayingChange(false);
+                return;
+            }
+
+            const shouldConsiderUnexpectedPauseResume =
+                isPlaying &&
+                !audio.ended &&
+                audio.readyState >= 2;
+
+            if (shouldConsiderUnexpectedPauseResume && document.visibilityState !== 'visible') {
+                pendingUnexpectedPauseResumeOnVisibleRef.current = true;
+                logAudioPlaybackDebug('unexpected pause while hidden; queued auto-resume for visible');
+                return;
+            }
+
+            if (shouldConsiderUnexpectedPauseResume && !unexpectedPauseResumeInFlightRef.current) {
+                unexpectedPauseResumeInFlightRef.current = true;
+                logAudioPlaybackDebug('unexpected native pause detected; attempting auto-resume');
+                audio.play().then(() => {
+                    unexpectedPauseResumeInFlightRef.current = false;
+                    pendingUnexpectedPauseResumeOnVisibleRef.current = false;
+                    logAudioPlaybackDebug('auto-resume after unexpected pause succeeded');
+                    // Keep playing intent; native play event will sync state.
+                }).catch((error) => {
+                    unexpectedPauseResumeInFlightRef.current = false;
+                    pendingUnexpectedPauseResumeOnVisibleRef.current = false;
+                    logAudioPlaybackDebug('auto-resume after unexpected pause failed', { error });
+                    onIsPlayingChange(false);
+                });
+                return;
+            }
+
             logAudioPlaybackDebug('native pause event');
             onIsPlayingChange(false);
         };
@@ -257,7 +306,7 @@ export default function AudioPlayer({
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
         };
-    }, [onIsPlayingChange, onTrackPlayed, track, src, logAudioPlaybackDebug, shouldSuppressPauseSync]);
+    }, [onIsPlayingChange, onTrackPlayed, track, src, logAudioPlaybackDebug, shouldSuppressPauseSync, isPlaying]);
 
     // Extra media-event diagnostics for "random pause" investigation.
     useEffect(() => {
@@ -301,12 +350,39 @@ export default function AudioPlayer({
             if (document.visibilityState === 'visible') {
                 const audio = audioRef.current;
                 if (!audio) return;
+
+                if (
+                    pendingUnexpectedPauseResumeOnVisibleRef.current &&
+                    isPlaying &&
+                    audio.paused &&
+                    !audio.ended &&
+                    !unexpectedPauseResumeInFlightRef.current
+                ) {
+                    unexpectedPauseResumeInFlightRef.current = true;
+                    logAudioPlaybackDebug('visibility became visible; replaying queued unexpected pause');
+                    audio.play().then(() => {
+                        unexpectedPauseResumeInFlightRef.current = false;
+                        pendingUnexpectedPauseResumeOnVisibleRef.current = false;
+                        logAudioPlaybackDebug('queued auto-resume succeeded after visible');
+                    }).catch((error) => {
+                        unexpectedPauseResumeInFlightRef.current = false;
+                        pendingUnexpectedPauseResumeOnVisibleRef.current = false;
+                        logAudioPlaybackDebug('queued auto-resume failed after visible', { error });
+                        onIsPlayingChange(false);
+                    });
+                    return;
+                }
+
                 const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState >= 2;
                 if (isPlaying !== actuallyPlaying) {
                     if (!actuallyPlaying && shouldSuppressPauseSync(audio)) {
                         logAudioPlaybackDebug('visibility reconcile pause suppressed during recovery', {
                             actuallyPlaying,
                         });
+                        return;
+                    }
+                    if (!actuallyPlaying && pendingUnexpectedPauseResumeOnVisibleRef.current) {
+                        logAudioPlaybackDebug('visibility reconcile pause suppressed due to queued unexpected-resume');
                         return;
                     }
                     logAudioPlaybackDebug('visibility reconcile state', { actuallyPlaying });
@@ -541,7 +617,7 @@ export default function AudioPlayer({
                         </button>
                         <button 
                             className="play-pause-btn" 
-                            onClick={onPlayPauseToggle} 
+                            onClick={handleUserPlayPauseClick}
                             disabled={!track}
                         >
                             {isPlaying ? <Pause size={20} /> : <Play size={20} />}
