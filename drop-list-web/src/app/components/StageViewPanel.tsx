@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TrackType } from '../lib/types';
 import { parseTrackName } from '../../utils/track';
 import ScrollingText from './ScrollingText';
+import { useVideoRetryRecovery } from '../hooks/useVideoRetryRecovery';
 
 /** Toggle equalizer bars in Stage View */
 const isShowEqualizer = true;
@@ -27,7 +28,13 @@ export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
   const [infoVisible, setInfoVisible] = useState(true);
   const prevTrackIdRef = useRef(track.id);
   const titleMeasureRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const titleMaxWidth = isShowEqualizer ? TITLE_MAX_WIDTH_WITH_EQ : TITLE_MAX_WIDTH_NO_EQ;
+  const { handleVideoRecovered, handleVideoError } = useVideoRetryRecovery({
+    trackId: track.id,
+    videoSrc,
+    debug: true,
+  });
 
   useEffect(() => {
     // Reset loading state when the video source changes (new artist/track)
@@ -78,14 +85,21 @@ export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
           </>
         )}
         <video
+          ref={videoRef}
           className="stage-view-video"
           src={videoSrc}
           muted
           loop
           playsInline
           autoPlay
-          onLoadedData={() => setIsVideoReady(true)}
-          onError={() => setIsVideoReady(true)}
+          onLoadedData={(e) => {
+            setIsVideoReady(true);
+            handleVideoRecovered(e.currentTarget);
+          }}
+          onError={(e) => {
+            setIsVideoReady(false);
+            handleVideoError(e);
+          }}
         />
       </div>
       {/* Progress bar – flush under video, no overlap */}
