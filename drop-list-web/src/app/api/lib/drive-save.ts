@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
-const SILENCE_DRIVE_SAVE_ERRORS_TEMP = true;
 
 /** เก็บทุกอย่างในไฟล์เดียว (play count, เวลาฟังรวม, liked ฯลฯ อนาคตเพิ่มใน type DroplistData) */
 export const DROPLIST_DATA_FILENAME = 'droplist-data.json';
@@ -81,9 +80,7 @@ async function createJsonFile<T>(
     body,
   });
   if (!res.ok) {
-    if (!SILENCE_DRIVE_SAVE_ERRORS_TEMP) {
-      console.error('Drive create failed:', res.status, await res.text());
-    }
+    console.error('Drive create failed:', res.status, await res.text());
     return null;
   }
   const file = (await res.json()) as { id?: string };

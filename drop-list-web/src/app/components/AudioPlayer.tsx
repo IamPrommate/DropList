@@ -37,7 +37,7 @@ type Props = {
     isSleepTimerExpired?: boolean;
 };
 
-const AUDIO_PLAYBACK_DEBUG = true;
+const AUDIO_PLAYBACK_DEBUG = false;
 
 export default function AudioPlayer({
     track,
@@ -119,7 +119,7 @@ export default function AudioPlayer({
         trackId: track?.id,
         isPlaying,
         handleNext,
-        debug: true,
+        debug: false,
     });
     const logAudioPlaybackDebug = useCallback((event: string, payload?: Record<string, unknown>) => {
         if (!AUDIO_PLAYBACK_DEBUG) return;
