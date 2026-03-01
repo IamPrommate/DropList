@@ -8,6 +8,7 @@ import { Play, Pause } from 'lucide-react';
 import { formatDuration } from '../../utils/time';
 import { parseTrackName } from '../../utils/track';
 import ScrollingText from './ScrollingText';
+import { useAudioRetryRecovery } from '../hooks/useAudioRetryRecovery';
 
 type Props = {
     track?: TrackType;
@@ -35,10 +36,6 @@ type Props = {
     /** True when sleep timer is in "finish this track then stop" mode */
     isSleepTimerExpired?: boolean;
 };
-
-const MAX_AUDIO_LOAD_RETRY_ATTEMPTS = 3;
-const AUDIO_LOAD_RETRY_DELAY_MS = 1000;
-const AUDIO_RETRY_DEBUG = true;
 
 export default function AudioPlayer({
     track,
@@ -70,9 +67,6 @@ export default function AudioPlayer({
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
     const [shouldScroll, setShouldScroll] = useState<boolean>(false);
-    const audioLoadRetryCountRef = useRef(0);
-    const audioLoadRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const retryTrackKeyRef = useRef<string | null>(null);
 
     // Memoize source: prefer remote URLs over local blob
     const src = useMemo(() => {
@@ -110,24 +104,17 @@ export default function AudioPlayer({
         documentEventListenersRef.current.forEach(cleanup => cleanup());
         documentEventListenersRef.current.clear();
     }, []);
-
-    const clearAudioRetryTimeout = useCallback(() => {
-        if (audioLoadRetryTimeoutRef.current) {
-            clearTimeout(audioLoadRetryTimeoutRef.current);
-            audioLoadRetryTimeoutRef.current = null;
-        }
-    }, []);
-
-    const resetAudioRetryState = useCallback((trackKey?: string | null) => {
-        clearAudioRetryTimeout();
-        audioLoadRetryCountRef.current = 0;
-        retryTrackKeyRef.current = trackKey ?? null;
-    }, [clearAudioRetryTimeout]);
-
-    const logAudioRetryDebug = useCallback((event: string, payload?: Record<string, unknown>) => {
-        if (!AUDIO_RETRY_DEBUG) return;
-        console.log(`[AudioRetry] ${event}`, payload ?? {});
-    }, []);
+    const {
+        clearAudioRetryTimeout,
+        resetAudioRetryState,
+        handleAudioRecovered,
+        handleAudioError,
+    } = useAudioRetryRecovery({
+        trackId: track?.id,
+        isPlaying,
+        handleNext,
+        debug: true,
+    });
 
     // Audio cleanup on unmount and fast refresh
     useEffect(() => {
@@ -294,18 +281,7 @@ export default function AudioPlayer({
     const handleLoadedMetadata = () => {
         const audio = audioRef.current;
         if (!audio || !track) return;
-        const recoveredAfterRetries = audioLoadRetryCountRef.current;
-        if (recoveredAfterRetries > 0) {
-            logAudioRetryDebug('source recovered', {
-                trackId: track.id,
-                src: audio.currentSrc || audio.src,
-                retriesUsed: recoveredAfterRetries,
-                readyState: audio.readyState,
-                networkState: audio.networkState,
-            });
-        }
-        // Source recovered; clear retry state for this track.
-        resetAudioRetryState(track.id);
+        handleAudioRecovered(audio, track.id);
         const trackDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
         setDuration(trackDuration);
         
@@ -314,85 +290,6 @@ export default function AudioPlayer({
             onDurationLoaded(track.id, trackDuration);
         }
     };
-
-    const handleAudioError = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
-        const audio = e.currentTarget;
-        const trackKey = track?.id ?? audio.currentSrc ?? audio.src ?? null;
-
-        if (retryTrackKeyRef.current !== trackKey) {
-            resetAudioRetryState(trackKey);
-        }
-
-        console.error('Audio loading error:', {
-            error: audio.error,
-            errorCode: audio.error?.code,
-            errorMessage: audio.error?.message,
-            networkState: audio.networkState,
-            readyState: audio.readyState,
-            src: audio.src,
-            trackId: track?.id
-        });
-
-        logAudioRetryDebug('error received', {
-            trackId: track?.id,
-            trackKey,
-            src: audio.currentSrc || audio.src,
-            retryCount: audioLoadRetryCountRef.current,
-            maxRetries: MAX_AUDIO_LOAD_RETRY_ATTEMPTS,
-            networkState: audio.networkState,
-            readyState: audio.readyState,
-            errorCode: audio.error?.code,
-            errorMessage: audio.error?.message,
-            timestamp: new Date().toISOString(),
-        });
-
-        if (!audio.src) {
-            return;
-        }
-
-        if (audioLoadRetryCountRef.current >= MAX_AUDIO_LOAD_RETRY_ATTEMPTS) {
-            console.error(
-                `Audio failed after ${MAX_AUDIO_LOAD_RETRY_ATTEMPTS} retries. Skipping to next track.`,
-                { src: audio.src, trackId: track?.id }
-            );
-            logAudioRetryDebug('max retries reached; skipping next track', {
-                trackId: track?.id,
-                src: audio.currentSrc || audio.src,
-                retriesUsed: audioLoadRetryCountRef.current,
-            });
-            resetAudioRetryState(trackKey);
-            handleNext();
-            return;
-        }
-
-        // Avoid stacking multiple scheduled retries from repeated onError events.
-        if (audioLoadRetryTimeoutRef.current) {
-            return;
-        }
-
-        audioLoadRetryCountRef.current += 1;
-        const attempt = audioLoadRetryCountRef.current;
-        console.warn(
-            `Audio source load failed. Retrying ${attempt}/${MAX_AUDIO_LOAD_RETRY_ATTEMPTS}...`,
-            { src: audio.src, trackId: track?.id }
-        );
-        logAudioRetryDebug('retry scheduled', {
-            trackId: track?.id,
-            src: audio.currentSrc || audio.src,
-            attempt,
-            delayMs: AUDIO_LOAD_RETRY_DELAY_MS,
-        });
-
-        audioLoadRetryTimeoutRef.current = setTimeout(() => {
-            audioLoadRetryTimeoutRef.current = null;
-            logAudioRetryDebug('retry load() fired', {
-                trackId: track?.id,
-                src: audio.currentSrc || audio.src,
-                attempt,
-            });
-            audio.load();
-        }, AUDIO_LOAD_RETRY_DELAY_MS);
-    }, [handleNext, track?.id, resetAudioRetryState, logAudioRetryDebug]);
 
     const handleTimeUpdate = () => {
         if (isSeeking) return;
