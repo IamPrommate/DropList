@@ -36,6 +36,9 @@ type Props = {
     isSleepTimerExpired?: boolean;
 };
 
+const MAX_AUDIO_LOAD_RETRY_ATTEMPTS = 3;
+const AUDIO_LOAD_RETRY_DELAY_MS = 1000;
+
 export default function AudioPlayer({
     track,
     volume,
@@ -66,6 +69,9 @@ export default function AudioPlayer({
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
     const [shouldScroll, setShouldScroll] = useState<boolean>(false);
+    const audioLoadRetryCountRef = useRef(0);
+    const audioLoadRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const retryTrackKeyRef = useRef<string | null>(null);
 
     // Memoize source: prefer remote URLs over local blob
     const src = useMemo(() => {
@@ -104,6 +110,19 @@ export default function AudioPlayer({
         documentEventListenersRef.current.clear();
     }, []);
 
+    const clearAudioRetryTimeout = useCallback(() => {
+        if (audioLoadRetryTimeoutRef.current) {
+            clearTimeout(audioLoadRetryTimeoutRef.current);
+            audioLoadRetryTimeoutRef.current = null;
+        }
+    }, []);
+
+    const resetAudioRetryState = useCallback((trackKey?: string | null) => {
+        clearAudioRetryTimeout();
+        audioLoadRetryCountRef.current = 0;
+        retryTrackKeyRef.current = trackKey ?? null;
+    }, [clearAudioRetryTimeout]);
+
     // Audio cleanup on unmount and fast refresh
     useEffect(() => {
         return () => {
@@ -124,10 +143,11 @@ export default function AudioPlayer({
                 audio.removeEventListener('timeupdate', () => {});
                 audio.removeEventListener('error', () => {});
             }
+            clearAudioRetryTimeout();
             cleanupEventListeners();
             cleanupDocumentEventListeners();
         };
-    }, [cleanupEventListeners, cleanupDocumentEventListeners]);
+    }, [cleanupEventListeners, cleanupDocumentEventListeners, clearAudioRetryTimeout]);
 
     // Handle fast refresh by stopping audio immediately when component unmounts
     useEffect(() => {
@@ -140,8 +160,9 @@ export default function AudioPlayer({
                 audio.src = '';
                 audio.load();
             }
+            clearAudioRetryTimeout();
         };
-    }, []); // Empty dependency array means this runs on every unmount
+    }, [clearAudioRetryTimeout]); // Empty dependency array means this runs on every unmount
 
     // Fast refresh test #2 - triggering another refresh
 
@@ -185,7 +206,8 @@ export default function AudioPlayer({
     const hasReportedPlayRef = useRef(false);
     useEffect(() => {
         hasReportedPlayRef.current = false;
-    }, [track?.id, src]);
+        resetAudioRetryState(track?.id ?? src ?? null);
+    }, [track?.id, src, resetAudioRetryState]);
 
     // Sync UI with actual audio state via play/pause events
     useEffect(() => {
@@ -266,6 +288,8 @@ export default function AudioPlayer({
     const handleLoadedMetadata = () => {
         const audio = audioRef.current;
         if (!audio || !track) return;
+        // Source recovered; clear retry state for this track.
+        resetAudioRetryState(track.id);
         const trackDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
         setDuration(trackDuration);
         
@@ -274,6 +298,54 @@ export default function AudioPlayer({
             onDurationLoaded(track.id, trackDuration);
         }
     };
+
+    const handleAudioError = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
+        const audio = e.currentTarget;
+        const trackKey = track?.id ?? audio.currentSrc ?? audio.src ?? null;
+
+        if (retryTrackKeyRef.current !== trackKey) {
+            resetAudioRetryState(trackKey);
+        }
+
+        console.error('Audio loading error:', {
+            error: audio.error,
+            networkState: audio.networkState,
+            readyState: audio.readyState,
+            src: audio.src,
+            trackId: track?.id
+        });
+
+        if (!audio.src) {
+            return;
+        }
+
+        if (audioLoadRetryCountRef.current >= MAX_AUDIO_LOAD_RETRY_ATTEMPTS) {
+            console.error(
+                `Audio failed after ${MAX_AUDIO_LOAD_RETRY_ATTEMPTS} retries. Skipping to next track.`,
+                { src: audio.src, trackId: track?.id }
+            );
+            resetAudioRetryState(trackKey);
+            handleNext();
+            return;
+        }
+
+        // Avoid stacking multiple scheduled retries from repeated onError events.
+        if (audioLoadRetryTimeoutRef.current) {
+            return;
+        }
+
+        audioLoadRetryCountRef.current += 1;
+        const attempt = audioLoadRetryCountRef.current;
+        console.warn(
+            `Audio source load failed. Retrying ${attempt}/${MAX_AUDIO_LOAD_RETRY_ATTEMPTS}...`,
+            { src: audio.src, trackId: track?.id }
+        );
+
+        audioLoadRetryTimeoutRef.current = setTimeout(() => {
+            audioLoadRetryTimeoutRef.current = null;
+            audio.load();
+        }, AUDIO_LOAD_RETRY_DELAY_MS);
+    }, [handleNext, track?.id, resetAudioRetryState]);
 
     const handleTimeUpdate = () => {
         if (isSeeking) return;
@@ -626,29 +698,7 @@ export default function AudioPlayer({
                 onEnded={handleEnded}
                 onLoadedMetadata={handleLoadedMetadata}
                 onTimeUpdate={handleTimeUpdate}
-                onError={(e) => {
-                    const audio = e.target as HTMLAudioElement;
-                    console.error('Audio loading error:', {
-                        error: audio.error,
-                        networkState: audio.networkState,
-                        readyState: audio.readyState,
-                        src: audio.src,
-                        trackId: track?.id
-                    });
-                    
-                    // Reset playing state on error
-                    onPlayPauseToggle();
-                    
-                    // Try to recover by reloading the audio
-                    if (audio.error && audio.error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-                        console.warn('Audio source not supported, trying to reload...');
-                        setTimeout(() => {
-                            if (audio.src) {
-                                audio.load();
-                            }
-                        }, 1000);
-                    }
-                }}
+                onError={handleAudioError}
             />
         </div>
     );
