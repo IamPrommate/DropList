@@ -37,6 +37,8 @@ type Props = {
     isSleepTimerExpired?: boolean;
 };
 
+const AUDIO_PLAYBACK_DEBUG = true;
+
 export default function AudioPlayer({
     track,
     volume,
@@ -115,6 +117,21 @@ export default function AudioPlayer({
         handleNext,
         debug: true,
     });
+    const logAudioPlaybackDebug = useCallback((event: string, payload?: Record<string, unknown>) => {
+        if (!AUDIO_PLAYBACK_DEBUG) return;
+        const audio = audioRef.current;
+        console.log(`[AudioDebug] ${event}`, {
+            trackId: track?.id,
+            src: audio?.currentSrc || audio?.src || src,
+            isPlayingProp: isPlaying,
+            audioPaused: audio?.paused,
+            audioEnded: audio?.ended,
+            readyState: audio?.readyState,
+            networkState: audio?.networkState,
+            currentTime: audio?.currentTime,
+            ...payload,
+        });
+    }, [track?.id, src, isPlaying]);
 
     // Audio cleanup on unmount and fast refresh
     useEffect(() => {
@@ -166,20 +183,27 @@ export default function AudioPlayer({
         
         // Clean up any existing event listeners
         cleanupEventListeners();
+        logAudioPlaybackDebug('playback effect start');
         
         if (isPlaying) {
+            logAudioPlaybackDebug('requested play');
             // Check if audio is ready before playing
             if (audio.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+                logAudioPlaybackDebug('play immediately (readyState >= 2)');
                 audio.play().catch((error) => {
                     console.error('Audio play failed:', error);
+                    logAudioPlaybackDebug('play() failed', { error });
                     onPlayPauseToggle(); // Reset state on failure
                 });
             } else {
+                logAudioPlaybackDebug('play deferred; waiting canplay');
                 // Wait for audio to be ready
                 const handleCanPlay = () => {
                     audio.removeEventListener('canplay', handleCanPlay);
+                    logAudioPlaybackDebug('canplay received; attempting play');
                     audio.play().catch((error) => {
                         console.error('Audio play failed after ready:', error);
+                        logAudioPlaybackDebug('play() failed after canplay', { error });
                         onPlayPauseToggle();
                     });
                 };
@@ -191,9 +215,10 @@ export default function AudioPlayer({
                 });
             }
         } else {
+            logAudioPlaybackDebug('requested pause');
             audio.pause();
         }
-    }, [isPlaying, src, cleanupEventListeners]);
+    }, [isPlaying, src, cleanupEventListeners, logAudioPlaybackDebug]);
 
     // Report play once per track start (for stats), and sync UI with play/pause
     const hasReportedPlayRef = useRef(false);
@@ -208,13 +233,17 @@ export default function AudioPlayer({
         if (!audio || !onIsPlayingChange) return;
 
         const handlePlay = () => {
+            logAudioPlaybackDebug('native play event');
             onIsPlayingChange(true);
             if (track && onTrackPlayed && !hasReportedPlayRef.current) {
                 hasReportedPlayRef.current = true;
                 onTrackPlayed(track);
             }
         };
-        const handlePause = () => onIsPlayingChange(false);
+        const handlePause = () => {
+            logAudioPlaybackDebug('native pause event');
+            onIsPlayingChange(false);
+        };
 
         audio.addEventListener('play', handlePlay);
         audio.addEventListener('pause', handlePause);
@@ -223,24 +252,60 @@ export default function AudioPlayer({
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
         };
-    }, [onIsPlayingChange, onTrackPlayed, track, src]);
+    }, [onIsPlayingChange, onTrackPlayed, track, src, logAudioPlaybackDebug]);
+
+    // Extra media-event diagnostics for "random pause" investigation.
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        const logEvent = (name: string) => () => {
+            logAudioPlaybackDebug(`media event: ${name}`);
+        };
+
+        const handlers: Array<[keyof HTMLMediaElementEventMap, EventListener]> = [
+            ['playing', logEvent('playing')],
+            ['waiting', logEvent('waiting')],
+            ['stalled', logEvent('stalled')],
+            ['suspend', logEvent('suspend')],
+            ['abort', logEvent('abort')],
+            ['seeking', logEvent('seeking')],
+            ['seeked', logEvent('seeked')],
+            ['ended', logEvent('ended')],
+            ['canplay', logEvent('canplay')],
+            ['canplaythrough', logEvent('canplaythrough')],
+            ['loadstart', logEvent('loadstart')],
+        ];
+
+        handlers.forEach(([event, handler]) => {
+            audio.addEventListener(event, handler);
+        });
+
+        return () => {
+            handlers.forEach(([event, handler]) => {
+                audio.removeEventListener(event, handler);
+            });
+        };
+    }, [src, track?.id, logAudioPlaybackDebug]);
 
     // On tab becoming visible, reconcile UI state with element state
     useEffect(() => {
         if (!onIsPlayingChange) return;
         const handleVisibility = () => {
+            logAudioPlaybackDebug('document visibility changed', { visibilityState: document.visibilityState });
             if (document.visibilityState === 'visible') {
                 const audio = audioRef.current;
                 if (!audio) return;
                 const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState >= 2;
                 if (isPlaying !== actuallyPlaying) {
+                    logAudioPlaybackDebug('visibility reconcile state', { actuallyPlaying });
                     onIsPlayingChange(actuallyPlaying);
                 }
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, [onIsPlayingChange, isPlaying]);
+    }, [onIsPlayingChange, isPlaying, logAudioPlaybackDebug]);
 
     // Parse track info early so it can be used in useEffects
     const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
@@ -302,6 +367,7 @@ export default function AudioPlayer({
     };
 
     const handleEnded = () => {
+        logAudioPlaybackDebug('handleEnded invoked', { isSleepTimerExpired, isRepeated });
         // Sleep mode has expired: always defer to parent end handler
         if (isSleepTimerExpired) {
             onEnded();
