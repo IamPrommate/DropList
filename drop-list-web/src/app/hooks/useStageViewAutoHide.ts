@@ -2,9 +2,8 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 
-const STAGE_VIEW_HIDE_ON_GAP_LESS_THAN = 36;
-const STAGE_VIEW_SHOW_ON_GAP_AT_LEAST = 24;
 const STAGE_VIEW_MOBILE_BREAKPOINT = 1023;
+const STAGE_VIEW_MIN_REQUIRED_GAP_PX = 12;
 
 function getGapBetweenPlaylistAndStageView(
   playlistEl: HTMLDivElement,
@@ -13,12 +12,6 @@ function getGapBetweenPlaylistAndStageView(
   const playlistRect = playlistEl.getBoundingClientRect();
   const stageViewRect = stageViewEl.getBoundingClientRect();
   return stageViewRect.left - playlistRect.right;
-}
-
-function getNextStageViewAutoHidden(prevHidden: boolean, gapBetweenPlaylistAndStage: number): boolean {
-  return prevHidden
-    ? gapBetweenPlaylistAndStage < STAGE_VIEW_SHOW_ON_GAP_AT_LEAST
-    : gapBetweenPlaylistAndStage < STAGE_VIEW_HIDE_ON_GAP_LESS_THAN;
 }
 
 type UseStageViewAutoHideArgs = {
@@ -38,8 +31,10 @@ export function useStageViewAutoHide({ enabled, layoutDependency }: UseStageView
 
     let frameId: number | null = null;
 
-    const checkShouldAutoHide = () => {
-      if (window.innerWidth <= STAGE_VIEW_MOBILE_BREAKPOINT) {
+    const evaluateVisibility = () => {
+      const viewportWidth = window.innerWidth;
+
+      if (viewportWidth <= STAGE_VIEW_MOBILE_BREAKPOINT) {
         setIsStageViewAutoHidden(true);
         return;
       }
@@ -47,11 +42,13 @@ export function useStageViewAutoHide({ enabled, layoutDependency }: UseStageView
       const playlistEl = playlistRef.current;
       const stageViewEl = document.querySelector('.stage-view-panel') as HTMLElement | null;
       if (!playlistEl || !stageViewEl) {
+        // Measurement can be temporarily unavailable during mount/layout transitions.
+        // Keep current visibility state to avoid hide/show flicker.
         return;
       }
 
       const gapBetweenPlaylistAndStage = getGapBetweenPlaylistAndStageView(playlistEl, stageViewEl);
-      setIsStageViewAutoHidden((prev) => getNextStageViewAutoHidden(prev, gapBetweenPlaylistAndStage));
+      setIsStageViewAutoHidden(gapBetweenPlaylistAndStage < STAGE_VIEW_MIN_REQUIRED_GAP_PX);
     };
 
     const scheduleCheck = () => {
@@ -59,7 +56,7 @@ export function useStageViewAutoHide({ enabled, layoutDependency }: UseStageView
         cancelAnimationFrame(frameId);
       }
       frameId = requestAnimationFrame(() => {
-        checkShouldAutoHide();
+        evaluateVisibility();
       });
     };
 

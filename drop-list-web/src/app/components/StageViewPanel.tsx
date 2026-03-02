@@ -14,6 +14,7 @@ const isStageViewProgressBar = false;
 
 const TITLE_MAX_WIDTH_WITH_EQ = '230px';
 const TITLE_MAX_WIDTH_NO_EQ = '260px';
+const STAGE_VIEW_PANEL_DEBUG = true;
 
 type Props = {
   track: TrackType;
@@ -35,6 +36,21 @@ export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
     videoSrc,
     debug: true,
   });
+
+  useEffect(() => {
+    if (!STAGE_VIEW_PANEL_DEBUG) return;
+    console.log('[StageViewPanelDebug] mounted', {
+      trackId: track.id,
+      videoSrc,
+    });
+
+    return () => {
+      console.log('[StageViewPanelDebug] unmounted', {
+        trackId: track.id,
+        videoSrc,
+      });
+    };
+  }, [track.id, videoSrc]);
 
   useEffect(() => {
     // Reset loading state when the video source changes (new artist/track)
@@ -94,10 +110,22 @@ export default function StageViewPanel({ track, playbackProgress = 0 }: Props) {
           autoPlay
           onLoadedData={(e) => {
             setIsVideoReady(true);
+            if (STAGE_VIEW_PANEL_DEBUG) {
+              console.log('[StageViewPanelDebug] video loaded', {
+                trackId: track.id,
+                videoSrc,
+              });
+            }
             handleVideoRecovered(e.currentTarget);
           }}
           onError={(e) => {
             setIsVideoReady(false);
+            if (STAGE_VIEW_PANEL_DEBUG) {
+              console.log('[StageViewPanelDebug] video error', {
+                trackId: track.id,
+                videoSrc,
+              });
+            }
             handleVideoError(e);
           }}
         />

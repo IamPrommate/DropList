@@ -35,6 +35,8 @@ enum KeyboardShortcuts {
 }
 
 export default function HomePage() {
+  const SIDEBAR_COLLAPSE_TRANSITION_MS = 180;
+  const STAGE_VIEW_OPEN_DEBUG = true;
   const [tracks, setTracks] = useState<TrackType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isShuffled, setIsShuffled] = useState(false);
@@ -69,7 +71,9 @@ export default function HomePage() {
   const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
   const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
-  const [isStageViewOpen, setIsStageViewOpen] = useState(true);
+  // Start closed so first video open follows the same staged open path.
+  // This avoids initial-session double-appear when sidebar is still open.
+  const [isStageViewOpen, setIsStageViewOpen] = useState(false);
   /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
   const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
   
@@ -83,6 +87,7 @@ export default function HomePage() {
   const { data: session, status: sessionStatus } = useSession();
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
   const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageViewOpenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
   const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
   const shouldAttemptShowStageView = hasStageViewVideo && isStageViewOpen;
@@ -90,7 +95,21 @@ export default function HomePage() {
     enabled: shouldAttemptShowStageView,
     layoutDependency: sidebarCollapsed,
   });
-  const shouldReserveStageViewSpace = shouldAttemptShowStageView && !isStageViewAutoHidden;
+  // Keep layout reservation stable while Stage View mode is enabled.
+  // Auto-hide should only toggle panel visibility, not container geometry.
+  const shouldKeepStageViewLayoutReserved = shouldAttemptShowStageView;
+  const logStageViewOpenDebug = useCallback(
+    (message: string, payload?: Record<string, unknown>) => {
+      if (!STAGE_VIEW_OPEN_DEBUG) return;
+      if (payload) {
+        console.log(`[StageViewOpenDebug] ${message}`, payload);
+        return;
+      }
+      console.log(`[StageViewOpenDebug] ${message}`);
+    },
+    [STAGE_VIEW_OPEN_DEBUG]
+  );
+
   const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
   const isSleepTimerActive = sleepTimerEndAt !== null;
   const canUseSleepTimer = Boolean(currentTrack);
@@ -106,6 +125,84 @@ export default function HomePage() {
       clearSleepTimer();
     }
   }, [sleepTimerExpired, clearSleepTimer]);
+
+  const closeStageView = useCallback((reason = 'unknown') => {
+    logStageViewOpenDebug('close requested', {
+      reason,
+      isStageViewOpen,
+      sidebarCollapsed,
+      hasPendingOpenTimeout: Boolean(stageViewOpenTimeoutRef.current),
+    });
+
+    if (stageViewOpenTimeoutRef.current) {
+      clearTimeout(stageViewOpenTimeoutRef.current);
+      stageViewOpenTimeoutRef.current = null;
+      logStageViewOpenDebug('cleared pending open timeout while closing', { reason });
+    }
+    setIsStageViewOpen(false);
+  }, [isStageViewOpen, logStageViewOpenDebug, sidebarCollapsed]);
+
+  const openStageView = useCallback((reason = 'unknown') => {
+    logStageViewOpenDebug('open requested', {
+      reason,
+      sidebarCollapsed,
+      isStageViewOpen,
+      hasPendingOpenTimeout: Boolean(stageViewOpenTimeoutRef.current),
+    });
+
+    if (stageViewOpenTimeoutRef.current) {
+      clearTimeout(stageViewOpenTimeoutRef.current);
+      stageViewOpenTimeoutRef.current = null;
+      logStageViewOpenDebug('cleared previous pending open timeout', { reason });
+    }
+
+    // If Stage View is already open, avoid scheduling another open.
+    // We only need to collapse the sidebar (if needed).
+    if (isStageViewOpen) {
+      if (!sidebarCollapsed) {
+        setSidebarCollapsed(true);
+        logStageViewOpenDebug('stage view already open, collapsing sidebar only', { reason });
+      } else {
+        logStageViewOpenDebug('stage view already open, no-op', { reason });
+      }
+      return;
+    }
+
+    if (sidebarCollapsed) {
+      setIsStageViewOpen(true);
+      logStageViewOpenDebug('opened immediately because sidebar already collapsed', { reason });
+      return;
+    }
+
+    setSidebarCollapsed(true);
+    logStageViewOpenDebug('sidebar collapse requested before opening stage view', { reason });
+    stageViewOpenTimeoutRef.current = setTimeout(() => {
+      setIsStageViewOpen(true);
+      logStageViewOpenDebug('delayed open timeout fired', { reason });
+      stageViewOpenTimeoutRef.current = null;
+    }, SIDEBAR_COLLAPSE_TRANSITION_MS);
+  }, [isStageViewOpen, logStageViewOpenDebug, sidebarCollapsed]);
+
+  useEffect(() => {
+    logStageViewOpenDebug('stage view state snapshot', {
+      currentTrackId: currentTrack?.id ?? null,
+      hasStageViewVideo,
+      isStageViewOpen,
+      sidebarCollapsed,
+      shouldAttemptShowStageView,
+      isStageViewAutoHidden,
+      shouldKeepStageViewLayoutReserved,
+    });
+  }, [
+    currentTrack?.id,
+    hasStageViewVideo,
+    isStageViewOpen,
+    sidebarCollapsed,
+    shouldAttemptShowStageView,
+    isStageViewAutoHidden,
+    shouldKeepStageViewLayoutReserved,
+    logStageViewOpenDebug,
+  ]);
 
   const openAuthDropdown = useCallback(() => {
     if (authDropdownCloseTimeoutRef.current) {
@@ -126,6 +223,9 @@ export default function HomePage() {
     return () => {
       if (authDropdownCloseTimeoutRef.current) {
         clearTimeout(authDropdownCloseTimeoutRef.current);
+      }
+      if (stageViewOpenTimeoutRef.current) {
+        clearTimeout(stageViewOpenTimeoutRef.current);
       }
     };
   }, []);
@@ -648,13 +748,11 @@ export default function HomePage() {
         case KeyboardShortcuts.KEY_V:
           if (tracks.length > 0 && currentTrack?.stageViewVideoUrl) {
             e.preventDefault();
-            setIsStageViewOpen(prev => {
-              const next = !prev;
-              if (next && !sidebarCollapsed) {
-                setSidebarCollapsed(true);
-              }
-              return next;
-            });
+            if (isStageViewOpen) {
+              closeStageView('keyboard-v-toggle-close');
+            } else {
+              openStageView('keyboard-v-toggle-open');
+            }
           }
           break;
       }
@@ -662,7 +760,7 @@ export default function HomePage() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [tracks.length, isPlaying, handlePrev, handleNext, currentTrack, sidebarCollapsed]);
+  }, [tracks.length, isPlaying, handlePrev, handleNext, currentTrack, isStageViewOpen, closeStageView, openStageView]);
 
   return (
     <main className="pageRoot">
@@ -709,7 +807,7 @@ export default function HomePage() {
                 const next = !prev;
                 // When sidebar is opened, hide Stage View
                 if (!next) {
-                  setIsStageViewOpen(false);
+                  closeStageView('sidebar-expanded-manually');
                 }
                 return next;
               });
@@ -780,7 +878,7 @@ export default function HomePage() {
             <div
               className={
                 `container ${
-                  shouldReserveStageViewSpace
+                  shouldKeepStageViewLayoutReserved
                     ? 'container-stage-view-open'
                     : 'container-centered'
                 }`
@@ -877,11 +975,7 @@ export default function HomePage() {
                         setIsPlaying(true);
                         // When selecting a new track with video, ensure Stage View is shown
                         if (track.stageViewVideoUrl) {
-                          setIsStageViewOpen(true);
-                          // Also collapse sidebar so layout matches Stage View
-                          if (!sidebarCollapsed) {
-                            setSidebarCollapsed(true);
-                          }
+                          openStageView('track-click-with-video');
                         }
                       }}
                     >
@@ -1007,13 +1101,11 @@ export default function HomePage() {
                   onProgressUpdate={setPlaybackProgress}
                   onToggleStageView={() => {
                     if (currentTrack?.stageViewVideoUrl) {
-                      setIsStageViewOpen(prev => {
-                        const next = !prev;
-                        if (next && !sidebarCollapsed) {
-                          setSidebarCollapsed(true);
-                        }
-                        return next;
-                      });
+                      if (isStageViewOpen) {
+                        closeStageView('player-toggle-close');
+                      } else {
+                        openStageView('player-toggle-open');
+                      }
                     }
                   }}
                 />
