@@ -50,13 +50,9 @@ export default function PlaylistHeader({
         .then((dominantColor) => {
           console.log('Extracted dominant color:', dominantColor);
           
-          // Generate shades for TYPE 1 variables with 10% saturation boost
-          // Start: extracted color darkened by 5% + 10% saturation
-          const gradientStart = saturateColor(darkenColor(dominantColor, 20), 50);
-          // Middle: 30% darker than start + 10% saturation
-          const gradientMiddle = saturateColor(darkenColor(dominantColor, 35), 50);
-          // End is always fixed
-          const gradientEnd = '#1f1f2e';
+          const gradientStart = saturateColor(darkenColor(dominantColor, 30), 40);
+          const gradientMiddle = saturateColor(darkenColor(dominantColor, 45), 40);
+          const gradientEnd = '#000e1a';
           
           // Apply to background gradient
           document.documentElement.style.setProperty('--bg-gradient-start', gradientStart);
@@ -82,43 +78,34 @@ export default function PlaylistHeader({
           
           console.log('Applied TYPE 1 colors:', { dominantColor, gradientStart, gradientMiddle, gradientEnd });
           
-          // TYPE 2: Apply hue angle shift to primary gradient colors
-          // Original middle color: #a855f7 (purple)
-          // We need to calculate the hue shift from purple to extracted color
-          const originalMiddle = '#a855f7';
+          // TYPE 2: Apply hue angle shift to primary accent colors
+          const originalMiddle = '#00f594';
           
-          // Get hues for original middle color and extracted color
           const [origR, origG, origB] = hexToRgb(originalMiddle);
           const originalHue = rgbToHsl(origR, origG, origB);
           const [extR, extG, extB] = hexToRgb(dominantColor);
           const extractedHue = rgbToHsl(extR, extG, extB);
           
-          // Calculate hue angle difference
           let hueShift = extractedHue[0] - originalHue[0];
           
-          // Normalize the shift
           if (hueShift > 180) hueShift -= 360;
           if (hueShift < -180) hueShift += 360;
           
-          // Apply same hue shift to all primary gradient colors
           const originalColors = {
-            start: '#ec4899',
-            middle: '#a855f7',
-            end: '#3b82f6',
-            hoverStart: '#f472b6',
-            hoverMiddle: '#c084fc',
-            hoverEnd: '#60a5fa'
+            start: '#00f594',
+            middle: '#00d681',
+            end: '#00d07e',
+            hoverStart: '#2ef7a7',
+            hoverMiddle: '#00e686',
+            hoverEnd: '#00d681'
           };
           
-          // Shift all colors by the same hue angle
           document.documentElement.style.setProperty('--primary-gradient-start', shiftHue(originalColors.start, hueShift));
           document.documentElement.style.setProperty('--primary-gradient-middle', shiftHue(originalColors.middle, hueShift));
           document.documentElement.style.setProperty('--primary-gradient-end', shiftHue(originalColors.end, hueShift));
           document.documentElement.style.setProperty('--primary-gradient-hover-start', shiftHue(originalColors.hoverStart, hueShift));
           document.documentElement.style.setProperty('--primary-gradient-hover-middle', shiftHue(originalColors.hoverMiddle, hueShift));
           document.documentElement.style.setProperty('--primary-gradient-hover-end', shiftHue(originalColors.hoverEnd, hueShift));
-          
-          console.log('Applied TYPE 2 hue shift:', { hueShift, originalHue: originalHue[0], extractedHue: extractedHue[0] });
         })
         .catch((error) => {
           console.error('Failed to extract color:', error);
@@ -127,32 +114,29 @@ export default function PlaylistHeader({
           setIsAlbumCoverLoading(false);
         });
     } else if (!showCoverImage) {
-      // Reset to default purple colors when cover is hidden
-      document.documentElement.style.setProperty('--bg-gradient-start', '#5b21b6');
-      document.documentElement.style.setProperty('--bg-gradient-middle', '#581c87');
-      document.documentElement.style.setProperty('--bg-gradient-end', '#1f1f2e');
+      document.documentElement.style.setProperty('--bg-gradient-start', '#152028');
+      document.documentElement.style.setProperty('--bg-gradient-middle', '#0f1921');
+      document.documentElement.style.setProperty('--bg-gradient-end', '#000e1a');
       
-      document.documentElement.style.setProperty('--switch-bg', 'rgba(168, 85, 247, 0.3)');
-      document.documentElement.style.setProperty('--switch-border', 'rgba(168, 85, 247, 0.5)');
-      document.documentElement.style.setProperty('--switch-checked-bg', 'rgba(168, 85, 247, 0.8)');
-      document.documentElement.style.setProperty('--switch-checked-border', '#a855f7');
-      document.documentElement.style.setProperty('--switch-hover', 'rgba(168, 85, 247, 0.4)');
-      document.documentElement.style.setProperty('--switch-checked-hover', 'rgba(168, 85, 247, 0.9)');
+      document.documentElement.style.setProperty('--switch-bg', 'rgba(0, 245, 148, 0.2)');
+      document.documentElement.style.setProperty('--switch-border', 'rgba(0, 245, 148, 0.35)');
+      document.documentElement.style.setProperty('--switch-checked-bg', 'rgba(0, 245, 148, 0.7)');
+      document.documentElement.style.setProperty('--switch-checked-border', '#00f594');
+      document.documentElement.style.setProperty('--switch-hover', 'rgba(0, 245, 148, 0.3)');
+      document.documentElement.style.setProperty('--switch-checked-hover', 'rgba(0, 245, 148, 0.8)');
       
-      // Reset shadow colors to default
-      document.documentElement.style.setProperty('--shadow-primary', 'rgba(168, 85, 247, 0.2)');
-      document.documentElement.style.setProperty('--shadow-primary-glow', 'rgba(236, 72, 153, 0.3)');
-      document.documentElement.style.setProperty('--playlist-active-shadow', 'rgba(236, 72, 153, 0.15)');
+      document.documentElement.style.setProperty('--shadow-primary', 'rgba(0, 245, 148, 0.12)');
+      document.documentElement.style.setProperty('--shadow-primary-glow', 'rgba(0, 245, 148, 0.18)');
+      document.documentElement.style.setProperty('--playlist-active-shadow', 'rgba(0, 245, 148, 0.08)');
       
-      // Reset player border to default
-      document.documentElement.style.setProperty('--player-border', 'rgba(255, 255, 255, 0.1)');
+      document.documentElement.style.setProperty('--player-border', 'rgba(255, 255, 255, 0.08)');
       
-      document.documentElement.style.setProperty('--primary-gradient-start', '#ec4899');
-      document.documentElement.style.setProperty('--primary-gradient-middle', '#a855f7');
-      document.documentElement.style.setProperty('--primary-gradient-end', '#3b82f6');
-      document.documentElement.style.setProperty('--primary-gradient-hover-start', '#f472b6');
-      document.documentElement.style.setProperty('--primary-gradient-hover-middle', '#c084fc');
-      document.documentElement.style.setProperty('--primary-gradient-hover-end', '#60a5fa');
+      document.documentElement.style.setProperty('--primary-gradient-start', '#00f594');
+      document.documentElement.style.setProperty('--primary-gradient-middle', '#00d681');
+      document.documentElement.style.setProperty('--primary-gradient-end', '#00d07e');
+      document.documentElement.style.setProperty('--primary-gradient-hover-start', '#2ef7a7');
+      document.documentElement.style.setProperty('--primary-gradient-hover-middle', '#00e686');
+      document.documentElement.style.setProperty('--primary-gradient-hover-end', '#00d681');
     }
   }, [albumCoverUrl, showCoverImage]);
 

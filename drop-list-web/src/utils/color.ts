@@ -3,7 +3,7 @@
  * @param imageUrl - URL of the image
  * @returns Promise with the dominant color as hex string
  */
-const DEFAULT_DOMINANT_COLOR = '#a855f7';
+const DEFAULT_DOMINANT_COLOR = '#00f594';
 const albumColorMemoryCache = new Map<string, string>();
 const LOCAL_CACHE_PREFIX = 'droplist:album-color:v2:';
 

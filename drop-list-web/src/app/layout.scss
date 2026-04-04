@@ -1,134 +1,132 @@
-/* Modern UI Revamp - Glassmorphism & Contemporary Design */
+/* Heygoody-inspired Dark Theme */
 
-/* CSS Variables for Modern Color Scheme */
+/* CSS Variables — near-black + neon green palette */
 :root {
-  /* Primary Colors */
-  --primary-gradient-start: #ec4899;
-  --primary-gradient-middle: #a855f7;
-  --primary-gradient-end: #3b82f6;
-  --primary-gradient-hover-start: #f472b6;
-  --primary-gradient-hover-middle: #c084fc;
-  --primary-gradient-hover-end: #60a5fa;
+  /* Primary Colors — neon green accent */
+  --primary-gradient-start: #00f594;
+  --primary-gradient-middle: #00d681;
+  --primary-gradient-end: #00d07e;
+  --primary-gradient-hover-start: #2ef7a7;
+  --primary-gradient-hover-middle: #00e686;
+  --primary-gradient-hover-end: #00d681;
   
-  /* Background Colors */
-  --bg-primary: #1f1f2e;
-  --bg-secondary: #1a1a2e;
-  --bg-gradient-start: #5b21b6;
-  --bg-gradient-middle: #581c87;
-  --bg-gradient-end: #1f1f2e;
+  /* Background Colors — hgd-neutral-gray */
+  --bg-primary: #000e1a;
+  --bg-secondary: #0f1921;
+  --bg-gradient-start: #152028;
+  --bg-gradient-middle: #0f1921;
+  --bg-gradient-end: #000e1a;
   
-  /* Text Colors */
+  /* Text Colors — hgd-neutral-gray */
   --text-primary: #ffffff;
-  --text-secondary: #b8d4e8;
-  --text-muted: #7da3b8;
-  --text-subtle: #5a7a92;
-  --text-artist: #94b4c7;
+  --text-secondary: #a2acb3;
+  --text-muted: #73818c;
+  --text-subtle: #52606b;
+  --text-artist: #929da5;
   
-  /* Border Colors - Glass Effect */
-  --border-primary: rgba(0, 217, 255, 0.15);
-  --border-secondary: rgba(0, 217, 255, 0.08);
-  --border-tertiary: rgba(0, 217, 255, 0.25);
+  /* Border Colors — subtle white/green */
+  --border-primary: rgba(255, 255, 255, 0.08);
+  --border-secondary: rgba(255, 255, 255, 0.06);
+  --border-tertiary: rgba(0, 245, 148, 0.18);
   
-  /* Button Colors */
-  --btn-primary-bg: #ffffff;
-  --btn-primary-text: #000000;
-  --btn-primary-hover: #f0f0f0;
-  --btn-secondary-bg: rgba(255, 255, 255, 0.12);
+  /* Button Colors — neon green primary */
+  --btn-primary-bg: #00f594;
+  --btn-primary-text: #000e1a;
+  --btn-primary-hover: #2ef7a7;
+  --btn-secondary-bg: rgba(255, 255, 255, 0.08);
   --btn-secondary-text: #ffffff;
-  --btn-secondary-border: rgba(0, 217, 255, 0.3);
-  --btn-secondary-hover: rgba(255, 255, 255, 0.2);
-  --btn-toggle-bg: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-  --btn-toggle-border: rgba(0, 152, 255, 0.4);
-  --btn-toggle-hover: linear-gradient(135deg, var(--primary-gradient-hover-start), var(--primary-gradient-hover-middle), var(--primary-gradient-hover-end));
-  --btn-ggd-bg: rgba(15, 20, 25, 0.8);
-  --btn-ggd-hover: rgba(15, 20, 25, 0.95);
+  --btn-secondary-border: rgba(255, 255, 255, 0.12);
+  --btn-secondary-hover: rgba(255, 255, 255, 0.14);
+  --btn-toggle-bg: #00f594;
+  --btn-toggle-border: rgba(0, 245, 148, 0.3);
+  --btn-toggle-hover: #2ef7a7;
+  --btn-ggd-bg: rgba(15, 25, 33, 0.9);
+  --btn-ggd-hover: rgba(15, 25, 33, 0.98);
   
-  /* Switch Colors */
-  --switch-bg: rgba(168, 85, 247, 0.3);
-  --switch-border: rgba(168, 85, 247, 0.5);
-  --switch-checked-bg: rgba(168, 85, 247, 0.8);
-  --switch-checked-border: rgba(168, 85, 247, 1);
-  --switch-hover: rgba(168, 85, 247, 0.4);
-  --switch-checked-hover: rgba(168, 85, 247, 0.9);
+  /* Switch Colors — neon green */
+  --switch-bg: rgba(0, 245, 148, 0.2);
+  --switch-border: rgba(0, 245, 148, 0.35);
+  --switch-checked-bg: rgba(0, 245, 148, 0.7);
+  --switch-checked-border: #00f594;
+  --switch-hover: rgba(0, 245, 148, 0.3);
+  --switch-checked-hover: rgba(0, 245, 148, 0.8);
   
-  /* Track Colors */
-  --track-active-bg: rgba(0, 255, 136, 0.06);
-  --track-active-border: #00ff88;
-  --track-active-shadow: rgba(0, 255, 136, 0.08);
-  --track-hover-bg: rgba(255, 255, 255, 0.05);
-  --track-splitter: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-  --track-indicator: #00ff88;
+  /* Track Colors — neon green active */
+  --track-active-bg: rgba(0, 245, 148, 0.06);
+  --track-active-border: #00f594;
+  --track-active-shadow: rgba(0, 245, 148, 0.08);
+  --track-hover-bg: rgba(255, 255, 255, 0.04);
+  --track-splitter: #00f594;
+  --track-indicator: #00f594;
   
-  /* Player Colors */
-  --player-bg: rgba(0, 0, 0, 0.55);
-  --player-border: rgba(255, 255, 255, 0.1);
-  --player-shadow: rgba(0, 0, 0, 0.4);
-  --progress-bg: rgba(255, 255, 255, 0.15);
-  --progress-fill: #ffffff;
-  --volume-bg: rgba(255, 255, 255, 0.15);
-  --volume-fill: #ffffff;
+  /* Player Colors — dark bar */
+  --player-bg: rgba(15, 25, 33, 0.9);
+  --player-border: rgba(255, 255, 255, 0.08);
+  --player-shadow: rgba(0, 0, 0, 0.5);
+  --progress-bg: rgba(255, 255, 255, 0.12);
+  --progress-fill: #00f594;
+  --volume-bg: rgba(255, 255, 255, 0.12);
+  --volume-fill: #00f594;
   
-  /* Shadow Colors */
+  /* Shadow Colors — clean dark */
   --shadow-light: rgba(0, 0, 0, 0.2);
   --shadow-medium: rgba(0, 0, 0, 0.3);
-  --shadow-heavy: rgba(0, 0, 0, 0.4);
-  --shadow-white: rgba(255, 255, 255, 0.1);
-  --shadow-primary: rgba(168, 85, 247, 0.2);
-  --shadow-primary-glow: rgba(236, 72, 153, 0.3);
-  --playlist-active-shadow: rgba(236, 72, 153, 0.15);
+  --shadow-heavy: rgba(0, 0, 0, 0.5);
+  --shadow-white: rgba(255, 255, 255, 0.05);
+  --shadow-primary: rgba(0, 245, 148, 0.12);
+  --shadow-primary-glow: rgba(0, 245, 148, 0.18);
+  --playlist-active-shadow: rgba(0, 245, 148, 0.08);
   
   /* Button Shadow Colors */
-  --btn-shadow-primary: rgba(0, 212, 255, 0.2);
-  --btn-shadow-primary-hover: rgba(0, 212, 255, 0.3);
-  --btn-shadow-secondary: rgba(0, 217, 255, 0.25);
+  --btn-shadow-primary: rgba(0, 245, 148, 0.15);
+  --btn-shadow-primary-hover: rgba(0, 245, 148, 0.25);
+  --btn-shadow-secondary: rgba(255, 255, 255, 0.08);
   
   /* Track Shadow Colors */
-  --track-shadow-active: rgba(0, 255, 136, 0.06);
-  --track-shadow-glow: rgba(0, 255, 136, 0.6);
+  --track-shadow-active: rgba(0, 245, 148, 0.06);
+  --track-shadow-glow: rgba(0, 245, 148, 0.5);
   
-  /* Background Gradient Colors */
-  --bg-glow-top: rgba(0, 212, 255, 0.1);
-  --bg-glow-bottom: rgba(0, 152, 255, 0.08);
+  /* Background Gradient Colors — very subtle */
+  --bg-glow-top: rgba(0, 245, 148, 0.03);
+  --bg-glow-bottom: rgba(0, 245, 148, 0.02);
   
   /* Border Glow Colors */
-  --border-glow: rgba(0, 217, 255, 0.1);
-  --border-glow-inset: rgba(0, 217, 255, 0.1);
+  --border-glow: rgba(255, 255, 255, 0.04);
+  --border-glow-inset: rgba(255, 255, 255, 0.04);
   
   /* Track Splitter Glow */
-  --splitter-glow: rgba(0, 212, 255, 0.4);
+  --splitter-glow: rgba(0, 245, 148, 0.25);
   
   /* Overlay Colors */
   --overlay-light: rgba(255, 255, 255, 0.03);
-  --overlay-medium: rgba(255, 255, 255, 0.08);
-  --overlay-heavy: rgba(255, 255, 255, 0.12);
+  --overlay-medium: rgba(255, 255, 255, 0.06);
+  --overlay-heavy: rgba(255, 255, 255, 0.10);
   --overlay-dark: rgba(0, 0, 0, 0.6);
 }
 
 .pageRoot {
-  background: linear-gradient(to bottom, var(--bg-gradient-start) 0%, var(--bg-gradient-middle) 15%, var(--bg-gradient-end) 35%); 
+  background: var(--bg-primary);
+  background-image: url('/images/background/bg-aurora-desktop.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   min-height: 100vh;
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-noto-sans), var(--font-noto-sans-thai), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--text-primary);
   scroll-behavior: smooth;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 217, 255, 0.4) transparent;
+  scrollbar-color: rgba(0, 245, 148, 0.25) transparent;
   position: relative;
-  
-  /* Animated background gradient overlay */
-  &::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle at 20% 30%, var(--bg-glow-top) 0%, transparent 50%),
-                radial-gradient(circle at 80% 70%, var(--bg-glow-bottom) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: 0;
-    animation: breathe 8s ease-in-out infinite;
+
+  @media (max-width: 1023px) {
+    background-image: url('/images/background/bg-aurora-tablet.png');
+  }
+
+  @media (max-width: 639px) {
+    background-image: url('/images/background/bg-aurora-mobile.png');
   }
 }
 
@@ -146,11 +144,10 @@
 
 .sidebar {
   width: 288px;
-  background: rgba(10, 14, 19, 0.7);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow: 4px 0 40px rgba(0, 0, 0, 0.5),
-              inset -1px 0 0 var(--border-glow-inset);
+  background: rgba(0, 14, 26, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 1px 0 0 var(--border-primary);
   position: fixed;
   left: 0;
   top: 0;
@@ -223,13 +220,8 @@
 .sidebar-title {
   font-size: 1.575rem;
   font-weight: 800;
-  color: var(--text-primary);
+  color: #00f594;
   margin: 0;
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: 0 0 40px var(--shadow-primary-glow);
   letter-spacing: -0.02em;
 }
 
@@ -245,19 +237,18 @@
   align-items: center;
   gap: 0.675rem;
   padding: 0.7875rem 1.125rem;
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-  color: var(--text-primary);
+  background: #00f594;
+  color: #000e1a;
   border: none;
-  border-radius: 10.8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 0.7875rem;
   font-weight: 600;
   width: 100%;
   white-space: nowrap;
   overflow: hidden;
-  box-shadow: 0 4px 20px var(--btn-shadow-primary),
-              0 0 0 1px var(--border-glow);
+  box-shadow: 0 2px 8px var(--btn-shadow-primary);
 
   svg {
     flex-shrink: 0;
@@ -271,26 +262,26 @@
   }
 
   &:hover {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 8px 30px var(--btn-shadow-primary-hover),
-                0 0 0 1px var(--border-primary);
-    background: linear-gradient(135deg, var(--primary-gradient-hover-start), var(--primary-gradient-hover-middle), var(--primary-gradient-hover-end));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px var(--btn-shadow-primary-hover);
+    background: #2ef7a7;
   }
 
   &:active {
-    transform: translateY(0) scale(1);
-    box-shadow: 0 4px 20px var(--btn-shadow-primary);
+    transform: translateY(0);
+    box-shadow: 0 2px 8px var(--btn-shadow-primary);
   }
 }
 
 // Override Ant Design dropdown styles
 .ant-dropdown {
   .ant-dropdown-menu {
-    background: rgba(15, 20, 25, 0.95) !important;
-    backdrop-filter: blur(24px) !important;
+    background: rgba(0, 14, 26, 0.92) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
     border: 1px solid var(--border-primary) !important;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4) !important;
-    border-radius: 16px !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+    border-radius: 12px !important;
     padding: 0.75rem 0 !important;
 
     .ant-dropdown-menu-item {
@@ -406,10 +397,11 @@
     left: 0;
     top: 0;
     bottom: 0;
-    width: 4px;
-    background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
+    width: 3px;
+    background: #00f594;
     transform: scaleY(0);
     transition: transform 0.3s ease;
+    border-radius: 0 2px 2px 0;
   }
 
   &:hover {
@@ -423,10 +415,9 @@
   }
 
   &.active {
-    background: var(--overlay-heavy);
+    background: rgba(0, 245, 148, 0.06);
     color: var(--text-primary);
-    box-shadow: 0 4px 20px var(--playlist-active-shadow);
-    border: 1px solid var(--border-primary);
+    border: 1px solid rgba(0, 245, 148, 0.12);
     
     &::before {
       transform: scaleY(1);
@@ -482,11 +473,10 @@
   text-align: center;
   padding: 3rem 1.5rem;
   color: var(--text-subtle);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--overlay-light);
   border: 2px dashed var(--border-secondary);
   margin-top: 2rem;
-  backdrop-filter: blur(10px);
 }
 
 .empty-icon {
@@ -540,8 +530,8 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle));
-  color: #fff;
+  background: rgba(0, 245, 148, 0.15);
+  color: #00f594;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -915,8 +905,8 @@
 }
 
 .sleep-alt-10.is-active {
-  border-color: rgba(0, 255, 136, 0.45);
-  color: #bbf7d0;
+  border-color: rgba(0, 245, 148, 0.45);
+  color: #91fbd1;
 }
 
 .sleep-alt-10.is-expired {
@@ -931,10 +921,10 @@
   min-width: 230px;
   border-radius: 12px;
   border: 1px solid var(--border-primary);
-  background: rgba(15, 20, 25, 0.95);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  background: rgba(0, 14, 26, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
   padding: 0.45rem;
   z-index: 1400;
 }
@@ -982,8 +972,8 @@
 
   &.is-selected {
     color: #fff;
-    border-color: rgba(0, 255, 136, 0.5);
-    background: rgba(0, 255, 136, 0.16);
+    border-color: rgba(0, 245, 148, 0.5);
+    background: rgba(0, 245, 148, 0.12);
   }
 }
 
@@ -1057,7 +1047,7 @@
   color: var(--text-primary);
 }
 
-/* --- Dropdown (Sign Out) – same style as Add Music dropdown --- */
+/* --- Dropdown (Sign Out) --- */
 .header-auth-dropdown {
   position: absolute;
   top: 100%;
@@ -1065,12 +1055,12 @@
   margin-top: 0.35rem;
   min-width: 10rem;
   width: max-content;
-  background: rgba(15, 20, 25, 0.95);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(0, 14, 26, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-primary);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
-  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
   padding: 0.75rem;
   overflow: hidden;
   opacity: 0;
@@ -1139,14 +1129,14 @@
 .header-auth-sign-in {
   padding: 0.5rem 1rem;
   border-radius: 8px;
-  background: #2a2a3a;
-  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-primary);
   color: #ffffff;
   font-weight: 500;
 }
 
 .header-auth-sign-in:hover {
-  background: #333348;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .header-auth-sign-in svg {
@@ -1216,12 +1206,12 @@
   width: 320px;
   max-width: 360px;
   max-height: 65vh;
-  border-radius: 18px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--player-border);
-  box-shadow: 0 20px 60px var(--shadow-heavy);
+  border-radius: 14px;
+  background: rgba(0, 14, 26, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   padding: 0;
   color: var(--text-primary);
   display: flex;
@@ -1291,7 +1281,7 @@
 
 .stage-view-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--track-active-border), var(--primary-gradient-middle));
+  background: #00f594;
   border-radius: 0 2px 2px 0;
   transition: width 0.3s linear;
 }
@@ -1394,19 +1384,17 @@
 .album-art {
   width: 252px;
   height: 252px;
-  border-radius: 18px;
+  border-radius: 14px;
   position: relative;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
-              0 0 0 1px rgba(0, 217, 255, 0.1);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
   overflow: hidden;
-  backdrop-filter: blur(10px);
   
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 18px;
+    border-radius: 14px;
   }
 }
 
@@ -1432,8 +1420,11 @@
 .album-art-default {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-  border-radius: 20px;
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(90, 50, 180, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 85%, rgba(0, 180, 100, 0.45) 0%, transparent 50%),
+    #051018;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1473,25 +1464,25 @@
 }
 
 .play-btn {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
+  background: #00f594;
+  color: #000e1a;
   border: none;
   padding: 0.68rem 1.5rem;
   font-weight: 600;
   font-size: 0.9rem;
-  border-radius: 12.6px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   gap: 0.45rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 245, 148, 0.15);
 }
 
 .play-btn:hover {
-  background: var(--btn-primary-hover);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.3);
+  background: #2ef7a7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 245, 148, 0.25);
 }
 
 .add-btn {
@@ -1506,36 +1497,34 @@
   align-items: center;
   gap: 0.45rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
 }
 
 .add-btn:hover {
   background: var(--btn-secondary-hover);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 30px var(--btn-shadow-secondary);
+  transform: translateY(-1px);
 }
 
 .toggle-btn {
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-  color: var(--text-primary);
-  border: 1px solid var(--btn-toggle-border);
+  background: #00f594;
+  color: #000e1a;
+  border: none;
   padding: 0.875rem 2rem;
   font-weight: 600;
   font-size: 1rem;
-  border-radius: 14px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 20px var(--btn-shadow-primary);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px var(--btn-shadow-primary);
 }
 
 .toggle-btn:hover {
-  background: linear-gradient(135deg, var(--primary-gradient-hover-start), var(--primary-gradient-hover-middle), var(--primary-gradient-hover-end));
-  transform: translateY(-3px);
-  box-shadow: 0 8px 30px var(--btn-shadow-primary-hover);
+  background: #2ef7a7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--btn-shadow-primary-hover);
 }
 
 .playlist-controls {
@@ -1584,19 +1573,17 @@
   padding: 0.875rem 2rem;
   font-weight: 600;
   font-size: 1rem;
-  border-radius: 14px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
 }
 
 .add-btn-ggd:hover {
   background: var(--btn-ggd-hover);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 30px var(--btn-shadow-secondary);
+  transform: translateY(-1px);
 }
 
 .download-btn {
@@ -1606,19 +1593,17 @@
   padding: 0.68rem 1.5rem;
   font-weight: 600;
   font-size: 1rem;
-  border-radius: 14px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
 }
 
 .download-btn:hover {
   background: var(--btn-secondary-hover);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 30px var(--btn-shadow-secondary);
+  transform: translateY(-1px);
 }
 
 .download-btn:disabled {
@@ -1659,47 +1644,23 @@
   align-items: center;
   justify-content: space-between;
   padding: 1.125rem;
-  border-radius: 16.2px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(2px);
   border: 1px solid transparent;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: -1;
-  }
 }
 
 .track-item:hover {
   background: var(--track-hover-bg);
-  transform: translateX(6px);
-  
-  &::before {
-    opacity: 0.06;
-  }
+  transform: translateX(4px);
 }
 
 .track-item.active {
   background: var(--track-active-bg);
-  border-left: 4px solid var(--track-active-border);
-  box-shadow: 0 0 30px var(--track-active-shadow), 
-              0 8px 30px var(--track-shadow-active);
-  transform: translateX(6px);
-  
-  &::before {
-    opacity: 0.12;
-  }
+  border-left: 3px solid #00f594;
+  transform: translateX(4px);
 }
 
 .track-artist-image {
@@ -1730,21 +1691,23 @@
   width: 100%;
   height: 100%;
   border-radius: 10.8px;
-  background: var(--overlay-medium);
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(90, 50, 180, 0.4) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 85%, rgba(0, 180, 100, 0.35) 0%, transparent 55%),
+    #051018;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.25);
 }
 
 .track-splitter {
   width: 3px;
   height: 38px;
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
+  background: linear-gradient(180deg, rgba(60, 40, 140, 0.5) 0%, rgba(0, 180, 120, 0.7) 45%, rgba(0, 220, 130, 0.8) 100%);
   margin: 0 12px;
   flex-shrink: 0;
-  border-radius: 2px;
-  box-shadow: 0 0 12px var(--splitter-glow);
+  border-radius: 1.5px;
 }
 
 .track-number {
@@ -1883,14 +1846,13 @@
 .player-footer {
   width: 100%;
   max-width: 1260px;
-  background: var(--player-bg);
-  backdrop-filter: blur(36px);
-  -webkit-backdrop-filter: blur(36px);
+  background: rgba(0, 14, 26, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--player-border);
-  border-radius: 36px;
+  border-radius: 16px;
   padding: 1rem 2rem;
-  box-shadow: 0 20px 60px var(--player-shadow),
-              0 0 0 1px var(--border-glow);
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.4);
 }
 
 .player-footer-transition {
@@ -1985,12 +1947,15 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: var(--overlay-medium);
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(90, 50, 180, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 85%, rgba(0, 180, 100, 0.45) 0%, transparent 50%),
+    #051018;
   border-radius: 10.8px;
   display: none;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.3);
   
   svg {
     width: 28.8px;
@@ -2057,8 +2022,8 @@
 }
 
 .play-pause-btn {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
+  background: #00f594;
+  color: #000e1a;
   width: 46.8px;
   height: 46.8px;
   border-radius: 50%;
@@ -2068,14 +2033,14 @@
   cursor: pointer;
   border: none;
   font-size: 19.8px;
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 245, 148, 0.15);
+  transition: all 0.2s ease;
 }
 
 .play-pause-btn:hover {
-  background: var(--btn-primary-hover);
+  background: #2ef7a7;
   transform: scale(1.05);
-  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 245, 148, 0.25);
 }
 
 .progress-bar-container {
@@ -2109,11 +2074,10 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--progress-fill);
+  background: #00f594;
   border-radius: 3px;
   width: 0%;
   transition: width 0.1s;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
 }
 
 .volume-control {
@@ -2186,7 +2150,6 @@
   background: var(--volume-fill);
   border-radius: 3px;
   width: 70%;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
 }
 
 /* Scroll to top button */
@@ -2197,9 +2160,9 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(15, 20, 25, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(0, 14, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-primary);
   color: var(--text-muted);
   cursor: pointer;
@@ -2220,7 +2183,7 @@
 
   &:hover {
     color: var(--text-primary);
-    background: rgba(15, 20, 25, 0.95);
+    background: rgba(0, 14, 26, 0.95);
     border-color: var(--border-tertiary);
     transform: translateY(-2px);
   }

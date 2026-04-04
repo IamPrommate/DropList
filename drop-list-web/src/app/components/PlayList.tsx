@@ -23,7 +23,7 @@ export default function Playlist({ tracks, currentIndex, onSelect }: Props) {
           onClick={() => onSelect(i)}
           style={{
             cursor: 'pointer',
-            background: i === currentIndex ? 'var(--ant-primary-color-deprecated-5, #e6f4ff)' : undefined,
+            background: i === currentIndex ? 'rgba(0, 245, 148, 0.06)' : undefined,
           }}
         >
           <Text ellipsis title={t.name} style={{ maxWidth: '100%' }}>

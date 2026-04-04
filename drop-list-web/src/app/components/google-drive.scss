@@ -1,13 +1,11 @@
 .drive-modal {
   .ant-modal-content {
-    background: rgba(15, 20, 25, 0.95) !important;
-    backdrop-filter: blur(40px) !important;
-    -webkit-backdrop-filter: blur(40px) !important;
-    border: 1px solid rgba(0, 217, 255, 0.15) !important;
-    border-radius: 24px !important;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(0, 217, 255, 0.1),
-                0 0 40px rgba(0, 217, 255, 0.05) !important;
+    background: rgba(0, 14, 26, 0.92) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6) !important;
     overflow: hidden;
   }
 
@@ -16,9 +14,7 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.7);
   }
 
   .ant-modal {
@@ -29,127 +25,120 @@
 
   .ant-modal-header {
     background: transparent !important;
-    border-bottom: 1px solid rgba(0, 217, 255, 0.1) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
     padding: 2rem 2.5rem 1.5rem !important;
     
     .ant-modal-title {
-      color: #fff !important;
+      color: #00f594 !important;
       font-size: 1.5rem !important;
       font-weight: 700 !important;
-      background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end)) !important;
-      -webkit-background-clip: text !important;
-      -webkit-text-fill-color: transparent !important;
-      background-clip: text !important;
     }
   }
 
   .ant-modal-close {
-    color: #fff !important;
+    color: #a2acb3 !important;
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: 12px;
+    border-radius: 8px;
     transition: all 0.2s ease;
     
     &:hover {
-      background: rgba(255, 255, 255, 0.1) !important;
-      color: #fff !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #ffffff !important;
     }
   }
 
   .ant-modal-body {
     background: transparent !important;
-    color: #fff;
+    color: #ffffff;
     padding: 1.5rem 2.5rem 2rem !important;
   }
 
   .ant-modal-footer {
     background: transparent !important;
-    border-top: 1px solid rgba(0, 217, 255, 0.1) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
     padding: 1.5rem 2.5rem 2rem !important;
     
     .ant-btn {
       height: 2.75rem;
       padding: 0 1.75rem;
-      border-radius: 12px;
+      border-radius: 10px;
       font-weight: 600;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
       
       &.ant-btn-primary {
-        background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end)) !important;
+        background: #00f594 !important;
+        color: #000e1a !important;
         border: none !important;
-        box-shadow: 0 4px 20px rgba(0, 212, 255, 0.2);
+        box-shadow: 0 2px 8px rgba(0, 245, 148, 0.15);
         
         &:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 30px rgba(0, 212, 255, 0.3);
+          background: #2ef7a7 !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(0, 245, 148, 0.25);
         }
       }
       
       &.ant-btn-default {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        color: #fff !important;
-        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.06) !important;
+        border: 1px solid rgba(255, 255, 255, 0.10) !important;
+        color: #ffffff !important;
         
         &:hover {
-          background: rgba(255, 255, 255, 0.12) !important;
-          border-color: rgba(255, 255, 255, 0.25) !important;
-          transform: translateY(-2px);
+          background: rgba(255, 255, 255, 0.10) !important;
+          border-color: rgba(255, 255, 255, 0.16) !important;
+          transform: translateY(-1px);
         }
       }
     }
   }
 
   .ant-alert {
-    border-radius: 16px;
+    border-radius: 10px;
     padding: 1rem 1.5rem;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     
     &.ant-alert-info {
-      background: rgba(0, 217, 255, 0.08) !important;
-      border: 1px solid rgba(0, 217, 255, 0.2) !important;
-      color: #a0e3ff !important;
+      background: rgba(0, 245, 148, 0.06) !important;
+      border: 1px solid rgba(0, 245, 148, 0.15) !important;
+      color: #00f594 !important;
     }
 
     &.ant-alert-warning {
-      background: rgba(245, 158, 11, 0.1) !important;
-      border: 1px solid rgba(245, 158, 11, 0.3) !important;
+      background: rgba(245, 158, 11, 0.08) !important;
+      border: 1px solid rgba(245, 158, 11, 0.2) !important;
       color: #fbbf24 !important;
     }
   }
 
   .ant-switch {
     &.ant-switch-checked {
-      background-color: rgba(168, 85, 247, 0.7) !important;
+      background-color: rgba(0, 245, 148, 0.6) !important;
     }
   }
 
   .ant-typography {
-    color: #fff;
+    color: #ffffff;
   }
 
   .ant-input,
   .ant-input-affix-wrapper,
   textarea.ant-input {
-    background: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    border-radius: 12px !important;
-    color: #fff !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    border-radius: 10px !important;
+    color: #ffffff !important;
     padding: 0.75rem 1rem !important;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 
     &::placeholder {
-      color: rgba(255, 255, 255, 0.4) !important;
+      color: rgba(255, 255, 255, 0.35) !important;
     }
 
     &:focus,
     &:hover {
-      background: rgba(255, 255, 255, 0.12) !important;
-      border-color: rgba(0, 217, 255, 0.4) !important;
-      box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1) !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      border-color: rgba(0, 245, 148, 0.3) !important;
+      box-shadow: 0 0 0 2px rgba(0, 245, 148, 0.08) !important;
     }
   }
 
