@@ -2,12 +2,12 @@
 'use client';
 
 import '@ant-design/v5-patch-for-react-19';
-import { useCallback, useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
 import { TrackType } from './lib/types';
-import { Switch } from 'antd';
+import { Switch, Modal } from 'antd';
 import Sidebar from './components/Sidebar';
 import { 
   ShuffleState, 
@@ -22,7 +22,7 @@ import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } 
 import './layout.scss';
 import StageViewPanel from './components/StageViewPanel';
 import SleepTimerControl from './components/SleepTimerControl';
-import { LogIn, LogOut } from 'lucide-react';
+import { LogIn, LogOut, Keyboard, Search, ListMusic, SearchX } from 'lucide-react';
 import { useStageViewAutoHide } from './hooks/useStageViewAutoHide';
 
 enum KeyboardShortcuts {
@@ -86,6 +86,9 @@ export default function HomePage() {
 
   const { data: session, status: sessionStatus } = useSession();
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
+  const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
+  const playlistSearchInputRef = useRef<HTMLInputElement>(null);
   const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageViewOpenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
@@ -679,6 +682,21 @@ export default function HomePage() {
     return total + duration;
   }, 0);
 
+  const visiblePlaylistItems = useMemo(() => {
+    const q = playlistSearchQuery.trim().toLowerCase();
+    const rows = tracks.map((track, originalIndex) => ({ track, originalIndex }));
+    if (!q) return rows;
+    return rows.filter(({ track }) => {
+      const parsed = parseTrackName(track.name);
+      const haystack = `${parsed.title} ${parsed.artist} ${track.name}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [tracks, playlistSearchQuery]);
+
+  useEffect(() => {
+    setPlaylistSearchQuery('');
+  }, [tracks]);
+
   // Scroll-to-top button visibility 
   useEffect(() => {
     const handleScroll = () => {
@@ -718,7 +736,19 @@ export default function HomePage() {
         return;
       }
 
+      if (shortcutsModalOpen) {
+        return;
+      }
+
       switch (e.code) {
+        case 'Slash':
+          e.preventDefault();
+          if (e.shiftKey) {
+            setShortcutsModalOpen(true);
+          } else if (tracks.length > 0) {
+            playlistSearchInputRef.current?.focus();
+          }
+          break;
         case KeyboardShortcuts.SPACE:
           e.preventDefault();
           if (tracks.length > 0) {
@@ -760,7 +790,17 @@ export default function HomePage() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [tracks.length, isPlaying, handlePrev, handleNext, currentTrack, isStageViewOpen, closeStageView, openStageView]);
+  }, [
+    tracks.length,
+    isPlaying,
+    handlePrev,
+    handleNext,
+    currentTrack,
+    isStageViewOpen,
+    closeStageView,
+    openStageView,
+    shortcutsModalOpen,
+  ]);
 
   return (
     <main className="pageRoot">
@@ -886,33 +926,46 @@ export default function HomePage() {
             >
               <div className="header">
                 <div className="header-left">
-                  <div className="image-toggle-control">
+                  <div className="header-tools-strip">
                     {tracks.length > 0 && (
-                      <>
-                      <span className="toggle-label">Show cover image</span>
-                      <Switch 
-                        checked={showCoverImage}
-                        onChange={setShowCoverImage}
-                        size="small"
-                      />
-                      </>
+                      <div className="image-toggle-control header-tools-item">
+                        <span className="toggle-label">Cover</span>
+                        <Switch 
+                          checked={showCoverImage}
+                          onChange={setShowCoverImage}
+                          size="small"
+                        />
+                      </div>
                     )}
-                    <SleepTimerControl
-                      isActive={isSleepTimerActive}
-                      isExpiredWaiting={sleepTimerExpired}
-                      remainingMs={sleepTimerRemainingMs}
-                      disabled={!canUseSleepTimer}
-                      onSelectMinutes={(minutes) => {
-                        if (minutes === null) {
-                          clearSleepTimer();
-                          return;
-                        }
-                        const now = Date.now();
-                        setSleepTimerNow(now);
-                        setSleepTimerExpired(false);
-                        setSleepTimerEndAt(now + minutes * 60 * 1000);
-                      }}
-                    />
+                    {tracks.length > 0 && <div className="header-tools-rule" aria-hidden />}
+                    <div className="header-tools-item">
+                      <SleepTimerControl
+                        isActive={isSleepTimerActive}
+                        isExpiredWaiting={sleepTimerExpired}
+                        remainingMs={sleepTimerRemainingMs}
+                        disabled={!canUseSleepTimer}
+                        onSelectMinutes={(minutes) => {
+                          if (minutes === null) {
+                            clearSleepTimer();
+                            return;
+                          }
+                          const now = Date.now();
+                          setSleepTimerNow(now);
+                          setSleepTimerExpired(false);
+                          setSleepTimerEndAt(now + minutes * 60 * 1000);
+                        }}
+                      />
+                    </div>
+                    <div className="header-tools-rule" aria-hidden />
+                    <button
+                      type="button"
+                      className="header-shortcuts-btn"
+                      aria-label="Keyboard shortcuts"
+                      title="Shortcuts (?)"
+                      onClick={() => setShortcutsModalOpen(true)}
+                    >
+                      <Keyboard size={18} strokeWidth={2} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -942,25 +995,86 @@ export default function HomePage() {
               {/* {currentTrack && (<Divider />)} */}
 
               {tracks.length > 0 && (
-                <div className="playlist-controls">
-                  <div className="image-toggle-control">
-                    <span className="toggle-label">Show artist image</span>
-                    <Switch 
-                      checked={showArtistImages}
-                      onChange={setShowArtistImages}
-                      size="small"
-                    />
-                  </div>
-                </div>
-              )}
+                <section className="playlist-panel" aria-labelledby="playlist-panel-heading">
+                  <header className="playlist-panel-header">
+                    <div className="playlist-panel-title-block">
+                      <span className="playlist-panel-icon-wrap" aria-hidden>
+                        <ListMusic size={20} strokeWidth={2} className="playlist-panel-icon" />
+                      </span>
+                      <div className="playlist-panel-titles">
+                        <h2 id="playlist-panel-heading" className="playlist-panel-title">
+                          Track list
+                        </h2>
+                        <p className="playlist-panel-subtitle">
+                          {playlistSearchQuery.trim()
+                            ? 'Filtered from your library'
+                            : 'Tap a row to play'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="playlist-panel-badges">
+                      {playlistSearchQuery.trim() ? (
+                        <span className="playlist-count-pill playlist-count-pill-filtered">
+                          {visiblePlaylistItems.length} / {tracks.length}
+                        </span>
+                      ) : (
+                        <span className="playlist-count-pill">{tracks.length} tracks</span>
+                      )}
+                    </div>
+                  </header>
 
-              <div className="playlist" ref={playlistRef}>
-                {tracks.map((track, i) => {
-                  const trackInfo = parseTrackName(track.name);
-                  const cacheKey = getTrackCacheKey(track);
-                  const duration = trackDurations.get(cacheKey) || 0;
-                  return (
-                    <div 
+                  <div className="playlist-toolbar">
+                    <label className="playlist-search-wrap">
+                      <Search size={16} className="playlist-search-icon" aria-hidden />
+                      <input
+                        ref={playlistSearchInputRef}
+                        type="search"
+                        className="playlist-search-input"
+                        placeholder="Search title, artist, or file…"
+                        value={playlistSearchQuery}
+                        onChange={(e) => setPlaylistSearchQuery(e.target.value)}
+                        aria-label="Filter playlist by title or artist"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </label>
+                    <div className="playlist-toolbar-divider" aria-hidden />
+                    <div className="image-toggle-control playlist-toolbar-toggle">
+                      <span className="toggle-label">Artist art</span>
+                      <Switch 
+                        checked={showArtistImages}
+                        onChange={setShowArtistImages}
+                        size="small"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="playlist playlist-panel-list" ref={playlistRef}>
+                    {visiblePlaylistItems.length === 0 &&
+                      playlistSearchQuery.trim() !== '' && (
+                        <div className="playlist-filter-empty">
+                          <div className="playlist-filter-empty-visual" aria-hidden>
+                            <SearchX size={36} strokeWidth={1.5} />
+                          </div>
+                          <p className="playlist-filter-empty-text">
+                            No tracks match{' '}
+                            <span className="playlist-filter-query">“{playlistSearchQuery.trim()}”</span>
+                          </p>
+                          <button
+                            type="button"
+                            className="playlist-filter-clear-btn"
+                            onClick={() => setPlaylistSearchQuery('')}
+                          >
+                            Clear search
+                          </button>
+                        </div>
+                      )}
+                    {visiblePlaylistItems.map(({ track, originalIndex: i }) => {
+                      const trackInfo = parseTrackName(track.name);
+                      const cacheKey = getTrackCacheKey(track);
+                      const duration = trackDurations.get(cacheKey) || 0;
+                      return (
+                        <div 
                       key={track.id}
                       className={`track-item ${i === currentIndex ? 'active' : ''}`}
                       onClick={() => {
@@ -1056,10 +1170,12 @@ export default function HomePage() {
                           <circle cx="12" cy="19" r="2"></circle>
                         </svg>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
 
               {/* <div className="audio-options">
                 <button className="audio-options-btn">
@@ -1125,6 +1241,44 @@ export default function HomePage() {
           <path d="M18 15l-6-6-6 6" />
         </svg>
       </button>
+
+      <Modal
+        title="Keyboard shortcuts"
+        open={shortcutsModalOpen}
+        onCancel={() => setShortcutsModalOpen(false)}
+        footer={null}
+        wrapClassName="shortcuts-help-modal"
+        destroyOnClose
+      >
+        <p className="shortcut-help-lead">
+          Shortcuts apply when focus is not in a text field or the playlist filter.
+        </p>
+        <ul className="shortcut-help-list">
+          <li className="shortcut-help-row">
+            <span>Play / pause</span>
+            <kbd className="shortcut-help-kbd">Space</kbd>
+          </li>
+          <li className="shortcut-help-row">
+            <span>Volume up / down</span>
+            <span className="shortcut-help-kbd-group">
+              <kbd className="shortcut-help-kbd">↑</kbd>
+              <kbd className="shortcut-help-kbd">↓</kbd>
+            </span>
+          </li>
+          <li className="shortcut-help-row">
+            <span>Toggle stage view (video tracks)</span>
+            <kbd className="shortcut-help-kbd">V</kbd>
+          </li>
+          <li className="shortcut-help-row">
+            <span>Focus playlist filter</span>
+            <kbd className="shortcut-help-kbd">/</kbd>
+          </li>
+          <li className="shortcut-help-row">
+            <span>Open this panel</span>
+            <kbd className="shortcut-help-kbd">?</kbd>
+          </li>
+        </ul>
+      </Modal>
     </main>
   );
 }
