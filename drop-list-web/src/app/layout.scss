@@ -718,28 +718,6 @@
   );
 }
 
-.header-shortcuts-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  padding: 0;
-  border-radius: 10px;
-  border: 1px solid var(--border-primary);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-
-  &:hover {
-    color: var(--text-primary);
-    border-color: var(--border-tertiary);
-    background: rgba(255, 255, 255, 0.08);
-    transform: translateY(-1px);
-  }
-}
-
 .header-right {
   display: flex;
   align-items: center;
@@ -1619,12 +1597,12 @@
   margin: 0 auto 2.25rem;
   border-radius: 18px;
   border: 1px solid var(--border-primary);
-  background: rgba(0, 14, 26, 0.45);
+  background: rgba(15, 25, 33, 0.35);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 24px 48px rgba(0, 0, 0, 0.35);
+    0 24px 48px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   animation: playlist-panel-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 
@@ -1882,109 +1860,6 @@
   }
 }
 
-.shortcuts-help-modal {
-  .ant-modal-content {
-    background: rgba(0, 14, 26, 0.92) !important;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 16px !important;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6) !important;
-    overflow: hidden;
-  }
-
-  .ant-modal-wrap {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    background: rgba(0, 0, 0, 0.7);
-  }
-
-  .ant-modal {
-    top: 0;
-    padding-bottom: 0;
-    margin: 0;
-  }
-
-  .ant-modal-header {
-    background: transparent !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-    padding: 1.5rem 1.75rem 1rem !important;
-
-    .ant-modal-title {
-      color: #00f594 !important;
-      font-size: 1.25rem !important;
-      font-weight: 700 !important;
-    }
-  }
-
-  .ant-modal-close {
-    color: #a2acb3 !important;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.08) !important;
-      color: #ffffff !important;
-    }
-  }
-
-  .ant-modal-body {
-    background: transparent !important;
-    color: #ffffff;
-    padding: 0.5rem 1.75rem 1.75rem !important;
-  }
-}
-
-.shortcut-help-lead {
-  margin: 0 0 1.25rem;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.shortcut-help-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.shortcut-help-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.9375rem;
-  color: var(--text-primary);
-}
-
-.shortcut-help-kbd-group {
-  display: inline-flex;
-  gap: 0.35rem;
-}
-
-.shortcut-help-kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  padding: 0.28rem 0.55rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-primary);
-  border-radius: 8px;
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
-}
-
 .image-toggle-control {
   display: flex;
   align-items: center;
@@ -2120,9 +1995,7 @@
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(2px);
-  border: 1px solid transparent;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -2140,7 +2013,7 @@
 .track-item:hover {
   background: var(--track-hover-bg);
   transform: translateX(6px);
-  
+
   &::before {
     opacity: 0.06;
   }
@@ -2152,7 +2025,7 @@
   box-shadow: 0 0 30px var(--track-active-shadow), 
               0 8px 30px var(--track-shadow-active);
   transform: translateX(6px);
-  
+
   &::before {
     opacity: 0.12;
   }

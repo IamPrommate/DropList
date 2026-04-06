@@ -7,7 +7,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
 import { TrackType } from './lib/types';
-import { Switch, Modal } from 'antd';
+import { Switch } from 'antd';
 import Sidebar from './components/Sidebar';
 import { 
   ShuffleState, 
@@ -22,7 +22,7 @@ import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } 
 import './layout.scss';
 import StageViewPanel from './components/StageViewPanel';
 import SleepTimerControl from './components/SleepTimerControl';
-import { LogIn, LogOut, Keyboard, Search, ListMusic, SearchX } from 'lucide-react';
+import { LogIn, LogOut, Search, ListMusic, SearchX } from 'lucide-react';
 import { useStageViewAutoHide } from './hooks/useStageViewAutoHide';
 
 enum KeyboardShortcuts {
@@ -87,7 +87,6 @@ export default function HomePage() {
   const { data: session, status: sessionStatus } = useSession();
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
   const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
-  const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   const playlistSearchInputRef = useRef<HTMLInputElement>(null);
   const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageViewOpenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -736,16 +735,10 @@ export default function HomePage() {
         return;
       }
 
-      if (shortcutsModalOpen) {
-        return;
-      }
-
       switch (e.code) {
         case 'Slash':
-          e.preventDefault();
-          if (e.shiftKey) {
-            setShortcutsModalOpen(true);
-          } else if (tracks.length > 0) {
+          if (!e.shiftKey && tracks.length > 0) {
+            e.preventDefault();
             playlistSearchInputRef.current?.focus();
           }
           break;
@@ -799,7 +792,6 @@ export default function HomePage() {
     isStageViewOpen,
     closeStageView,
     openStageView,
-    shortcutsModalOpen,
   ]);
 
   return (
@@ -956,16 +948,6 @@ export default function HomePage() {
                         }}
                       />
                     </div>
-                    <div className="header-tools-rule" aria-hidden />
-                    <button
-                      type="button"
-                      className="header-shortcuts-btn"
-                      aria-label="Keyboard shortcuts"
-                      title="Shortcuts (?)"
-                      onClick={() => setShortcutsModalOpen(true)}
-                    >
-                      <Keyboard size={18} strokeWidth={2} />
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1240,43 +1222,6 @@ export default function HomePage() {
         </svg>
       </button>
 
-      <Modal
-        title="Keyboard shortcuts"
-        open={shortcutsModalOpen}
-        onCancel={() => setShortcutsModalOpen(false)}
-        footer={null}
-        wrapClassName="shortcuts-help-modal"
-        destroyOnClose
-      >
-        <p className="shortcut-help-lead">
-          Shortcuts apply when focus is not in a text field or the playlist filter.
-        </p>
-        <ul className="shortcut-help-list">
-          <li className="shortcut-help-row">
-            <span>Play / pause</span>
-            <kbd className="shortcut-help-kbd">Space</kbd>
-          </li>
-          <li className="shortcut-help-row">
-            <span>Volume up / down</span>
-            <span className="shortcut-help-kbd-group">
-              <kbd className="shortcut-help-kbd">↑</kbd>
-              <kbd className="shortcut-help-kbd">↓</kbd>
-            </span>
-          </li>
-          <li className="shortcut-help-row">
-            <span>Toggle stage view (video tracks)</span>
-            <kbd className="shortcut-help-kbd">V</kbd>
-          </li>
-          <li className="shortcut-help-row">
-            <span>Focus playlist filter</span>
-            <kbd className="shortcut-help-kbd">/</kbd>
-          </li>
-          <li className="shortcut-help-row">
-            <span>Open this panel</span>
-            <kbd className="shortcut-help-kbd">?</kbd>
-          </li>
-        </ul>
-      </Modal>
     </main>
   );
 }
