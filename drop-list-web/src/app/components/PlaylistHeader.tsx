@@ -50,14 +50,13 @@ export default function PlaylistHeader({
         .then((dominantColor) => {
           console.log('Extracted dominant color:', dominantColor);
           
-          const gradientStart = saturateColor(darkenColor(dominantColor, 30), 40);
-          const gradientMiddle = saturateColor(darkenColor(dominantColor, 45), 40);
-          const gradientEnd = '#000e1a';
+          const auroraMiddle = saturateColor(darkenColor(dominantColor, 45), 40);
           
-          // Apply to background gradient
-          document.documentElement.style.setProperty('--bg-gradient-start', gradientStart);
-          document.documentElement.style.setProperty('--bg-gradient-middle', gradientMiddle);
-          document.documentElement.style.setProperty('--bg-gradient-end', gradientEnd);
+          // Apply to aurora background (bottom-right glow follows album color)
+          const [dr, dg, db] = hexToRgb(dominantColor);
+          document.documentElement.style.setProperty('--aurora-gradient-end', `rgba(${dr}, ${dg}, ${db}, 0.45)`);
+          const [mr, mg, mb] = hexToRgb(auroraMiddle);
+          document.documentElement.style.setProperty('--aurora-gradient-end-mid', `rgba(${mr}, ${mg}, ${mb}, 0.25)`);
           
           // Apply to switch colors
           document.documentElement.style.setProperty('--switch-bg', hexToRgba(lightenColor(dominantColor, 25), 0.3));
@@ -76,7 +75,7 @@ export default function PlaylistHeader({
           // Apply to player border for consistent theming
           document.documentElement.style.setProperty('--player-border', hexToRgba(lightenColor(dominantColor, 25), 0.2));
           
-          console.log('Applied TYPE 1 colors:', { dominantColor, gradientStart, gradientMiddle, gradientEnd });
+          console.log('Applied dynamic aurora + theme colors:', { dominantColor, auroraMiddle });
           
           // TYPE 2: Apply hue angle shift to primary accent colors
           const originalMiddle = '#00f594';
@@ -114,9 +113,9 @@ export default function PlaylistHeader({
           setIsAlbumCoverLoading(false);
         });
     } else if (!showCoverImage) {
-      document.documentElement.style.setProperty('--bg-gradient-start', '#152028');
-      document.documentElement.style.setProperty('--bg-gradient-middle', '#0f1921');
-      document.documentElement.style.setProperty('--bg-gradient-end', '#000e1a');
+      // Reset aurora background to defaults
+      document.documentElement.style.setProperty('--aurora-gradient-end', 'rgba(0, 180, 100, 0.45)');
+      document.documentElement.style.setProperty('--aurora-gradient-end-mid', 'rgba(0, 120, 90, 0.25)');
       
       document.documentElement.style.setProperty('--switch-bg', 'rgba(0, 245, 148, 0.2)');
       document.documentElement.style.setProperty('--switch-border', 'rgba(0, 245, 148, 0.35)');

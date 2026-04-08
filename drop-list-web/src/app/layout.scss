@@ -13,9 +13,6 @@
   /* Background Colors — hgd-neutral-gray */
   --bg-primary: #000e1a;
   --bg-secondary: #0f1921;
-  --bg-gradient-start: #152028;
-  --bg-gradient-middle: #0f1921;
-  --bg-gradient-end: #000e1a;
   
   /* Text Colors — hgd-neutral-gray */
   --text-primary: #ffffff;
@@ -86,6 +83,13 @@
   --track-shadow-active: rgba(0, 245, 148, 0.06);
   --track-shadow-glow: rgba(0, 245, 148, 0.5);
   
+  /* Aurora Background — two soft glows on a dark base */
+  --aurora-base: #000e1a;
+  --aurora-gradient-start: rgba(80, 40, 180, 0.55);
+  --aurora-gradient-start-mid: rgba(40, 50, 160, 0.3);
+  --aurora-gradient-end: rgba(0, 180, 100, 0.45);
+  --aurora-gradient-end-mid: rgba(0, 120, 90, 0.25);
+
   /* Background Gradient Colors — very subtle */
   --bg-glow-top: rgba(0, 245, 148, 0.03);
   --bg-glow-bottom: rgba(0, 245, 148, 0.02);
@@ -105,11 +109,12 @@
 }
 
 .pageRoot {
-  background: var(--bg-primary);
-  background-image: url('/images/background/bg-aurora-desktop.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  background:
+    radial-gradient(ellipse 60% 50% at 8% 0%, var(--aurora-gradient-start) 0%, transparent 100%),
+    radial-gradient(ellipse 50% 40% at 30% 5%, var(--aurora-gradient-start-mid) 0%, transparent 100%),
+    radial-gradient(ellipse 55% 50% at 85% 100%, var(--aurora-gradient-end) 0%, transparent 100%),
+    radial-gradient(ellipse 70% 55% at 65% 85%, var(--aurora-gradient-end-mid) 0%, transparent 100%),
+    var(--aurora-base);
   background-attachment: fixed;
   min-height: 100vh;
   font-family: var(--font-noto-sans), var(--font-noto-sans-thai), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -120,14 +125,6 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 245, 148, 0.25) transparent;
   position: relative;
-
-  @media (max-width: 1023px) {
-    background-image: url('/images/background/bg-aurora-tablet.png');
-  }
-
-  @media (max-width: 639px) {
-    background-image: url('/images/background/bg-aurora-mobile.png');
-  }
 }
 
 @keyframes breathe {
