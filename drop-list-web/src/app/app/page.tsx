@@ -11,11 +11,13 @@ import {
   maxSavedPlaylists,
   type ProLevelRank,
 } from '../lib/proLevels';
-import { UserPlan } from '../lib/userPlan';
+import { UserPlan, parseUserPlan } from '../lib/userPlan';
+import type { SettingsProfileMeta, SettingsSubscriptionPayload } from '../lib/settingsTypes';
 import AudioPlayer from '../components/AudioPlayer';
 import PlaylistHeader from '../components/PlaylistHeader';
 import { TrackType, SavedPlaylist } from '../lib/types';
 import Sidebar from '../components/Sidebar';
+import SettingsPanel from '../components/SettingsPanel';
 import { 
   ShuffleState, 
   createInitialShuffleState, 
@@ -110,17 +112,61 @@ export default function HomePage() {
     recentlyPlayed: []
   });
 
-  const { data: session, status: sessionStatus, update: updateSession } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
+  /**
+   * Local display name after PATCH — avoids `updateSession({ name })`, which triggers a soft refresh and stops audio.
+   */
+  const [sessionNameOverride, setSessionNameOverride] = useState<string | null>(null);
+  /**
+   * Listening rank from `/api/listen-time` — avoids `updateSession({ proLevel })` for the same reason (soft refresh).
+   */
+  const [proLevelOverride, setProLevelOverride] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') {
+      setSessionNameOverride(null);
+      setProLevelOverride(null);
+    }
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    if (sessionNameOverride != null && session?.user?.name === sessionNameOverride) {
+      setSessionNameOverride(null);
+    }
+  }, [session?.user?.name, sessionNameOverride]);
+
+  useEffect(() => {
+    if (proLevelOverride != null && session?.user?.proLevel === proLevelOverride) {
+      setProLevelOverride(null);
+    }
+  }, [session?.user?.proLevel, proLevelOverride]);
+
+  const sessionForUi = useMemo(() => {
+    if (!session) return null;
+    const nameChanged = sessionNameOverride != null;
+    const levelChanged = proLevelOverride != null;
+    if (!nameChanged && !levelChanged) return session;
+    return {
+      ...session,
+      user: {
+        ...session.user,
+        ...(nameChanged ? { name: sessionNameOverride } : {}),
+        ...(levelChanged ? { proLevel: proLevelOverride } : {}),
+      },
+    };
+  }, [session, sessionNameOverride, proLevelOverride]);
+
   const isPro = session?.user?.plan === UserPlan.Pro;
   const isFree = !isPro;
 
   const playlistAddAllowed = useMemo(() => {
     if (sessionStatus !== 'authenticated' || !session?.user) return false;
+    const proLevel = proLevelOverride ?? session.user.proLevel;
     return (
       savedPlaylists.length <
-      maxSavedPlaylists(session.user.plan === UserPlan.Pro, session.user.proLevel)
+      maxSavedPlaylists(session.user.plan === UserPlan.Pro, proLevel)
     );
-  }, [sessionStatus, session?.user, session?.user?.plan, session?.user?.proLevel, savedPlaylists.length]);
+  }, [sessionStatus, session?.user, session?.user?.plan, session?.user?.proLevel, proLevelOverride, savedPlaylists.length]);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -136,6 +182,11 @@ export default function HomePage() {
     [activeSavedPlaylist]
   );
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileMeta, setProfileMeta] = useState<SettingsProfileMeta | null>(null);
+  const [profileMetaLoading, setProfileMetaLoading] = useState(false);
+  const [subData, setSubData] = useState<SettingsSubscriptionPayload | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
   const authDropdownRef = useRef<HTMLDivElement | null>(null);
   const stageViewOpenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Wall clock when we last credited listen seconds (Pro only). */
@@ -143,6 +194,7 @@ export default function HomePage() {
   const isPlayingRef = useRef(false);
   const currentTrack = tracks[currentIndex];
   const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
+
   const shouldAttemptShowStageView = hasStageViewVideo && isStageViewOpen;
   const { playlistRef, isStageViewAutoHidden } = useStageViewAutoHide({
     enabled: shouldAttemptShowStageView,
@@ -173,6 +225,98 @@ export default function HomePage() {
         setPlayCountLoaded(true);
       })
       .catch(() => setPlayCountLoaded(true));
+  }, [sessionStatus]);
+
+  const loadSubscription = useCallback(async () => {
+    if (sessionStatus !== 'authenticated') return;
+    setSubLoading(true);
+    setSubData(null);
+    try {
+      const res = await fetch('/api/user/subscription');
+      const data = (await res.json()) as SettingsSubscriptionPayload & { error?: string };
+      if (!res.ok) {
+        setSubData({
+          plan: parseUserPlan(session?.user?.plan),
+          subscription: null,
+          billingError: data.error || 'Could not load billing details',
+        });
+        return;
+      }
+      setSubData({
+        plan: parseUserPlan(String(data.plan)),
+        subscription: data.subscription ?? null,
+        billingError: data.billingError,
+      });
+    } catch {
+      setSubData({
+        plan: parseUserPlan(session?.user?.plan),
+        subscription: null,
+        billingError: 'Could not load billing details',
+      });
+    } finally {
+      setSubLoading(false);
+    }
+  }, [sessionStatus, session?.user?.plan]);
+
+  const loadProfileMeta = useCallback(async () => {
+    if (sessionStatus !== 'authenticated') return;
+    setProfileMetaLoading(true);
+    try {
+      const res = await fetch('/api/user/profile');
+      const data = (await res.json()) as {
+        createdAt?: string | null;
+        plan?: string;
+        proLevel?: number | null;
+        totalListenSeconds?: number;
+        totalPlays?: number;
+        proLevelName?: string | null;
+        listenProgressPct?: number | null;
+        nextProLevelName?: string | null;
+        nextProLevelListenHours?: number | null;
+        listenProgressFromHours?: number | null;
+        error?: string;
+      };
+      if (res.ok) {
+        const plan = parseUserPlan(data.plan);
+        setProfileMeta({
+          createdAt: data.createdAt ?? null,
+          plan,
+          proLevel: typeof data.proLevel === 'number' ? data.proLevel : null,
+          totalListenSeconds: typeof data.totalListenSeconds === 'number' ? data.totalListenSeconds : 0,
+          totalPlays: typeof data.totalPlays === 'number' ? data.totalPlays : 0,
+          proLevelName: typeof data.proLevelName === 'string' ? data.proLevelName : null,
+          listenProgressPct: typeof data.listenProgressPct === 'number' ? data.listenProgressPct : null,
+          nextProLevelName: typeof data.nextProLevelName === 'string' ? data.nextProLevelName : null,
+          nextProLevelListenHours:
+            typeof data.nextProLevelListenHours === 'number' ? data.nextProLevelListenHours : null,
+          listenProgressFromHours:
+            typeof data.listenProgressFromHours === 'number' ? data.listenProgressFromHours : null,
+        });
+      } else {
+        setProfileMeta(null);
+      }
+    } catch {
+      setProfileMeta(null);
+    } finally {
+      setProfileMetaLoading(false);
+    }
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    void loadSubscription();
+    void loadProfileMeta();
+  }, [sessionStatus, loadSubscription, loadProfileMeta]);
+
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('settings') !== '1') return;
+    setSettingsOpen(true);
+    params.delete('settings');
+    const q = params.toString();
+    window.history.replaceState(null, '', `/app${q ? `?${q}` : ''}${window.location.hash || ''}`);
   }, [sessionStatus]);
 
   const checkAndDecrementPlay = useCallback(async (): Promise<boolean> => {
@@ -446,14 +590,14 @@ export default function HomePage() {
         if (!res.ok) return;
         const data = (await res.json()) as { proLevel?: number };
         if (typeof data.proLevel === 'number') {
-          await updateSession({ proLevel: data.proLevel });
+          setProLevelOverride(data.proLevel);
         }
       } catch {
         /* ignore */
       }
     };
     void flushOnPause();
-  }, [isPro, sessionStatus, isPlaying, updateSession]);
+  }, [isPro, sessionStatus, isPlaying]);
 
   useEffect(() => {
     if (!isPro || sessionStatus !== 'authenticated') return;
@@ -474,7 +618,7 @@ export default function HomePage() {
         if (!res.ok) return;
         const data = (await res.json()) as { proLevel?: number };
         if (typeof data.proLevel === 'number') {
-          await updateSession({ proLevel: data.proLevel });
+          setProLevelOverride(data.proLevel);
         }
       } catch {
         /* ignore */
@@ -485,7 +629,7 @@ export default function HomePage() {
       void flush();
     }, 30_000);
     return () => clearInterval(id);
-  }, [isPro, sessionStatus, updateSession]);
+  }, [isPro, sessionStatus]);
 
   useEffect(() => {
     return () => {
@@ -540,7 +684,7 @@ export default function HomePage() {
             if (!res.ok) return;
             const data = (await res.json()) as { proLevel?: number };
             if (typeof data.proLevel === 'number') {
-              await updateSession({ proLevel: data.proLevel });
+              setProLevelOverride(data.proLevel);
             }
           })
           .catch(() => {});
@@ -558,7 +702,7 @@ export default function HomePage() {
         }),
       }).catch(() => {});
     },
-    [isPro, session?.user, currentDriveFolderId, getTrackCacheKey, checkAndDecrementPlay, updateSession]
+    [isPro, session?.user, currentDriveFolderId, getTrackCacheKey, checkAndDecrementPlay]
   );
 
   // Audio cache for blob URLs - prevents memory leaks
@@ -1174,11 +1318,27 @@ export default function HomePage() {
             }}
           />
 
+          {sessionStatus === 'authenticated' && sessionForUi ? (
+            <SettingsPanel
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+              session={sessionForUi}
+              profileMeta={profileMeta}
+              profileMetaLoading={profileMetaLoading}
+              subData={subData}
+              subLoading={subLoading}
+              onNameSaved={(name) => {
+                setSessionNameOverride(name);
+              }}
+              onRefreshProfile={() => void loadProfileMeta()}
+            />
+          ) : null}
+
           {/* Main Content */}
           <div className="main-wrapper">
             {/* Auth – positioned absolute to main-wrapper top-right */}
             <div className="header-auth">
-              {sessionStatus === 'loading' ? null : session ? (
+              {sessionStatus === 'loading' ? null : sessionForUi ? (
                 <div
                   ref={authDropdownRef}
                   className={`header-auth-logged-in${authDropdownOpen ? ' is-open' : ''}`}
@@ -1189,20 +1349,20 @@ export default function HomePage() {
                     aria-expanded={authDropdownOpen}
                     aria-haspopup="menu"
                     aria-label={
-                      session.user?.proLevel != null && isProLevelRank(session.user.proLevel)
-                        ? `Account menu, ${PRO_LEVEL_DISPLAY[session.user.proLevel as ProLevelRank].name} rank`
+                      sessionForUi.user?.proLevel != null && isProLevelRank(sessionForUi.user.proLevel)
+                        ? `Account menu, ${PRO_LEVEL_DISPLAY[sessionForUi.user.proLevel as ProLevelRank].name} rank`
                         : 'Account menu'
                     }
                     onClick={toggleAuthDropdown}
                   >
                     <span className="header-auth-avatar-main">
-                      {session.user?.proLevel != null && isProLevelRank(session.user.proLevel) ? (
+                      {sessionForUi.user?.proLevel != null && isProLevelRank(sessionForUi.user.proLevel) ? (
                         <span
-                          className={`header-auth-avatar-ring ranks-catalog-card--${PRO_LEVEL_DISPLAY[session.user.proLevel as ProLevelRank].name.toLowerCase()}`}
+                          className={`header-auth-avatar-ring ranks-catalog-card--${PRO_LEVEL_DISPLAY[sessionForUi.user.proLevel as ProLevelRank].name.toLowerCase()}`}
                         >
-                          {session.user?.image ? (
+                          {sessionForUi.user?.image ? (
                             <img
-                              src={session.user.image}
+                              src={sessionForUi.user.image}
                               alt=""
                               className="header-auth-avatar"
                               referrerPolicy="no-referrer"
@@ -1210,19 +1370,19 @@ export default function HomePage() {
                                 const target = e.currentTarget;
                                 const placeholder = document.createElement('div');
                                 placeholder.className = 'header-auth-avatar-placeholder';
-                                placeholder.textContent = (session.user?.name || session.user?.email || '?').charAt(0).toUpperCase();
+                                placeholder.textContent = (sessionForUi.user?.name || sessionForUi.user?.email || '?').charAt(0).toUpperCase();
                                 target.parentNode?.replaceChild(placeholder, target);
                               }}
                             />
                           ) : (
                             <div className="header-auth-avatar-placeholder">
-                              {(session.user?.name || session.user?.email || '?').charAt(0).toUpperCase()}
+                              {(sessionForUi.user?.name || sessionForUi.user?.email || '?').charAt(0).toUpperCase()}
                             </div>
                           )}
                         </span>
-                      ) : session.user?.image ? (
+                      ) : sessionForUi.user?.image ? (
                         <img
-                          src={session.user.image}
+                          src={sessionForUi.user.image}
                           alt=""
                           className="header-auth-avatar"
                           referrerPolicy="no-referrer"
@@ -1230,13 +1390,13 @@ export default function HomePage() {
                             const target = e.currentTarget;
                             const placeholder = document.createElement('div');
                             placeholder.className = 'header-auth-avatar-placeholder';
-                            placeholder.textContent = (session.user?.name || session.user?.email || '?').charAt(0).toUpperCase();
+                            placeholder.textContent = (sessionForUi.user?.name || sessionForUi.user?.email || '?').charAt(0).toUpperCase();
                             target.parentNode?.replaceChild(placeholder, target);
                           }}
                         />
                       ) : (
                         <div className="header-auth-avatar-placeholder">
-                          {(session.user?.name || session.user?.email || '?').charAt(0).toUpperCase()}
+                          {(sessionForUi.user?.name || sessionForUi.user?.email || '?').charAt(0).toUpperCase()}
                         </div>
                       )}
                     </span>
@@ -1246,18 +1406,18 @@ export default function HomePage() {
                     <div className="header-auth-dropdown-header">
                       <div className="header-auth-dropdown-user">
                         <span className="header-auth-dropdown-name">
-                          {session.user?.name || session.user?.email || 'Account'}
+                          {sessionForUi.user?.name || sessionForUi.user?.email || 'Account'}
                         </span>
                         <span
                           className={`header-auth-plan-badge ${isPro ? 'header-auth-plan-badge--pro' : 'header-auth-plan-badge--free'}`}
                         >
                           {isPro ? 'Pro' : 'Free'}
                         </span>
-                        {session.user?.proLevel != null && isProLevelRank(session.user.proLevel) ? (
+                        {sessionForUi.user?.proLevel != null && isProLevelRank(sessionForUi.user.proLevel) ? (
                           <span
-                            className={`ranks-your-card-badge ranks-catalog-card--${PRO_LEVEL_DISPLAY[session.user.proLevel as ProLevelRank].name.toLowerCase()}`}
+                            className={`ranks-your-card-badge ranks-catalog-card--${PRO_LEVEL_DISPLAY[sessionForUi.user.proLevel as ProLevelRank].name.toLowerCase()}`}
                           >
-                            {proLevelLabel(session.user.proLevel)}
+                            {proLevelLabel(sessionForUi.user.proLevel)}
                           </span>
                         ) : (
                           <span className="header-auth-dropdown-rank header-auth-dropdown-rank--empty">—</span>
@@ -1296,17 +1456,20 @@ export default function HomePage() {
                           <span className="header-auth-dropdown-item-label">Manage subscription</span>
                         </button>
                       )}
-                      <LoadingLink
-                        href="/settings"
+                      <button
+                        type="button"
                         className="header-auth-dropdown-item"
                         role="menuitem"
-                        onClick={() => closeAuthDropdown()}
+                        onClick={() => {
+                          closeAuthDropdown();
+                          setSettingsOpen(true);
+                        }}
                       >
                         <span className="header-auth-dropdown-item-icon" aria-hidden>
                           <Settings size={15} strokeWidth={1.75} />
                         </span>
                         <span className="header-auth-dropdown-item-label">Settings</span>
-                      </LoadingLink>
+                      </button>
                     </div>
                     <div className="header-auth-dropdown-footer">
                       <button

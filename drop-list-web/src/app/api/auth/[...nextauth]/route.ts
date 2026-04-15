@@ -3,6 +3,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import { supabaseAdmin } from '@/app/lib/supabase';
 import { isProLevelRank } from '@/app/lib/proLevels';
 import { UserPlan, parseUserPlan } from '@/app/lib/userPlan';
+import { refreshGoogleAccessToken, GOOGLE_ACCESS_BUFFER_SEC } from '@/app/api/lib/google-oauth-refresh';
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '';
@@ -79,7 +80,14 @@ const handler = NextAuth({
       if (account && profile) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at ?? undefined;
+        const expiresInSec =
+          typeof account.expires_in === 'number' && Number.isFinite(account.expires_in)
+            ? account.expires_in
+            : 3600;
+        token.expiresAt =
+          typeof account.expires_at === 'number' && account.expires_at > 0
+            ? account.expires_at
+            : Math.floor(Date.now() / 1000) + expiresInSec;
 
         const googleProfile = profile as { sub: string; email: string; name?: string; picture?: string };
         token.userId = googleProfile.sub;
@@ -110,6 +118,22 @@ const handler = NextAuth({
           token.email = googleProfile.email;
           token.picture = googleProfile.picture;
           token.proLevel = undefined;
+        }
+      } else if (token.refreshToken && typeof token.refreshToken === 'string') {
+        const now = Math.floor(Date.now() / 1000);
+        const exp = typeof token.expiresAt === 'number' ? token.expiresAt : 0;
+        const needsRefresh = !token.accessToken || exp <= now + GOOGLE_ACCESS_BUFFER_SEC;
+        if (needsRefresh) {
+          const refreshed = await refreshGoogleAccessToken(token.refreshToken);
+          if (refreshed) {
+            token.accessToken = refreshed.accessToken;
+            token.expiresAt = refreshed.expiresAt;
+            if (refreshed.refreshToken) {
+              token.refreshToken = refreshed.refreshToken;
+            }
+          } else {
+            token.accessToken = undefined;
+          }
         }
       }
 

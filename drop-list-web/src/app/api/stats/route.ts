@@ -7,27 +7,31 @@ import { createEmptyDroplistData, normalizeDroplistData, recordPlayInDroplistDat
  * Body: trackKey, trackName, driveFolderId
  */
 export async function POST(req: NextRequest) {
-  const accessToken = await getDriveAccessToken(req);
+  const { accessToken, applyRefreshedSessionCookie } = await getDriveAccessToken(req);
+
+  const respond = (body: unknown, status = 200) => {
+    const res = NextResponse.json(body, { status });
+    applyRefreshedSessionCookie?.(res);
+    return res;
+  };
+
   let body: { trackKey?: string; trackName?: string; driveFolderId?: string | null };
   try {
     body = (await req.json()) as { trackKey?: string; trackName?: string; driveFolderId?: string | null };
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    return respond({ error: 'Invalid JSON' }, 400);
   }
   const { trackKey, trackName, driveFolderId } = body;
   if (!trackKey || typeof trackName !== 'string') {
-    return NextResponse.json(
-      { error: 'trackKey and trackName required' },
-      { status: 400 }
-    );
+    return respond({ error: 'trackKey and trackName required' }, 400);
   }
 
   if (!accessToken) {
-    return NextResponse.json({ ok: true, source: 'local' });
+    return respond({ ok: true, source: 'local' });
   }
 
   if (!driveFolderId || typeof driveFolderId !== 'string') {
-    return NextResponse.json({ error: 'driveFolderId required' }, { status: 400 });
+    return respond({ error: 'driveFolderId required' }, 400);
   }
 
   const { ok, data } = await readMergeWriteJsonFile(
@@ -39,8 +43,8 @@ export async function POST(req: NextRequest) {
   );
 
   if (!ok) {
-    return NextResponse.json({ error: 'Failed to save to Drive' }, { status: 500 });
+    return respond({ error: 'Failed to save to Drive' }, 500);
   }
 
-  return NextResponse.json({ ok: true, playCount: data.playCount });
+  return respond({ ok: true, playCount: data.playCount });
 }

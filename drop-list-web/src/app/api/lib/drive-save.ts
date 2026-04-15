@@ -1,19 +1,92 @@
-import { getToken } from 'next-auth/jwt';
-import { NextRequest } from 'next/server';
+import { getToken, encode } from 'next-auth/jwt';
+import type { JWT } from 'next-auth/jwt';
+import { NextRequest, NextResponse } from 'next/server';
+import {
+  refreshGoogleAccessToken,
+  resolveNextAuthSecureCookie,
+  GOOGLE_ACCESS_BUFFER_SEC,
+} from './google-oauth-refresh';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 
+const SESSION_JWT_MAX_AGE_SEC = 30 * 24 * 60 * 60;
+
 /** เก็บทุกอย่างในไฟล์เดียว (play count, เวลาฟังรวม, liked ฯลฯ อนาคตเพิ่มใน type DroplistData) */
 export const DROPLIST_DATA_FILENAME = 'droplist-data.json';
 
-/** ดึง access token จาก NextAuth (ใช้ใน API route เท่านั้น) */
-export async function getDriveAccessToken(req: NextRequest): Promise<string | null> {
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+export type DriveAccessAuth = {
+  accessToken: string | null;
+  /**
+   * When the Google access token was refreshed, re-encrypt the NextAuth session JWT and
+   * attach it to the response (getToken in route handlers does not run the jwt callback).
+   */
+  applyRefreshedSessionCookie?: (res: NextResponse) => void;
+};
+
+function authSecret(): string | undefined {
+  return process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+}
+
+/**
+ * Google OAuth access token for Drive, with refresh + session cookie update when needed.
+ * API routes must call `applyRefreshedSessionCookie` on their `NextResponse` when defined.
+ */
+export async function getDriveAccessToken(req: NextRequest): Promise<DriveAccessAuth> {
+  const secret = authSecret();
+  if (!secret) return { accessToken: null };
+
+  const secureCookie = resolveNextAuthSecureCookie();
+  const token = (await getToken({ req, secret, secureCookie })) as JWT | null;
+  if (!token) return { accessToken: null };
+
+  const now = Math.floor(Date.now() / 1000);
+  const exp = typeof token.expiresAt === 'number' ? token.expiresAt : 0;
+  const access = typeof token.accessToken === 'string' ? token.accessToken : undefined;
+  const refresh = typeof token.refreshToken === 'string' ? token.refreshToken : undefined;
+
+  const accessValid = Boolean(access && exp > now + GOOGLE_ACCESS_BUFFER_SEC);
+  if (accessValid && access) {
+    return { accessToken: access };
+  }
+
+  if (!refresh) {
+    return { accessToken: null };
+  }
+
+  const refreshed = await refreshGoogleAccessToken(refresh);
+  if (!refreshed) {
+    return { accessToken: null };
+  }
+
+  const nextPayload: JWT = {
+    ...token,
+    accessToken: refreshed.accessToken,
+    expiresAt: refreshed.expiresAt,
+    ...(refreshed.refreshToken ? { refreshToken: refreshed.refreshToken } : {}),
+  };
+
+  const newJwt = await encode({
+    token: nextPayload,
+    secret,
+    maxAge: SESSION_JWT_MAX_AGE_SEC,
   });
-  return (token?.accessToken as string) ?? null;
+
+  const cookieName = secureCookie
+    ? '__Secure-next-auth.session-token'
+    : 'next-auth.session-token';
+
+  return {
+    accessToken: refreshed.accessToken,
+    applyRefreshedSessionCookie(res: NextResponse) {
+      res.cookies.set(cookieName, newJwt, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: secureCookie,
+      });
+    },
+  };
 }
 
 /**

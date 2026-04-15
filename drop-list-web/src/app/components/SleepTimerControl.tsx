@@ -88,7 +88,7 @@ export default function SleepTimerControl({
 
       {open && (
         <div className="sleep-timer-menu" role="menu" aria-label="Sleep timer options">
-          <div className="sleep-timer-menu-caption">Quick presets</div>
+          <div className="sleep-timer-menu-caption">SLEEP TIMER</div>
           <div className="sleep-timer-preset-row">
             {OPTIONS.map((option) => (
               <button

@@ -144,11 +144,34 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
-  const { error } = await supabaseAdmin.from('users').update({ name }).eq('id', token.userId);
+  const userId = String(token.userId);
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+    console.error('[DropList] PATCH profile: SUPABASE_SERVICE_ROLE_KEY is not set');
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 503 });
+  }
+
+  // `.update()` does not error when zero rows match — always verify a row was updated.
+  const { data: updatedRows, error } = await supabaseAdmin
+    .from('users')
+    .update({ name })
+    .eq('id', userId)
+    .select('id');
 
   if (error) {
     console.error('[DropList] PATCH profile:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!updatedRows?.length) {
+    console.error('[DropList] PATCH profile: no users row for id (JWT userId not in DB):', userId);
+    return NextResponse.json(
+      {
+        error:
+          'No account row found for this sign-in. Try signing out and signing in again so your profile can be created.',
+      },
+      { status: 404 }
+    );
   }
 
   return NextResponse.json({ name });

@@ -91,7 +91,6 @@ export default function AudioPlayer({
         return undefined;
     }, [track?.id, track?.file, getCachedBlobUrl]); // Depend on cached blob URL function
 
-
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import Link from 'next/link';
-import {
+import { 
   Link2,
   Play,
   Headphones,
@@ -163,8 +163,8 @@ export default function LandingPage() {
               </div>
               <h3>3. Listen and rank up</h3>
               <p>Enjoy shuffle on Free or full control on Pro. The more you listen, the higher your rank climbs.</p>
-            </div>
-          </div>
+                      </div>
+                  </div>
         </section>
 
         {/* ── Divider ── */}
@@ -191,14 +191,14 @@ export default function LandingPage() {
               </ul>
               <button type="button" className="landing-feature-card-btn" onClick={() => void startFree()}>
                 {isAuthed ? 'Open app' : 'Try free'}
-              </button>
-            </div>
+                    </button>
+                  </div>
 
             {/* Pro column */}
             <div className="landing-feature-card landing-feature-card--pro">
               <div className="landing-feature-card-badge landing-feature-card-badge--pro">
                 <Zap size={13} aria-hidden /> Pro
-              </div>
+                </div>
               <ul className="landing-feature-list">
                 <li><CirclePlay size={15} aria-hidden /> Unlimited plays</li>
                 <li><SlidersHorizontal size={15} aria-hidden /> Seek anywhere in a track</li>
@@ -263,12 +263,12 @@ export default function LandingPage() {
                           Feature request
                         </div>
                       )}
+                          </div>
+                        )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
 
           <p className="landing-ranks-note">
             Your rank stays even if you pause your subscription.
@@ -300,7 +300,7 @@ export default function LandingPage() {
               <div className="landing-pricing-row"><Keyboard size={15} aria-hidden /><span>Keyboard shortcuts</span></div>
               <div className="landing-pricing-row"><BarChart3 size={15} aria-hidden /><span>Play statistics</span></div>
               <div className="landing-pricing-row"><Library size={15} aria-hidden /><span>5–8 playlists (by rank)</span></div>
-            </div>
+              </div>
             {isAuthed ? (
               <button type="button" className="landing-pricing-cta" onClick={() => void handleGetPro()}>
                 Get Pro — $2.99/month
@@ -331,17 +331,17 @@ export default function LandingPage() {
             <button type="button" className="landing-btn-primary" onClick={() => void startFree()}>
               <Play size={18} aria-hidden />
               Sign in with Google
-            </button>
+      </button>
           )}
         </section>
-      </main>
+    </main>
 
       <footer className="landing-footer">
         <span>DropList</span>
         {isAuthed ? (
           <>
             <Link href="/app">Player</Link>
-            <Link href="/settings">Account</Link>
+            <Link href="/app?settings=1">Account</Link>
           </>
         ) : (
           <button type="button" className="landing-footer-link-btn" onClick={() => void startFree()}>
