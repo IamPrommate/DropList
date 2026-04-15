@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { supabaseAdmin } from '@/app/lib/supabase';
+import { UserPlan, parseUserPlan } from '@/app/lib/userPlan';
 
 const DAILY_PLAY_LIMIT = 10;
 
@@ -24,8 +25,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ allowed: true, remaining: DAILY_PLAY_LIMIT, limit: DAILY_PLAY_LIMIT });
   }
 
-  if (user.plan === 'pro') {
-    return NextResponse.json({ allowed: true, remaining: Infinity, limit: Infinity, plan: 'pro' });
+  if (parseUserPlan(user.plan) === UserPlan.Pro) {
+    return NextResponse.json({ allowed: true, remaining: Infinity, limit: Infinity, plan: UserPlan.Pro });
   }
 
   const today = todayUTC();
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
     allowed: remaining > 0,
     remaining,
     limit: DAILY_PLAY_LIMIT,
-    plan: 'free',
+    plan: UserPlan.Free,
   });
 }
 
@@ -58,8 +59,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ allowed: true, remaining: DAILY_PLAY_LIMIT, limit: DAILY_PLAY_LIMIT });
   }
 
-  if (user.plan === 'pro') {
-    return NextResponse.json({ allowed: true, remaining: Infinity, limit: Infinity, plan: 'pro' });
+  if (parseUserPlan(user.plan) === UserPlan.Pro) {
+    return NextResponse.json({ allowed: true, remaining: Infinity, limit: Infinity, plan: UserPlan.Pro });
   }
 
   const today = todayUTC();
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
       allowed: false,
       remaining: 0,
       limit: DAILY_PLAY_LIMIT,
-      plan: 'free',
+      plan: UserPlan.Free,
     });
   }
 
@@ -87,6 +88,6 @@ export async function POST(req: NextRequest) {
     allowed: true,
     remaining,
     limit: DAILY_PLAY_LIMIT,
-    plan: 'free',
+    plan: UserPlan.Free,
   });
 }

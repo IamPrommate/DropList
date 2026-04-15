@@ -1,19 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { supabaseAdmin } from '@/app/lib/supabase';
+import { parseUserPlan, UserPlan } from '@/app/lib/userPlan';
+import { maxSavedPlaylists } from '@/app/lib/proLevels';
 
-/** GET: list all playlists for the current user */
+/** GET: list all playlists for the current user (Free: oldest saved only; extras stay in DB for Pro again) */
 export async function GET(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET });
   if (!token?.userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data: userRow } = await supabaseAdmin
+    .from('users')
+    .select('plan')
+    .eq('id', token.userId)
+    .single();
+
+  let query = supabaseAdmin
     .from('playlists')
     .select('*')
     .eq('user_id', token.userId)
     .order('created_at', { ascending: true });
+
+  if (parseUserPlan(userRow?.plan) === UserPlan.Free) {
+    query = query.limit(1);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -40,16 +54,60 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'folder_id and name are required' }, { status: 400 });
   }
 
-  // Check if this folder is already saved
+  // Same folder may not use .single(): legacy duplicates would error; limit(1) is stable.
   const { data: existing } = await supabaseAdmin
     .from('playlists')
     .select('id')
     .eq('user_id', token.userId)
     .eq('folder_id', body.folder_id)
-    .single();
+    .limit(1)
+    .maybeSingle();
 
   if (existing) {
     return NextResponse.json({ playlist: existing, alreadyExists: true });
+  }
+
+  const { data: userRow } = await supabaseAdmin
+    .from('users')
+    .select('plan, pro_level')
+    .eq('id', token.userId)
+    .single();
+
+  const plan = parseUserPlan(userRow?.plan);
+  const isPro = plan === UserPlan.Pro;
+  const rawLevel = userRow?.pro_level;
+  const proLevelNum =
+    typeof rawLevel === 'number'
+      ? rawLevel
+      : typeof rawLevel === 'string' && /^\d+$/.test(rawLevel)
+        ? Number(rawLevel)
+        : null;
+  const cap = maxSavedPlaylists(isPro, proLevelNum);
+
+  const { count, error: countError } = await supabaseAdmin
+    .from('playlists')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', token.userId);
+
+  if (countError) {
+    return NextResponse.json({ error: countError.message }, { status: 500 });
+  }
+  if ((count ?? 0) >= cap) {
+    if (!isPro) {
+      return NextResponse.json(
+        {
+          error:
+            'Free plan allows one saved playlist. Delete one from your library or upgrade to Pro for more.',
+        },
+        { status: 403 },
+      );
+    }
+    return NextResponse.json(
+      {
+        error: `You can save up to ${cap} playlists on Pro at your listening rank (5 through Gold, 6 from Sapphire, 8 at Emerald). Delete one to add another, or earn a higher rank in Settings.`,
+      },
+      { status: 403 },
+    );
   }
 
   const { data, error } = await supabaseAdmin
@@ -65,6 +123,19 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
+    // Unique idx_playlists_user_id_folder_id: concurrent save of same folder
+    if (error.code === '23505') {
+      const { data: row } = await supabaseAdmin
+        .from('playlists')
+        .select('id')
+        .eq('user_id', token.userId)
+        .eq('folder_id', body.folder_id)
+        .limit(1)
+        .maybeSingle();
+      if (row) {
+        return NextResponse.json({ playlist: row, alreadyExists: true });
+      }
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

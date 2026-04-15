@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { TrackType, SavedPlaylist } from '../lib/types';
 import { getPlaylistCoverUrl } from '../lib/playlistCover';
 import GoogleDrivePicker from './GoogleDrivePicker';
@@ -11,13 +11,16 @@ import { signIn } from 'next-auth/react';
 
 interface SidebarProps {
   isLoggedIn: boolean;
+  /** When true, show “DropList Pro” in the sidebar header. */
   isPro: boolean;
+  /** When true, user may add another saved playlist (plan + rank cap). */
+  playlistAddAllowed: boolean;
   savedPlaylists: SavedPlaylist[];
   activePlaylistId: string | null;
   tracks: TrackType[];
   onGoogleDrivePicked: (picked: TrackType[], folderName?: string, albumCoverUrl?: string | null, driveFolderId?: string | null) => void;
   onSelectPlaylist: (playlist: SavedPlaylist) => void;
-  onDeletePlaylist: (playlistId: string) => void;
+  onDeletePlaylist: (playlistId: string) => Promise<void>;
   onAddBlocked: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -28,6 +31,7 @@ interface SidebarProps {
 export default function Sidebar({
   isLoggedIn,
   isPro,
+  playlistAddAllowed,
   savedPlaylists,
   activePlaylistId,
   tracks,
@@ -41,8 +45,20 @@ export default function Sidebar({
   loadingPlaylists,
 }: SidebarProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleteInProgress, setDeleteInProgress] = useState(false);
 
-  const canAddPlaylist = isPro || savedPlaylists.length === 0;
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDeleteId || deleteInProgress) return;
+    setDeleteInProgress(true);
+    try {
+      await onDeletePlaylist(pendingDeleteId);
+      setPendingDeleteId(null);
+    } catch {
+      /* keep modal open; optional: surface error later */
+    } finally {
+      setDeleteInProgress(false);
+    }
+  }, [pendingDeleteId, deleteInProgress, onDeletePlaylist]);
 
   const pendingPlaylist = savedPlaylists.find((pl) => pl.id === pendingDeleteId);
 
@@ -51,7 +67,9 @@ export default function Sidebar({
       <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-content">
           <div className="sidebar-header">
-            {!collapsed && <h2 className="sidebar-title">DropList</h2>}
+            {!collapsed && (
+              <h2 className="sidebar-title">{isPro ? 'DropList Pro' : 'DropList'}</h2>
+            )}
             <button className="sidebar-toggle" onClick={onToggleCollapse}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 {collapsed ? (
@@ -80,7 +98,7 @@ export default function Sidebar({
                     <GoogleDrivePicker
                       onPicked={onGoogleDrivePicked}
                       variant="sidebar"
-                      addBlocked={!canAddPlaylist}
+                      addBlocked={!playlistAddAllowed}
                       onAddBlocked={onAddBlocked}
                     />
                   )}
@@ -158,14 +176,13 @@ export default function Sidebar({
         title="Delete Playlist"
         message={pendingPlaylist ? `Remove "${pendingPlaylist.name}" from your library?` : 'Remove this playlist?'}
         confirmLabel="Delete"
-        danger
-        onConfirm={() => {
-          if (pendingDeleteId) {
-            onDeletePlaylist(pendingDeleteId);
-          }
+        confirmPending={deleteInProgress}
+        confirmPendingLabel="Deleting…"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          if (deleteInProgress) return;
           setPendingDeleteId(null);
         }}
-        onCancel={() => setPendingDeleteId(null)}
       />
     </>
   );

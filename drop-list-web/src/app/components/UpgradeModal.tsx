@@ -1,7 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Zap, Shuffle, Image, Timer, Keyboard, BarChart3, Infinity, SlidersHorizontal } from 'lucide-react';
+import {
+  X,
+  Zap,
+  Shuffle,
+  Image,
+  Timer,
+  Keyboard,
+  BarChart3,
+  Infinity,
+  SlidersHorizontal,
+  Library,
+} from 'lucide-react';
 
 interface UpgradeModalProps {
   open: boolean;
@@ -10,11 +21,13 @@ interface UpgradeModalProps {
   remainingPlays?: number;
 }
 
-const PRO_FEATURES = [
-  { icon: Infinity, label: 'Unlimited plays per day' },
-  { icon: SlidersHorizontal, label: 'Seek / skip inside a track' },
+/** Shared with marketing landing page */
+export const PRO_FEATURES = [
+  { icon: Infinity, label: 'Unlimited plays' },
+  { icon: Library, label: 'Save 5–8 playlists' },
+  { icon: SlidersHorizontal, label: 'Seek inside tracks' },
   { icon: Shuffle, label: 'Pick any track directly' },
-  { icon: Shuffle, label: 'Shuffle & Repeat controls' },
+  { icon: Shuffle, label: 'Shuffle & Repeat' },
   { icon: Image, label: 'Album covers' },
   { icon: Timer, label: 'Sleep timer' },
   { icon: Keyboard, label: 'Keyboard shortcuts' },

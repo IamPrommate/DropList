@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/app/lib/stripe';
 import { supabaseAdmin } from '@/app/lib/supabase';
+import { isProLevelRank } from '@/app/lib/proLevels';
+import { UserPlan } from '@/app/lib/userPlan';
 import Stripe from 'stripe';
 
 export async function POST(req: NextRequest) {
@@ -29,11 +31,18 @@ export async function POST(req: NextRequest) {
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.metadata?.userId;
       if (userId && session.subscription) {
+        const { data: row } = await supabaseAdmin
+          .from('users')
+          .select('pro_level')
+          .eq('id', userId)
+          .single();
+        const hasRank = row?.pro_level != null && isProLevelRank(Number(row.pro_level));
         await supabaseAdmin
           .from('users')
           .update({
-            plan: 'pro',
+            plan: UserPlan.Pro,
             stripe_subscription_id: session.subscription as string,
+            ...(hasRank ? {} : { pro_level: 1 }),
           })
           .eq('id', userId);
       }
@@ -43,9 +52,9 @@ export async function POST(req: NextRequest) {
     case 'customer.subscription.deleted': {
       const subscription = event.data.object as Stripe.Subscription;
       const customerId = subscription.customer as string;
-      await supabaseAdmin
+        await supabaseAdmin
         .from('users')
-        .update({ plan: 'free', stripe_subscription_id: null })
+        .update({ plan: UserPlan.Free, stripe_subscription_id: null })
         .eq('stripe_customer_id', customerId);
       break;
     }
@@ -56,7 +65,7 @@ export async function POST(req: NextRequest) {
       if (customerId) {
         await supabaseAdmin
           .from('users')
-          .update({ plan: 'free' })
+          .update({ plan: UserPlan.Free })
           .eq('stripe_customer_id', customerId);
       }
       break;

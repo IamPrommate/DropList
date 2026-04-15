@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { supabaseAdmin } from '@/app/lib/supabase';
 import { stripe } from '@/app/lib/stripe';
+import { UserPlan, parseUserPlan } from '@/app/lib/userPlan';
 
 /** Stripe retrieve payload (snake_case); SDK types may not expose all fields on `Subscription`. */
 type SubscriptionShape = {
@@ -26,9 +27,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
 
-  const plan = (user.plan as 'free' | 'pro') ?? 'free';
+  const plan = parseUserPlan(user.plan);
 
-  if (plan !== 'pro' || !user.stripe_subscription_id) {
+  if (plan !== UserPlan.Pro || !user.stripe_subscription_id) {
     return NextResponse.json({
       plan,
       subscription: null,
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
     const sub = raw as unknown as SubscriptionShape;
     const currentPeriodEnd = sub.current_period_end;
     return NextResponse.json({
-      plan: 'pro' as const,
+      plan: UserPlan.Pro,
       subscription: {
         status: sub.status,
         currentPeriodEnd,

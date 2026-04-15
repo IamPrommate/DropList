@@ -21,13 +21,13 @@ export default function AlertModal({
 
   return (
     <div className="upgrade-modal-overlay" onClick={onClose}>
-      <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="upgrade-modal" onClick={(e) => e.stopPropagation()}>
         <button className="upgrade-modal-close" onClick={onClose} aria-label="Close">
           <X size={20} />
         </button>
 
-        <h2 className="confirm-modal-title">{title}</h2>
-        <p className="confirm-modal-message">{message}</p>
+        <h2 className="upgrade-modal-title">{title}</h2>
+        <p className="upgrade-modal-reason">{message}</p>
 
         <div className="confirm-modal-actions confirm-modal-actions-single">
           <button type="button" className="confirm-modal-btn confirm-modal-primary" onClick={onClose}>

@@ -7,8 +7,10 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import { ArrowLeft, User, CreditCard, Zap, Copy, Check } from 'lucide-react';
+import { ArrowLeft, User, CreditCard, Zap, Copy, Check, Trophy } from 'lucide-react';
+import { isProLevelRank, PRO_LEVEL_DISPLAY, PRO_LEVEL_RANKS, type ProLevelRank } from '../lib/proLevels';
 import { DISPLAY_NAME_MAX_LENGTH } from '../lib/displayNameLimits';
+import { UserPlan, parseUserPlan } from '../lib/userPlan';
 import '../layout.scss';
 import './settings.scss';
 
@@ -26,8 +28,17 @@ function formatRegisteredSince(iso: string | null): string {
   return d.isValid() ? d.format('MMMM D, YYYY') : '—';
 }
 
-function tierLabel(plan: 'free' | 'pro'): string {
-  return plan === 'pro' ? 'Pro' : 'Free';
+function tierLabel(plan: UserPlan): string {
+  return plan === UserPlan.Pro ? 'Pro' : 'Free';
+}
+
+function formatListenTime(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h >= 1) return `${h}h ${m}m`;
+  if (m >= 1) return `${m}m`;
+  return `${s}s`;
 }
 
 /** Multicolor Google “G” for sign-in row */
@@ -56,13 +67,21 @@ function GoogleIcon({ size = 20 }: { size?: number }) {
 
 type ProfileMeta = {
   createdAt: string | null;
-  plan: 'free' | 'pro';
+  plan: UserPlan;
+  proLevel: number | null;
+  totalListenSeconds: number;
+  totalPlays: number;
+  proLevelName: string | null;
+  listenProgressPct: number | null;
+  nextProLevelName: string | null;
+  nextProLevelListenHours: number | null;
+  listenProgressFromHours: number | null;
 };
 
-type SectionId = 'profile' | 'subscription';
+type SectionId = 'profile' | 'ranks' | 'subscription';
 
 type SubscriptionPayload = {
-  plan: 'free' | 'pro';
+  plan: UserPlan;
   subscription: {
     status: string;
     currentPeriodEnd: number;
@@ -88,7 +107,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.replace('/');
+      router.replace('/app');
     }
   }, [status, router]);
 
@@ -107,16 +126,19 @@ export default function SettingsPage() {
       const data = (await res.json()) as SubscriptionPayload & { error?: string };
       if (!res.ok) {
         setSubData({
-          plan: session?.user?.plan === 'pro' ? 'pro' : 'free',
+          plan: parseUserPlan(session?.user?.plan),
           subscription: null,
           billingError: data.error || 'Could not load billing details',
         });
         return;
       }
-      setSubData(data);
+      setSubData({
+        ...data,
+        plan: parseUserPlan(data.plan),
+      });
     } catch {
       setSubData({
-        plan: session?.user?.plan === 'pro' ? 'pro' : 'free',
+        plan: parseUserPlan(session?.user?.plan),
         subscription: null,
         billingError: 'Could not load billing details',
       });
@@ -133,13 +155,31 @@ export default function SettingsPage() {
       const data = (await res.json()) as {
         createdAt?: string | null;
         plan?: string;
+        proLevel?: number | null;
+        totalListenSeconds?: number;
+        totalPlays?: number;
+        proLevelName?: string | null;
+        listenProgressPct?: number | null;
+        nextProLevelName?: string | null;
+        nextProLevelListenHours?: number | null;
+        listenProgressFromHours?: number | null;
         error?: string;
       };
       if (res.ok) {
-        const plan = data.plan === 'pro' ? 'pro' : 'free';
+        const plan = parseUserPlan(data.plan);
         setProfileMeta({
           createdAt: data.createdAt ?? null,
           plan,
+          proLevel: typeof data.proLevel === 'number' ? data.proLevel : null,
+          totalListenSeconds: typeof data.totalListenSeconds === 'number' ? data.totalListenSeconds : 0,
+          totalPlays: typeof data.totalPlays === 'number' ? data.totalPlays : 0,
+          proLevelName: typeof data.proLevelName === 'string' ? data.proLevelName : null,
+          listenProgressPct: typeof data.listenProgressPct === 'number' ? data.listenProgressPct : null,
+          nextProLevelName: typeof data.nextProLevelName === 'string' ? data.nextProLevelName : null,
+          nextProLevelListenHours:
+            typeof data.nextProLevelListenHours === 'number' ? data.nextProLevelListenHours : null,
+          listenProgressFromHours:
+            typeof data.listenProgressFromHours === 'number' ? data.listenProgressFromHours : null,
         });
       } else {
         setProfileMeta(null);
@@ -172,7 +212,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const raw = window.location.hash.replace(/^#/, '');
-    if (raw === 'profile' || raw === 'subscription') {
+    if (raw === 'profile' || raw === 'ranks' || raw === 'subscription') {
       setActiveSection(raw);
       requestAnimationFrame(() => {
         document.getElementById(raw)?.scrollIntoView({ behavior: 'instant', block: 'start' });
@@ -270,11 +310,11 @@ export default function SettingsPage() {
     return null;
   }
 
-  const sessionPlan = session?.user?.plan === 'pro' ? 'pro' : 'free';
-  const effectivePlan = subData?.plan ?? sessionPlan;
-  const isPro = effectivePlan === 'pro';
+  const sessionPlan = parseUserPlan(session?.user?.plan);
+  const effectivePlan = parseUserPlan(subData?.plan ?? sessionPlan);
+  const isPro = effectivePlan === UserPlan.Pro;
 
-  const effectiveProfilePlan: 'free' | 'pro' = profileMeta?.plan ?? sessionPlan;
+  const effectiveProfilePlan: UserPlan = profileMeta?.plan ?? sessionPlan;
   const registeredSinceDisplay = profileMetaLoading
     ? '…'
     : formatRegisteredSince(profileMeta?.createdAt ?? null);
@@ -286,7 +326,7 @@ export default function SettingsPage() {
     <div className="settings-page">
       <div className="settings-page-inner">
         <aside className="settings-sidebar" aria-label="Settings sections">
-          <LoadingLink href="/" className="settings-back">
+          <LoadingLink href="/app" className="settings-back">
             <ArrowLeft size={16} strokeWidth={2} aria-hidden />
             Back to DropList
           </LoadingLink>
@@ -301,6 +341,16 @@ export default function SettingsPage() {
             >
               <User size={17} strokeWidth={1.75} aria-hidden />
               Profile
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeSection === 'ranks'}
+              className={`settings-nav-item${activeSection === 'ranks' ? ' is-active' : ''}`}
+              onClick={() => scrollToSection('ranks')}
+            >
+              <Trophy size={17} strokeWidth={1.75} aria-hidden />
+              Ranks
             </button>
             <button
               type="button"
@@ -367,7 +417,7 @@ export default function SettingsPage() {
                 ) : (
                   <span
                     className={`header-auth-plan-badge settings-tier-badge ${
-                      effectiveProfilePlan === 'pro' ? 'header-auth-plan-badge--pro' : 'header-auth-plan-badge--free'
+                      effectiveProfilePlan === UserPlan.Pro ? 'header-auth-plan-badge--pro' : 'header-auth-plan-badge--free'
                     }`}
                   >
                     {tierLabel(effectiveProfilePlan)}
@@ -459,6 +509,169 @@ export default function SettingsPage() {
                 )}
               </div>
             </>
+          </section>
+
+          <section id="ranks" className="settings-section ranks-section" aria-labelledby="settings-ranks-heading">
+            <h2 id="settings-ranks-heading" className="settings-section-title">
+              Listening Rank
+            </h2>
+            {profileMetaLoading ? (
+              <p className="settings-muted">Loading…</p>
+            ) : (
+              <>
+                {/* Zone 1 — Roadmap (same journey as marketing page) */}
+                <div className="ranks-roadmap" role="list" aria-label="Listening rank tiers">
+                  <div className="ranks-roadmap-track" aria-hidden />
+                  {PRO_LEVEL_RANKS.map((rank) => {
+                    const tier = PRO_LEVEL_DISPLAY[rank];
+                    const cr = profileMeta?.proLevel;
+                    const hasRank = cr != null && isProLevelRank(cr);
+                    const isCurrent = hasRank && cr === rank;
+                    const isPassed = hasRank && cr != null && rank < cr;
+                    const isFuture = hasRank && cr != null && rank > cr;
+                    const playlists = rank >= 7 ? 8 : rank >= 4 ? 6 : 5;
+                    const isMilestone = rank === 4 || rank === 7;
+                    const nodeClass = [
+                      'ranks-roadmap-node',
+                      isMilestone ? 'is-milestone' : '',
+                      isCurrent ? 'is-current' : '',
+                      isPassed ? 'is-passed' : '',
+                      isFuture ? 'is-future' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+                    return (
+                      <div
+                        key={rank}
+                        role="listitem"
+                        className={nodeClass}
+                        title={`${tier.name} — ${tier.hours}h listening`}
+                      >
+                        <div
+                          className="ranks-roadmap-dot"
+                          style={{
+                            background: tier.colorVar,
+                            boxShadow: `0 0 12px ${tier.colorVar}55`,
+                          }}
+                        />
+                        <div className="ranks-roadmap-label">
+                          <span className="ranks-roadmap-name" style={{ color: tier.colorVar }}>
+                            {tier.name}
+                          </span>
+                          <span className="ranks-roadmap-hours">{tier.hours}h</span>
+                        </div>
+                        {isMilestone && (
+                          <div className="ranks-roadmap-perks">
+                            <div className="ranks-roadmap-perk">{playlists} playlists</div>
+                            {rank === 7 && (
+                              <div className="ranks-roadmap-perk ranks-roadmap-perk--emerald">
+                                Feature request
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Zone 2 — Your Rank card */}
+                <div className="ranks-your-card">
+                  <div className="ranks-your-card-header">
+                    <span className="ranks-your-card-label">Your Rank</span>
+                    {profileMeta?.proLevel != null && isProLevelRank(profileMeta.proLevel) ? (
+                      <span
+                        className={`ranks-your-card-badge ranks-catalog-card--${PRO_LEVEL_DISPLAY[profileMeta.proLevel as ProLevelRank].name.toLowerCase()}`}
+                      >
+                        {PRO_LEVEL_DISPLAY[profileMeta.proLevel as ProLevelRank].name}
+                      </span>
+                    ) : (
+                      <span className="ranks-your-card-badge ranks-your-card-badge--none">—</span>
+                    )}
+                  </div>
+
+                  <div className="ranks-progress-block">
+                    {(() => {
+                      const hours = (profileMeta?.totalListenSeconds ?? 0) / 3600;
+                      const pct =
+                        profileMeta?.listenProgressPct != null
+                          ? Math.min(100, Math.max(0, profileMeta.listenProgressPct))
+                          : 0;
+                      const nextName = profileMeta?.nextProLevelName;
+                      const hi = profileMeta?.nextProLevelListenHours;
+                      const hasStoredRank =
+                        profileMeta?.proLevel != null && isProLevelRank(profileMeta.proLevel);
+                      const progressPaused =
+                        effectiveProfilePlan === UserPlan.Free && hasStoredRank;
+                      const progressTitle =
+                        nextName != null
+                          ? `Progress toward ${nextName}`
+                          : hasStoredRank
+                            ? 'Max rank reached'
+                            : 'All milestones reached';
+                      const fractionLabel =
+                        hi != null ? `${hours.toFixed(1)}h / ${hi}h` : `${hours.toFixed(1)}h`;
+                      const barLabel = progressPaused
+                        ? nextName != null
+                          ? `Listening progress toward ${nextName} — paused (not on Pro)`
+                          : 'Listening progress — paused while not on Pro'
+                        : nextName != null
+                          ? `Listening progress toward ${nextName}`
+                          : 'Listening progress complete';
+                      return (
+                        <>
+                          <div className="ranks-progress-head">
+                            <span className="ranks-progress-title">{progressTitle}</span>
+                            <span className="ranks-progress-fraction">{fractionLabel}</span>
+                          </div>
+                          <div
+                            className="ranks-progress-bar"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={Math.round(pct)}
+                            aria-label={barLabel}
+                          >
+                            <div
+                              className={`ranks-progress-fill${progressPaused ? ' ranks-progress-fill--inactive' : ''}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="ranks-footer-stats">
+                    <div className="ranks-footer-stat">
+                      <span className="ranks-footer-value">{formatListenTime(profileMeta?.totalListenSeconds ?? 0)}</span>
+                      <span className="ranks-footer-label">Total listening</span>
+                    </div>
+                    <div className="ranks-footer-stat">
+                      <span className="ranks-footer-value">{(profileMeta?.totalPlays ?? 0).toLocaleString()}</span>
+                      <span className="ranks-footer-label">Tracks played</span>
+                    </div>
+                    <div className="ranks-footer-stat">
+                      <span className="ranks-footer-value ranks-footer-value--rank">
+                        {profileMeta?.proLevel != null && isProLevelRank(profileMeta.proLevel)
+                          ? PRO_LEVEL_DISPLAY[profileMeta.proLevel as ProLevelRank].name
+                          : '—'}
+                      </span>
+                      <span className="ranks-footer-label">Current rank</span>
+                    </div>
+                  </div>
+                </div>
+
+                {profileMeta?.proLevel == null && (
+                  <p className="settings-muted ranks-section-hint">
+                    Subscribe to Pro to start earning ranks through listening time.
+                  </p>
+                )}
+                {profileMeta?.proLevel != null && effectiveProfilePlan === UserPlan.Free && (
+                  <p className="settings-muted ranks-section-hint">Your rank progress is now paused. Subscribe again to continue progressing.</p>
+                )}
+              </>
+            )}
           </section>
 
           <section id="subscription" className="settings-section" aria-labelledby="settings-sub-heading">

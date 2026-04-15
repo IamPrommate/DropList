@@ -12,7 +12,7 @@ import "./google-drive.scss";
 type Props = {
   onPicked: (tracks: TrackType[], folderName?: string, albumCoverUrl?: string | null, driveFolderId?: string | null) => void;
   variant?: 'button' | 'dropdown' | 'sidebar';
-  /** Free tier: when user already has one playlist, open upgrade instead of the Drive modal */
+  /** When false (at plan/rank playlist cap), open upgrade or limit modal instead of the Drive modal */
   addBlocked?: boolean;
   onAddBlocked?: () => void;
 };
@@ -232,7 +232,8 @@ export default function GoogleDrivePicker({
       <Modal
         title={<span className="drive-modal-title-text">Add Google Drive audio links</span>}
         open={open}
-        width={600}
+        width={420}
+        wrapClassName="drive-modal-wrap"
         onOk={handleConfirm}
         onCancel={() => { if (!loading) setOpen(false); }}
         okText={loading ? 'Loading…' : 'Add'}

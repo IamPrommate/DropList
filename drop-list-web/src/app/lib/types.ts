@@ -1,4 +1,7 @@
 // src/lib/types.ts
+export type { ProLevelRank } from './proLevels';
+export { UserPlan, parseUserPlan } from './userPlan';
+
 export type TrackType = {
     id: string;
     name: string;

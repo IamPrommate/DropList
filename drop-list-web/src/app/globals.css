@@ -29,6 +29,10 @@ body {
 }
 
 html {
+  /* Anchor rem/em to the browser’s text / page zoom (Cmd±, View → Zoom). */
+  font-size: 100%;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
