@@ -6,7 +6,6 @@ import { google } from 'googleapis';
 const CONFIG = {
   TRACKS_FOLDER: process.env.NEXT_PUBLIC_TRACKS_FOLDER || 'track', // Default: empty (root folder)
   ARTIST_FOLDER: process.env.NEXT_PUBLIC_ARTIST_FOLDER || 'artist', // Default: 'artist'
-  COVER_FOLDER: process.env.NEXT_PUBLIC_COVER_FOLDER || 'cover', // Default: 'cover'
   VIDEO_FOLDER: process.env.NEXT_PUBLIC_VIDEO_FOLDER || 'video', // Default: 'video'
 };
 
@@ -195,7 +194,6 @@ export async function POST(request: NextRequest) {
     
     // Look for "artist", "cover" and "video" subfolders
     let artistSubfolderId: string | null = null;
-    let coverSubfolderId: string | null = null;
     let tracksFolderId: string | null = null;
     let videoSubfolderId: string | null = null;
     
@@ -208,10 +206,6 @@ export async function POST(request: NextRequest) {
           if (fileName === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
             artistSubfolderId = file.id;
             console.log(`Found "${CONFIG.ARTIST_FOLDER}" subfolder via API:`, file.id);
-          }
-          if (fileName === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
-            coverSubfolderId = file.id;
-            console.log(`Found "${CONFIG.COVER_FOLDER}" subfolder via API:`, file.id);
           }
           if (fileName === CONFIG.VIDEO_FOLDER.toLowerCase().trim()) {
             videoSubfolderId = file.id;
@@ -266,9 +260,6 @@ export async function POST(request: NextRequest) {
                 const normalizedName = subfolderName.toLowerCase().trim();
                 if (normalizedName === CONFIG.ARTIST_FOLDER.toLowerCase().trim()) {
                   artistSubfolderId = fileId;
-                }
-                if (normalizedName === CONFIG.COVER_FOLDER.toLowerCase().trim()) {
-                  coverSubfolderId = fileId;
                 }
                 if (normalizedName === CONFIG.VIDEO_FOLDER.toLowerCase().trim()) {
                   videoSubfolderId = fileId;
@@ -466,62 +457,8 @@ export async function POST(request: NextRequest) {
       console.log(`No "${CONFIG.VIDEO_FOLDER}" subfolder found - skipping video fetch`);
     }
     
-    // Get the first cover image (single album cover for the whole playlist)
-    let albumCoverUrl = null;
-    
-    // Fetch cover images from cover subfolder if it exists
-    if (coverSubfolderId) {
-      try {
-        let coverFiles: Array<{ id: string; name: string; mimeType: string }> | null = null;
-        
-        if (useAPI && drive) {
-          // Use API
-          coverFiles = await fetchFilesFromFolderAPI(coverSubfolderId);
-        } else {
-          // Fallback to HTML scraping
-          const subfolderUrl = `https://drive.google.com/drive/folders/${coverSubfolderId}`;
-          const response = await fetch(subfolderUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-          });
-          
-          if (response.ok) {
-            const subfolderHtml = await response.text();
-            const subfolderTableRows = subfolderHtml.match(/<tr[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/tr>/g);
-            
-            if (subfolderTableRows) {
-              coverFiles = subfolderTableRows.map(row => {
-                const idMatch = row.match(/data-id="([^"]+)"/);
-                const nameMatch = row.match(/data-title="([^"]+)"/) || row.match(/<strong[^>]*>([^<]+)<\/strong>/);
-                return {
-                  id: idMatch ? idMatch[1] : '',
-                  name: nameMatch ? nameMatch[1] : '',
-                  mimeType: '',
-                };
-              }).filter(f => f.id);
-            }
-          }
-        }
-        
-        if (coverFiles) {
-          // Get the first image file
-          for (const file of coverFiles) {
-            const fileName = file.name;
-            const isImageFile = fileName && Object.values(ImageExtension).some(ext => fileName.toLowerCase().endsWith(ext));
-            const isImageMimeType = file.mimeType && file.mimeType.startsWith('image/');
-            
-            if (isImageFile || isImageMimeType) {
-              albumCoverUrl = `/api/drive-file?id=${file.id}`;
-              break;
-            }
-          }
-        }
-      } catch (error) {
-        console.warn(`Error fetching "${CONFIG.COVER_FOLDER}" subfolder:`, error);
-      }
-    }
-    
+    const albumCoverUrl = null;
+
     console.log(`Total files found: ${files.length} (${files.filter(f => f.type === FileType.AUDIO).length} audio, ${files.filter(f => f.type === FileType.IMAGE).length} images)`);
     
     if (files.length === 0) {

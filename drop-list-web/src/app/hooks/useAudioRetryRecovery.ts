@@ -7,6 +7,8 @@ type UseAudioRetryRecoveryArgs = {
   trackId?: string;
   isPlaying: boolean;
   handleNext: () => void;
+  /** After max load retries, before skipping to the next track */
+  onPlaybackFailed?: () => void;
   maxRetryAttempts?: number;
   retryDelayMs?: number;
   debug?: boolean;
@@ -18,6 +20,7 @@ export function useAudioRetryRecovery({
   trackId,
   isPlaying,
   handleNext,
+  onPlaybackFailed,
   maxRetryAttempts = 3,
   retryDelayMs = 1000,
   debug = true,
@@ -141,6 +144,7 @@ export function useAudioRetryRecovery({
         src: audio.currentSrc || audio.src,
         retriesUsed: audioLoadRetryCountRef.current,
       });
+      onPlaybackFailed?.();
       resetAudioRetryState(trackKey);
       handleNext();
       return;
@@ -174,7 +178,7 @@ export function useAudioRetryRecovery({
       });
       audio.load();
     }, retryDelayMs);
-  }, [handleNext, logAudioRetryDebug, maxRetryAttempts, resetAudioRetryState, retryDelayMs, trackId]);
+  }, [handleNext, onPlaybackFailed, logAudioRetryDebug, maxRetryAttempts, resetAudioRetryState, retryDelayMs, trackId]);
 
   const shouldSuppressPauseSync = useCallback((audio?: HTMLAudioElement | null) => {
     if (!audio) return false;

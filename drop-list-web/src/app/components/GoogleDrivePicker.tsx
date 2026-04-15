@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Modal, Input, Space, Alert } from "antd";
 import type { TrackType } from "../lib/types";
 import { matchArtistImages } from "../../utils/track";
-import { isAudioFile, isImageFile, FileType } from "../lib/common";
-import { Cloud } from "lucide-react";
+import { isAudioFile, FileType } from "../lib/common";
+import { Cloud, Plus } from "lucide-react";
+import Spinner from "./Spinner";
 import "./google-drive.scss";
 
 type Props = {
   onPicked: (tracks: TrackType[], folderName?: string, albumCoverUrl?: string | null, driveFolderId?: string | null) => void;
-  variant?: 'button' | 'dropdown';
+  variant?: 'button' | 'dropdown' | 'sidebar';
+  /** Free tier: when user already has one playlist, open upgrade instead of the Drive modal */
+  addBlocked?: boolean;
+  onAddBlocked?: () => void;
 };
 
 type DriveFolderFile = {
@@ -36,16 +40,8 @@ function extractDriveFolderId(input: string): string | null {
 }
 
 
-async function buildStreamUrl(
-  fileId: string,
-  apiKey?: string | null
-): Promise<string> {
-  // Prefer Drive v3 media endpoint if API key provided and file is publicly accessible
-  if (apiKey) {
-    return `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${apiKey}`;
-  }
-
-  // Use server-side proxy to stream the file content directly
+async function buildStreamUrl(fileId: string): Promise<string> {
+  // Same-origin only: googleapis ?alt=media is not CORS-safe for <audio>/<video> in the browser.
   return `/api/drive-file?id=${fileId}`;
 }
 
@@ -103,30 +99,31 @@ async function fetchFolderFiles(
   }
 }
 
-export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Props) {
+export default function GoogleDrivePicker({
+  onPicked,
+  variant = 'button',
+  addBlocked = false,
+  onAddBlocked,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
-  const [useApiKey] = useState(false);
-  const apiKey = useMemo(
-    () => process.env.NEXT_PUBLIC_GOOGLE_API_KEY ?? null,
-    []
-  );
-
+  const [loading, setLoading] = useState(false);
   const handleConfirm = async () => {
     const lines = raw
       .split("\n")
       .map((s) => s.trim())
       .filter(Boolean);
 
+    setLoading(true);
+
+    try {
     const tracks: TrackType[] = [];
     let folderName: string | undefined;
-    let playlistAlbumCoverUrl: string | null = null;
     let firstDriveFolderId: string | null = null;
     let lastError: string | undefined;
 
     for (const line of lines) {
       try {
-        // Only process folder links
         const folderId = extractDriveFolderId(line);
         if (folderId) {
           const folderData = await fetchFolderFiles(folderId);
@@ -141,56 +138,29 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           // Extract files array, folder name, and album cover URL
           const files = folderData.files || [];
           const currentFolderName = folderData.folderName;
-          const albumCoverUrl = folderData.albumCoverUrl || null;
-          
-          // Separate audio, image, and video files using enums
+
+          // Separate audio and video files using enums
           const audioFiles = files.filter((file) => isAudioFile(file.name) && file.type === FileType.AUDIO);
-          const artistImages = files.filter((file) => 
-            isImageFile(file.name) && 
-            file.type === FileType.IMAGE && 
-            file.source === 'artist-subfolder'
-          );
           const artistVideos = files.filter((file) =>
             file.type === FileType.VIDEO &&
             file.source === 'video-subfolder'
           );
-          
-          // Match artist images and videos with tracks based on naming
-          const artistImageMap = matchArtistImages(audioFiles, artistImages);
+
           const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
-          
-          // Process audio files in parallel for better performance
+
           const filePromises = audioFiles.map(async (file, i) => {
-            const url = await buildStreamUrl(
-              file.id,
-              useApiKey ? apiKey : null
-            );
+            const url = await buildStreamUrl(file.id);
 
-            // Get artist image URL if available
-            let artistImageUrl = undefined;
-            const imageId = artistImageMap.get(file.id);
-            if (imageId) {
-              artistImageUrl = await buildStreamUrl(
-                imageId,
-                useApiKey ? apiKey : null
-              );
-            }
-
-            // Get stage view video URL if available
             let stageViewVideoUrl = undefined;
             const videoId = artistVideoMap.get(file.id);
             if (videoId) {
-              stageViewVideoUrl = await buildStreamUrl(
-                videoId,
-                useApiKey ? apiKey : null
-              );
+              stageViewVideoUrl = await buildStreamUrl(videoId);
             }
 
             return {
               id: `${Date.now()}_${file.id}_${i}`,
               name: file.name,
               googleDriveUrl: url,
-              artistImageUrl,
               stageViewVideoUrl,
             };
           });
@@ -198,15 +168,11 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           const folderTracks = await Promise.all(filePromises);
           tracks.push(...folderTracks);
           
-          // Store folder ID, name and album cover for the first folder processed
           if (!firstDriveFolderId) {
             firstDriveFolderId = folderId;
           }
           if (currentFolderName && !folderName) {
             folderName = currentFolderName;
-          }
-          if (albumCoverUrl) {
-            playlistAlbumCoverUrl = albumCoverUrl;
           }
         } else {
           console.log("Invalid folder link:", line);
@@ -223,13 +189,15 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
     }
 
     if (tracks.length > 0) {
-      onPicked(tracks, folderName, playlistAlbumCoverUrl, firstDriveFolderId);
+      onPicked(tracks, folderName, null, firstDriveFolderId);
       setOpen(false);
       setRaw("");
     } else {
-      // Show the specific backend error if available, otherwise show generic message
       const errorMessage = lastError || "No valid Google Drive folder links found. Please paste Google Drive folder share links only.";
       alert(errorMessage);
+    }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -240,6 +208,21 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
           <Cloud size={16} />
           <span>Add From Google Drive</span>
         </div>
+      ) : variant === 'sidebar' ? (
+        <button
+          type="button"
+          className="sidebar-add-main-btn"
+          onClick={() => {
+            if (addBlocked) {
+              onAddBlocked?.();
+              return;
+            }
+            setOpen(true);
+          }}
+        >
+          <Plus size={16} />
+          <span>Add Playlist</span>
+        </button>
       ) : (
         <button className="add-btn-ggd" onClick={() => setOpen(true)}>
           <Cloud size={20} />
@@ -247,34 +230,37 @@ export default function GoogleDrivePicker({ onPicked, variant = 'button' }: Prop
         </button>
       )}
       <Modal
-        title="Add Google Drive audio links"
+        title={<span className="drive-modal-title-text">Add Google Drive audio links</span>}
         open={open}
+        width={600}
         onOk={handleConfirm}
-        onCancel={() => setOpen(false)}
-        okText="Add"
+        onCancel={() => { if (!loading) setOpen(false); }}
+        okText={loading ? 'Loading…' : 'Add'}
+        okButtonProps={{ disabled: loading }}
+        cancelButtonProps={{ disabled: loading }}
+        closable={!loading}
+        maskClosable={!loading}
+        centered
         className="drive-modal"
       >
-        <Space direction="vertical" style={{ width: "100%" }}>
+        <Space direction="vertical" size="small" className="drive-modal-body-stack" style={{ width: '100%' }}>
           <Alert
             type="info"
             message="Paste Google Drive folder share links (one per line). Folder must be shared publicly."
           />
-          {/* <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Switch 
-              checked={useApiKey} 
-              onChange={setUseApiKey}
+          {loading ? (
+            <div className="drive-modal-loading">
+              <Spinner size={18} />
+              <span>Fetching playlist from Drive…</span>
+            </div>
+          ) : (
+            <Input.TextArea
+              rows={7}
+              placeholder="Google Drive folder share links"
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
             />
-            <Typography.Text>
-              Use API key streaming
-              {apiKey ? "" : " (optional - no NEXT_PUBLIC_GOOGLE_API_KEY set)"}
-            </Typography.Text>
-          </div> */}
-          <Input.TextArea
-            rows={6}
-            placeholder="Google Drive folder share links"
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-          />
+          )}
         </Space>
       </Modal>
     </>

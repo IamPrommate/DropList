@@ -368,7 +368,7 @@ export default function PlaylistHeader({
                   }
                 }}
               >
-                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                {isPlaying ? <Pause size={19} /> : <Play size={19} />}
                 {isPlaying ? 'Pause' : 'Play'}
               </button>
               <button 
@@ -378,14 +378,14 @@ export default function PlaylistHeader({
               >
                 {isDownloading ? (
                   <>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                       <path d="M21 12a9 9 0 11-6.219-8.56"/>
                     </svg>
                     Downloading...
                   </>
                 ) : (
                   <>
-                    <Download size={20} />
+                    <Download size={19} />
                     Download
                   </>
                 )}

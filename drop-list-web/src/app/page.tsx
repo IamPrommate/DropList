@@ -2,12 +2,11 @@
 'use client';
 
 import '@ant-design/v5-patch-for-react-19';
-import { useCallback, useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import AudioPlayer from './components/AudioPlayer';
 import PlaylistHeader from './components/PlaylistHeader';
-import { TrackType } from './lib/types';
-import { Switch } from 'antd';
+import { TrackType, SavedPlaylist } from './lib/types';
 import Sidebar from './components/Sidebar';
 import { 
   ShuffleState, 
@@ -22,8 +21,14 @@ import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } 
 import './layout.scss';
 import StageViewPanel from './components/StageViewPanel';
 import SleepTimerControl from './components/SleepTimerControl';
-import { LogIn, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { LoadingLink } from './components/NavigationLoading';
+import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings } from 'lucide-react';
 import { useStageViewAutoHide } from './hooks/useStageViewAutoHide';
+import UpgradeModal from './components/UpgradeModal';
+import AlertModal from './components/AlertModal';
+import Spinner from './components/Spinner';
+import { findSavedPlaylistById, getPlaylistCoverUrl } from './lib/playlistCover';
 
 enum KeyboardShortcuts {
   SPACE = 'Space',
@@ -66,16 +71,27 @@ export default function HomePage() {
   });
   const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
-  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
-  const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
-  const [showCoverImage, setShowCoverImage] = useState<boolean>(true);
-  const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
-  // Start closed so first video open follows the same staged open path.
-  // This avoids initial-session double-appear when sidebar is still open.
+  // Stage View is disabled for now.
   const [isStageViewOpen, setIsStageViewOpen] = useState(false);
+  const STAGE_VIEW_DISABLED = true;
   /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
   const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
+
+  // --- Tier enforcement state ---
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalReason, setUpgradeModalReason] = useState<'daily-limit' | 'track-select' | 'feature'>('feature');
+  const [remainingPlays, setRemainingPlays] = useState<number>(10);
+  const [playCountLoaded, setPlayCountLoaded] = useState(false);
+  const [audioLoadErrorOpen, setAudioLoadErrorOpen] = useState(false);
+
+  // --- Saved playlists ---
+  const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [loadingPlaylistId, setLoadingPlaylistId] = useState<string | null>(null);
+  /** false until we've resolved what playlists the user has (or confirmed they're a guest). */
+  const [savedPlaylistsHydrated, setSavedPlaylistsHydrated] = useState(false);
+  /** true once the session effect has run at least once (avoids flash on first render). */
+  const [sessionInitialized, setSessionInitialized] = useState(false);
   
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
@@ -85,8 +101,20 @@ export default function HomePage() {
   });
 
   const { data: session, status: sessionStatus } = useSession();
+  const isPro = session?.user?.plan === 'pro';
+  const isFree = !isPro;
+
+  /** Same `cover_url` drives sidebar row + main album art (future: PATCH + setSavedPlaylists updates both). */
+  const activeSavedPlaylist = useMemo(
+    () => findSavedPlaylistById(savedPlaylists, activePlaylistId),
+    [savedPlaylists, activePlaylistId]
+  );
+  const linkedAlbumCoverUrl = useMemo(
+    () => getPlaylistCoverUrl(activeSavedPlaylist),
+    [activeSavedPlaylist]
+  );
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
-  const authDropdownCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authDropdownRef = useRef<HTMLDivElement | null>(null);
   const stageViewOpenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrack = tracks[currentIndex];
   const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
@@ -110,9 +138,143 @@ export default function HomePage() {
     [STAGE_VIEW_OPEN_DEBUG]
   );
 
+  // --- Fetch play count on session load ---
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    fetch('/api/play-count')
+      .then(r => r.json())
+      .then(data => {
+        if (typeof data.remaining === 'number') setRemainingPlays(data.remaining);
+        setPlayCountLoaded(true);
+      })
+      .catch(() => setPlayCountLoaded(true));
+  }, [sessionStatus]);
+
+  const checkAndDecrementPlay = useCallback(async (): Promise<boolean> => {
+    if (isPro) return true;
+    if (!session?.user) return true; // anonymous users get no server-side tracking
+    try {
+      const res = await fetch('/api/play-count', { method: 'POST' });
+      const data = await res.json();
+      setRemainingPlays(data.remaining ?? 0);
+      if (!data.allowed) {
+        setUpgradeModalReason('daily-limit');
+        setUpgradeModalOpen(true);
+        return false;
+      }
+      return true;
+    } catch {
+      return true; // allow on network error
+    }
+  }, [isPro, session?.user]);
+
+  const showUpgradeFor = useCallback((reason: 'daily-limit' | 'track-select' | 'feature') => {
+    setUpgradeModalReason(reason);
+    setUpgradeModalOpen(true);
+  }, []);
+
+  /** Free signed-in users: block starting another track when daily quota is exhausted (plays are charged when audio actually starts). */
+  const assertFreePlayQuota = useCallback((): boolean => {
+    if (!isFree || !session?.user) return true;
+    if (remainingPlays > 0) return true;
+    setUpgradeModalReason('daily-limit');
+    setUpgradeModalOpen(true);
+    return false;
+  }, [isFree, session?.user, remainingPlays]);
+
+  const openAudioLoadErrorModal = useCallback(() => {
+    setAudioLoadErrorOpen(true);
+  }, []);
+
+  // --- Saved playlists: fetch on login ---
+  const fetchSavedPlaylists = useCallback(async () => {
+    try {
+      const res = await fetch('/api/playlists');
+      const data = await res.json();
+      if (data.playlists) setSavedPlaylists(data.playlists);
+    } catch { /* ignore */ }
+    finally {
+      setSavedPlaylistsHydrated(true);
+    }
+  }, []);
+
+  const hasRestoredPlaylist = useRef(false);
+
+  useEffect(() => {
+    if (sessionStatus === 'loading') {
+      setIsPlaying(false);
+      return;
+    }
+
+    setSessionInitialized(true);
+
+    if (sessionStatus === 'unauthenticated') {
+      hasRestoredPlaylist.current = false;
+      setSavedPlaylists([]);
+      setSavedPlaylistsHydrated(true);
+      setIsPlaying(false);
+      return;
+    }
+    if (sessionStatus === 'authenticated') {
+      hasRestoredPlaylist.current = false;
+      setSavedPlaylistsHydrated(false);
+      setSavedPlaylists([]);
+      setIsPlaying(false);
+      fetchSavedPlaylists();
+    }
+  }, [sessionStatus, fetchSavedPlaylists]);
+
+  /** Library list is reloading (e.g. after dev HMR / slow API); do not keep audio running over a loading shell */
+  useEffect(() => {
+    if (sessionStatus === 'authenticated' && !savedPlaylistsHydrated) {
+      setIsPlaying(false);
+    }
+  }, [sessionStatus, savedPlaylistsHydrated]);
+
+  /** Hard reload / bfcache restore can leave the tab thinking it should play while React rehydrates */
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setIsPlaying(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
+  const loadPlaylistFromDrive = useCallback(async (folderId: string): Promise<{
+    tracks: TrackType[];
+    folderName?: string;
+  } | null> => {
+    try {
+      const res = await fetch('/api/drive-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId }),
+      });
+      const data = await res.json();
+      if (data.error || !data.files) return null;
+
+      const { isAudioFile, FileType } = await import('./lib/common');
+
+      const audioFiles = data.files.filter((f: { name: string; type?: string }) => isAudioFile(f.name) && f.type === FileType.AUDIO);
+
+      // Always same-origin proxy: direct googleapis ?alt=media URLs reject browser <audio> (CORS).
+      const buildUrl = (fileId: string) => `/api/drive-file?id=${fileId}`;
+
+      const tracks: TrackType[] = audioFiles.map((file: { id: string; name: string }, i: number) => ({
+        id: `${Date.now()}_${file.id}_${i}`,
+        name: file.name,
+        googleDriveUrl: buildUrl(file.id),
+      }));
+
+      return { tracks, folderName: data.folderName };
+    } catch {
+      return null;
+    }
+  }, []);
+
   const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
   const isSleepTimerActive = sleepTimerEndAt !== null;
-  const canUseSleepTimer = Boolean(currentTrack);
+  const canUseSleepTimer = isPro && Boolean(currentTrack);
 
   const clearSleepTimer = useCallback(() => {
     setSleepTimerEndAt(null);
@@ -143,6 +305,7 @@ export default function HomePage() {
   }, [isStageViewOpen, logStageViewOpenDebug, sidebarCollapsed]);
 
   const openStageView = useCallback((reason = 'unknown') => {
+    if (STAGE_VIEW_DISABLED) return;
     logStageViewOpenDebug('open requested', {
       reason,
       sidebarCollapsed,
@@ -204,26 +367,36 @@ export default function HomePage() {
     logStageViewOpenDebug,
   ]);
 
-  const openAuthDropdown = useCallback(() => {
-    if (authDropdownCloseTimeoutRef.current) {
-      clearTimeout(authDropdownCloseTimeoutRef.current);
-      authDropdownCloseTimeoutRef.current = null;
-    }
-    setAuthDropdownOpen(true);
+  const closeAuthDropdown = useCallback(() => {
+    setAuthDropdownOpen(false);
   }, []);
 
-  const scheduleCloseAuthDropdown = useCallback(() => {
-    authDropdownCloseTimeoutRef.current = setTimeout(() => {
-      setAuthDropdownOpen(false);
-      authDropdownCloseTimeoutRef.current = null;
-    }, 200);
+  const toggleAuthDropdown = useCallback((e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    setAuthDropdownOpen((open) => !open);
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (authDropdownCloseTimeoutRef.current) {
-        clearTimeout(authDropdownCloseTimeoutRef.current);
+    if (!authDropdownOpen) return;
+    const onDocPointerDown = (ev: MouseEvent) => {
+      const root = authDropdownRef.current;
+      if (root && !root.contains(ev.target as Node)) {
+        setAuthDropdownOpen(false);
       }
+    };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setAuthDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', onDocPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [authDropdownOpen]);
+
+  useEffect(() => {
+    return () => {
       if (stageViewOpenTimeoutRef.current) {
         clearTimeout(stageViewOpenTimeoutRef.current);
       }
@@ -259,10 +432,15 @@ export default function HomePage() {
   }, []);
 
   const handleTrackPlayed = useCallback(
-    (track: TrackType) => {
-      if (!session?.user || !currentDriveFolderId) return;
-      const trackKey = getTrackCacheKey(track);
-      const trackName = track.name;
+    async (playedTrack: TrackType) => {
+      if (!isPro && session?.user) {
+        const allowed = await checkAndDecrementPlay();
+        if (!allowed) setIsPlaying(false);
+        return;
+      }
+      if (!isPro || !session?.user || !currentDriveFolderId) return;
+      const trackKey = getTrackCacheKey(playedTrack);
+      const trackName = playedTrack.name;
       fetch('/api/stats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -273,7 +451,7 @@ export default function HomePage() {
         }),
       }).catch(() => {});
     },
-    [getTrackCacheKey, session?.user, currentDriveFolderId]
+    [isPro, session?.user, currentDriveFolderId, getTrackCacheKey, checkAndDecrementPlay]
   );
 
   // Audio cache for blob URLs - prevents memory leaks
@@ -364,58 +542,6 @@ export default function HomePage() {
       });
       cache.clear();
     };
-  }, []);
-
-  // Preload and cache all artist images
-  const preloadArtistImages = useCallback(async (tracks: TrackType[]) => {
-    // Add all tracks with artist images to loading set
-    const tracksWithImages = tracks.filter(track => track.artistImageUrl);
-    setLoadingImages(prev => {
-      const updated = new Set(prev);
-      tracksWithImages.forEach(track => updated.add(track.id));
-      return updated;
-    });
-
-    const imagePromises = tracksWithImages
-      .map(async (track) => {
-        return new Promise<{ trackId: string; imageUrl: string }>((resolve) => {
-          const img = new Image();
-          
-          img.onload = () => {
-            // Create a canvas to convert the image to a blob URL for caching
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            ctx?.drawImage(img, 0, 0);
-            
-            canvas.toBlob((blob) => {
-              if (blob) {
-                const cachedUrl = URL.createObjectURL(blob);
-                resolve({ trackId: track.id, imageUrl: cachedUrl });
-              } else {
-                resolve({ trackId: track.id, imageUrl: track.artistImageUrl! });
-              }
-            }, 'image/jpeg', 0.9);
-          };
-          
-          img.onerror = () => {
-            // If image fails to load, don't cache it
-            resolve({ trackId: track.id, imageUrl: track.artistImageUrl! });
-          };
-          
-          img.src = track.artistImageUrl!;
-        });
-      });
-
-    const results = await Promise.all(imagePromises);
-    const newCachedImages = new Map<string, string>();
-    
-    results.forEach(({ trackId, imageUrl }) => {
-      newCachedImages.set(trackId, imageUrl);
-    });
-    
-    setCachedImages(newCachedImages);
   }, []);
 
   // Preload durations for all tracks with batching and caching
@@ -545,16 +671,85 @@ export default function HomePage() {
     }
   }, [trackDurations, loadingDurations, getTrackCacheKey, saveDurationsToCache]);
 
+  // --- Playlist management handlers ---
+  const handleSelectPlaylist = useCallback(async (playlist: SavedPlaylist) => {
+    if (loadingPlaylistId) return;
+    if (activePlaylistId === playlist.id) return;
+
+    setLoadingPlaylistId(playlist.id);
+    const result = await loadPlaylistFromDrive(playlist.folder_id);
+    setLoadingPlaylistId(null);
+
+    if (!result || result.tracks.length === 0) return;
+
+    setTracks(result.tracks);
+    setCurrentIndex(-1);
+    setIsPlaying(false);
+    setActivePlaylistId(playlist.id);
+    setCurrentDriveFolderId(playlist.folder_id);
+    setSelectedFolderName(result.folderName ?? playlist.name);
+    if (isFree) {
+      setIsShuffled(true);
+      setShuffleState(createInitialShuffleState(result.tracks, -1));
+    } else {
+      setShuffleState(resetShuffleState());
+    }
+
+    preloadTrackDurations(result.tracks);
+    preloadAudioFiles(result.tracks);
+  }, [loadingPlaylistId, activePlaylistId, isFree, preloadTrackDurations, preloadAudioFiles, loadPlaylistFromDrive]);
+
+  const handleDeletePlaylist = useCallback(async (playlistId: string) => {
+    await fetch(`/api/playlists?id=${playlistId}`, { method: 'DELETE' });
+    setSavedPlaylists(prev => prev.filter(p => p.id !== playlistId));
+    if (activePlaylistId === playlistId) {
+      setTracks([]);
+      setCurrentIndex(-1);
+      setIsPlaying(false);
+      setActivePlaylistId(null);
+      setCurrentDriveFolderId(null);
+      setSelectedFolderName(null);
+      localStorage.removeItem('droplist_last_playlist_id');
+    }
+  }, [activePlaylistId]);
+
+  const handleEditCover = useCallback(async (playlistId: string, coverUrl: string | null) => {
+    const res = await fetch('/api/playlists', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: playlistId, cover_url: coverUrl }),
+    });
+    const data = await res.json();
+    if (data.playlist) {
+      setSavedPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, cover_url: coverUrl } : p));
+    }
+  }, [activePlaylistId]);
+
+  // Auto-restore last playlist on login
+  useEffect(() => {
+    if (hasRestoredPlaylist.current) return;
+    if (sessionStatus !== 'authenticated') return;
+    if (savedPlaylists.length === 0) return;
+
+    hasRestoredPlaylist.current = true;
+    const lastId = localStorage.getItem('droplist_last_playlist_id');
+    if (!lastId) return;
+
+    const match = savedPlaylists.find(p => p.id === lastId);
+    if (match) {
+      handleSelectPlaylist(match);
+    }
+  }, [sessionStatus, savedPlaylists, handleSelectPlaylist]);
+
+  // Persist active playlist to localStorage
+  useEffect(() => {
+    if (activePlaylistId) {
+      localStorage.setItem('droplist_last_playlist_id', activePlaylistId);
+    }
+  }, [activePlaylistId]);
+
   const handleFilesSelected = useCallback((files: FileList | null) => {
     if (!files) return;
-    
-    // Clean up previous cached images
-    cachedImages.forEach(url => {
-      if (url.startsWith('blob:')) {
-        URL.revokeObjectURL(url);
-      }
-    });
-    setCachedImages(new Map());
     
     const audioFiles = filterAudioFiles(files);
     const next: TrackType[] = audioFiles.map((f) => ({
@@ -567,19 +762,22 @@ export default function HomePage() {
     setIsPlaying(false);
     setCurrentDriveFolderId(null); // Local playlist: no Drive folder for stats
 
-    // Reset shuffle state when new tracks are loaded
-    setShuffleState(resetShuffleState());
+    // Free users: always force shuffle on
+    if (isFree) {
+      setIsShuffled(true);
+      setShuffleState(createInitialShuffleState(next, -1));
+    } else {
+      setShuffleState(resetShuffleState());
+    }
 
-    // Preload durations, audio files, and artist images for all tracks
     preloadTrackDurations(next);
     preloadAudioFiles(next);
-    preloadArtistImages(next);
 
     // Derive folder name when picking a directory (webkitRelativePath available)
     const first = files[0] as File & { webkitRelativePath?: string };
     const folderName = extractFolderName(first);
     setSelectedFolderName(folderName);
-  }, [preloadTrackDurations, preloadAudioFiles, preloadArtistImages]);
+  }, [preloadTrackDurations, preloadAudioFiles, isFree]);
 
   // Directory picker (supported in Chromium-based browsers)
   const handleFolderPick = useCallback(async () => {
@@ -592,12 +790,20 @@ export default function HomePage() {
     input.click();
   }, [handleFilesSelected]);
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (tracks.length === 0) return;
+
+    if (!assertFreePlayQuota()) {
+      setIsPlaying(false);
+      return;
+    }
+
     maybeCancelExpiredSleepTimerOnManualTrackChange();
     setPlaybackProgress(0);
     
-    if (isShuffled) {
+    // Free users always shuffle; Pro users respect the toggle
+    const shouldShuffle = isFree || isShuffled;
+    if (shouldShuffle) {
       const result = getNextShuffleTrack(tracks, currentIndex, shuffleState);
       if (result) {
         setCurrentIndex(result.nextIndex);
@@ -608,13 +814,20 @@ export default function HomePage() {
       setCurrentIndex(nextIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange]);
+  }, [tracks, isShuffled, isFree, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange, assertFreePlayQuota]);
 
-  const handlePrev = useCallback(() => {
+  const handlePrev = useCallback(async () => {
     if (tracks.length === 0) return;
+
+    if (!assertFreePlayQuota()) {
+      setIsPlaying(false);
+      return;
+    }
+
     maybeCancelExpiredSleepTimerOnManualTrackChange();
     setPlaybackProgress(0);
-    if (isShuffled) {
+    const shouldShuffle = isFree || isShuffled;
+    if (shouldShuffle) {
       const result = getPrevShuffleTrack(tracks, currentIndex, shuffleState);
       if (result) {
         setCurrentIndex(result.prevIndex);
@@ -625,7 +838,7 @@ export default function HomePage() {
       setCurrentIndex(prevIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange]);
+  }, [tracks, isShuffled, isFree, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange, assertFreePlayQuota]);
 
   const handleTrackEnded = useCallback(() => {
     // Time is up: let current song finish, then stop and do not advance.
@@ -640,33 +853,32 @@ export default function HomePage() {
   }, [sleepTimerExpired, clearSleepTimer, handleNext]);
 
   const handleShuffleToggle = useCallback(() => {
+    if (isFree) { showUpgradeFor('feature'); return; }
     setIsShuffled((s) => {
       const newShuffleState = !s;
       
-      // If enabling shuffle, disable repeat and generate new queue
       if (newShuffleState) {
         setIsRepeated(false);
         const newShuffleState = createInitialShuffleState(tracks, currentIndex);
         setShuffleState(newShuffleState);
       } else {
-        // If disabling shuffle, clear the queue and history
         setShuffleState(resetShuffleState());
       }
       return newShuffleState;
     });
-  }, [tracks, currentIndex]);
+  }, [tracks, currentIndex, isFree, showUpgradeFor]);
 
   const handleRepeatToggle = useCallback(() => {
+    if (isFree) { showUpgradeFor('feature'); return; }
     setIsRepeated((r) => {
       const newRepeatState = !r;
-      // If enabling repeat, disable shuffle and clear queue
       if (newRepeatState) {
         setIsShuffled(false);
         setShuffleState(resetShuffleState());
       }
       return newRepeatState;
     });
-  }, []);
+  }, [isFree, showUpgradeFor]);
 
   const handleDurationLoaded = useCallback((trackId: string, duration: number) => {
     setTrackDurations(prev => new Map(prev.set(trackId, duration)));
@@ -709,10 +921,9 @@ export default function HomePage() {
     }
   }, [sleepTimerNow, sleepTimerEndAt, sleepTimerExpired, currentTrack, clearSleepTimer]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (Pro-only except Space)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle shortcuts when no input is focused
       if (document.activeElement?.tagName === 'INPUT' || 
           document.activeElement?.tagName === 'TEXTAREA') {
         return;
@@ -725,90 +936,102 @@ export default function HomePage() {
             setIsPlaying(!isPlaying);
           }
           break;
-        // case KeyboardShortcuts.ARROW_LEFT:
-        //   e.preventDefault();
-        //   if (tracks.length > 0) {
-        //     handlePrev();
-        //   }
-        //   break;
-        // case KeyboardShortcuts.ARROW_RIGHT:
-        //   e.preventDefault();
-        //   if (tracks.length > 0) {
-        //     handleNext();
-        //   }
-        //   break;
         case KeyboardShortcuts.ARROW_UP:
+          if (isFree) return;
           e.preventDefault();
           setVolume(prev => Math.min(1, prev + 0.1));
           break;
         case KeyboardShortcuts.ARROW_DOWN:
+          if (isFree) return;
           e.preventDefault();
           setVolume(prev => Math.max(0, prev - 0.1));
           break;
-        case KeyboardShortcuts.KEY_V:
-          if (tracks.length > 0 && currentTrack?.stageViewVideoUrl) {
-            e.preventDefault();
-            if (isStageViewOpen) {
-              closeStageView('keyboard-v-toggle-close');
-            } else {
-              openStageView('keyboard-v-toggle-open');
-            }
-          }
-          break;
+        // Stage View keyboard shortcut disabled
+        // case KeyboardShortcuts.KEY_V:
+        //   break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [tracks.length, isPlaying, handlePrev, handleNext, currentTrack, isStageViewOpen, closeStageView, openStageView]);
+  }, [tracks.length, isPlaying, isFree, handlePrev, handleNext, currentTrack, isStageViewOpen, closeStageView, openStageView]);
+
+  const isAuthPending = sessionStatus === 'loading' || !sessionInitialized;
+  const isPlaylistCatalogLoading = sessionStatus === 'authenticated' && !savedPlaylistsHydrated;
+
+  const mainContentLoading =
+    isAuthPending ||
+    isPlaylistCatalogLoading ||
+    (loadingPlaylistId !== null && tracks.length === 0);
 
   return (
     <main className="pageRoot">
+      {sessionStatus === 'loading' && (
+        <div className="page-loading-overlay">
+          <Spinner size={32} />
+          <span>Loading…</span>
+        </div>
+      )}
       <div suppressHydrationWarning>
         <div className="app-layout">
           {/* Left Sidebar */}
           <Sidebar
-            selectedFolderName={selectedFolderName}
+            isLoggedIn={sessionStatus === 'authenticated'}
+            isPro={isPro}
+            savedPlaylists={savedPlaylists}
+            activePlaylistId={activePlaylistId}
             tracks={tracks}
-            onFolderPick={handleFolderPick}
-            onGoogleDrivePicked={(picked, folderName, coverUrl, driveFolderId) => {
-              // Clean up previous cached images
-              cachedImages.forEach(url => {
-                if (url.startsWith('blob:')) {
-                  URL.revokeObjectURL(url);
-                }
-              });
-              setCachedImages(new Map());
-              
-              setTracks(picked); // Replace tracks instead of concatenating
+            loadingPlaylistId={loadingPlaylistId}
+            loadingPlaylists={isAuthPending || isPlaylistCatalogLoading}
+            onGoogleDrivePicked={async (picked, folderName, coverUrl, driveFolderId) => {
+              setTracks(picked);
               setCurrentIndex(-1);
               setIsPlaying(false);
               setCurrentDriveFolderId(driveFolderId ?? null);
-              
-              // Reset shuffle state when new tracks are loaded
-              setShuffleState(resetShuffleState());
-              
-              // Set folder name if provided
-              if (folderName) {
-                setSelectedFolderName(folderName);
+
+              if (isFree) {
+                setIsShuffled(true);
+                setShuffleState(createInitialShuffleState(picked, -1));
+              } else {
+                setShuffleState(resetShuffleState());
               }
-              
-              // Set album cover URL
-              setAlbumCoverUrl(coverUrl || null);
-              
-              // Preload durations, audio files, and artist images for Google Drive tracks
+
+              if (folderName) setSelectedFolderName(folderName);
+
               preloadTrackDurations(picked);
               preloadAudioFiles(picked);
-              preloadArtistImages(picked);
+
+              // Persist playlist to Supabase
+              if (driveFolderId && session?.user) {
+                try {
+                  const res = await fetch('/api/playlists', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      folder_url: `https://drive.google.com/drive/folders/${driveFolderId}`,
+                      folder_id: driveFolderId,
+                      name: folderName || 'Untitled Playlist',
+                      cover_url: null,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (data.playlist && !data.alreadyExists) {
+                    setSavedPlaylists(prev => [...prev, data.playlist]);
+                    setActivePlaylistId(data.playlist.id);
+                  } else if (data.alreadyExists) {
+                    setActivePlaylistId(data.playlist.id);
+                  }
+                } catch { /* ignore save errors */ }
+              }
             }}
+            onSelectPlaylist={handleSelectPlaylist}
+            onDeletePlaylist={handleDeletePlaylist}
+            onAddBlocked={() => showUpgradeFor('feature')}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => {
               setSidebarCollapsed(prev => {
                 const next = !prev;
-                // When sidebar is opened, hide Stage View
-                if (!next) {
-                  closeStageView('sidebar-expanded-manually');
-                }
+                if (!next) closeStageView('sidebar-expanded-manually');
                 return next;
               });
             }}
@@ -820,12 +1043,15 @@ export default function HomePage() {
             <div className="header-auth">
               {sessionStatus === 'loading' ? null : session ? (
                 <div
+                  ref={authDropdownRef}
                   className={`header-auth-logged-in${authDropdownOpen ? ' is-open' : ''}`}
                 >
-                  <div
+                  <button
+                    type="button"
                     className="header-auth-avatar-wrap"
-                    onMouseEnter={openAuthDropdown}
-                    onMouseLeave={scheduleCloseAuthDropdown}
+                    aria-expanded={authDropdownOpen}
+                    aria-haspopup="menu"
+                    onClick={toggleAuthDropdown}
                   >
                     {session.user?.image ? (
                       <img
@@ -847,20 +1073,79 @@ export default function HomePage() {
                         {(session.user?.name || session.user?.email || '?').charAt(0).toUpperCase()}
                       </div>
                     )}
-                  </div>
-                  <div
-                    className="header-auth-dropdown"
-                    onMouseEnter={openAuthDropdown}
-                    onMouseLeave={scheduleCloseAuthDropdown}
-                  >
-                    <button
-                      type="button"
-                      className="header-auth-sign-out-btn"
-                      onClick={() => signOut()}
-                    >
-                      <LogOut size={18} strokeWidth={2} />
-                      Sign Out
-                    </button>
+                  </button>
+                  <div className="header-auth-dropdown" role="menu">
+                    <div className="header-auth-dropdown-glow" aria-hidden />
+                    <div className="header-auth-dropdown-header">
+                      <div className="header-auth-dropdown-user">
+                        <span className="header-auth-dropdown-name">
+                          {session.user?.name || session.user?.email || 'Account'}
+                        </span>
+                        <span className={`header-auth-plan-badge ${isPro ? 'header-auth-plan-badge--pro' : 'header-auth-plan-badge--free'}`}>
+                          {isPro ? 'Pro' : 'Free'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="header-auth-dropdown-body">
+                      {isFree && (
+                        <button
+                          type="button"
+                          className="header-auth-dropdown-item header-auth-dropdown-item--accent"
+                          role="menuitem"
+                          onClick={() => { closeAuthDropdown(); showUpgradeFor('feature'); }}
+                        >
+                          <span className="header-auth-dropdown-item-icon" aria-hidden>
+                            <Zap size={15} strokeWidth={2} />
+                          </span>
+                          <span className="header-auth-dropdown-item-label">Upgrade to Pro</span>
+                        </button>
+                      )}
+                      {isPro && (
+                        <button
+                          type="button"
+                          className="header-auth-dropdown-item"
+                          role="menuitem"
+                          onClick={async () => {
+                            closeAuthDropdown();
+                            const res = await fetch('/api/stripe/portal', { method: 'POST' });
+                            const data = await res.json();
+                            if (data.url) window.location.href = data.url;
+                          }}
+                        >
+                          <span className="header-auth-dropdown-item-icon" aria-hidden>
+                            <CreditCard size={15} strokeWidth={1.75} />
+                          </span>
+                          <span className="header-auth-dropdown-item-label">Manage subscription</span>
+                        </button>
+                      )}
+                      <LoadingLink
+                        href="/settings"
+                        className="header-auth-dropdown-item"
+                        role="menuitem"
+                        onClick={() => closeAuthDropdown()}
+                      >
+                        <span className="header-auth-dropdown-item-icon" aria-hidden>
+                          <Settings size={15} strokeWidth={1.75} />
+                        </span>
+                        <span className="header-auth-dropdown-item-label">Settings</span>
+                      </LoadingLink>
+                    </div>
+                    <div className="header-auth-dropdown-footer">
+                      <button
+                        type="button"
+                        className="header-auth-dropdown-item header-auth-dropdown-item--signout"
+                        role="menuitem"
+                        onClick={() => {
+                          closeAuthDropdown();
+                          signOut();
+                        }}
+                      >
+                        <span className="header-auth-dropdown-item-icon" aria-hidden>
+                          <LogOut size={15} strokeWidth={2} />
+                        </span>
+                        <span className="header-auth-dropdown-item-label">Sign out</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -884,35 +1169,44 @@ export default function HomePage() {
                 }`
               }
             >
+              {mainContentLoading ? (
+                <div className="main-content-loading">
+                  <Spinner size={32} />
+                  <span>
+                    {isAuthPending || isPlaylistCatalogLoading
+                      ? 'Loading…'
+                      : 'Loading playlist…'}
+                  </span>
+                </div>
+              ) : (
+              <>
               <div className="header">
                 <div className="header-left">
                   <div className="image-toggle-control">
-                    {tracks.length > 0 && (
-                      <>
-                      <span className="toggle-label">Show cover image</span>
-                      <Switch 
-                        checked={showCoverImage}
-                        onChange={setShowCoverImage}
-                        size="small"
+                    {isPro && (
+                      <SleepTimerControl
+                        isActive={isSleepTimerActive}
+                        isExpiredWaiting={sleepTimerExpired}
+                        remainingMs={sleepTimerRemainingMs}
+                        disabled={!canUseSleepTimer}
+                        onSelectMinutes={(minutes) => {
+                          if (minutes === null) {
+                            clearSleepTimer();
+                            return;
+                          }
+                          const now = Date.now();
+                          setSleepTimerNow(now);
+                          setSleepTimerExpired(false);
+                          setSleepTimerEndAt(now + minutes * 60 * 1000);
+                        }}
                       />
-                      </>
                     )}
-                    <SleepTimerControl
-                      isActive={isSleepTimerActive}
-                      isExpiredWaiting={sleepTimerExpired}
-                      remainingMs={sleepTimerRemainingMs}
-                      disabled={!canUseSleepTimer}
-                      onSelectMinutes={(minutes) => {
-                        if (minutes === null) {
-                          clearSleepTimer();
-                          return;
-                        }
-                        const now = Date.now();
-                        setSleepTimerNow(now);
-                        setSleepTimerExpired(false);
-                        setSleepTimerEndAt(now + minutes * 60 * 1000);
-                      }}
-                    />
+                    {isFree && session && tracks.length > 0 && (
+                      <div className={`remaining-plays ${remainingPlays <= 3 ? 'remaining-plays-warn' : ''}`}>
+                        <Shuffle size={12} />
+                        <span className="remaining-plays-count">{remainingPlays}</span> plays left today
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -923,36 +1217,30 @@ export default function HomePage() {
                 totalDuration={totalDuration}
                 isPlaying={isPlaying}
                 currentIndex={currentIndex}
-                albumCoverUrl={albumCoverUrl}
-                showCoverImage={showCoverImage}
+                albumCoverUrl={linkedAlbumCoverUrl}
+                showCoverImage={!!linkedAlbumCoverUrl}
                 onPlayPause={() => {
                   if (tracks.length > 0) {
                     setIsPlaying(!isPlaying);
                   }
                 }}
-                onPlayFirst={() => {
+                onPlayFirst={async () => {
                   if (tracks.length > 0) {
+                    if (!assertFreePlayQuota()) return;
                     maybeCancelExpiredSleepTimerOnManualTrackChange();
-                    setCurrentIndex(0);
+                    if (isFree) {
+                      const randomIndex = Math.floor(Math.random() * tracks.length);
+                      setCurrentIndex(randomIndex);
+                      setShuffleState(createInitialShuffleState(tracks, randomIndex));
+                    } else {
+                      setCurrentIndex(0);
+                    }
                     setIsPlaying(true);
                   }
                 }}
               />
 
               {/* {currentTrack && (<Divider />)} */}
-
-              {tracks.length > 0 && (
-                <div className="playlist-controls">
-                  <div className="image-toggle-control">
-                    <span className="toggle-label">Show artist image</span>
-                    <Switch 
-                      checked={showArtistImages}
-                      onChange={setShowArtistImages}
-                      size="small"
-                    />
-                  </div>
-                </div>
-              )}
 
               <div className="playlist" ref={playlistRef}>
                 {tracks.map((track, i) => {
@@ -962,9 +1250,12 @@ export default function HomePage() {
                   return (
                     <div 
                       key={track.id}
-                      className={`track-item ${i === currentIndex ? 'active' : ''}`}
+                      className={`track-item ${i === currentIndex ? 'active' : ''} ${isFree ? 'track-item-locked' : ''}`}
                       onClick={() => {
-                        // If shuffle is enabled, reset the queue when user manually selects a track
+                        if (isFree) {
+                          showUpgradeFor('track-select');
+                          return;
+                        }
                         if (isShuffled) {
                           const newShuffleState = handleManualTrackSelection(tracks, i, shuffleState);
                           setShuffleState(newShuffleState);
@@ -973,56 +1264,15 @@ export default function HomePage() {
                         setPlaybackProgress(0);
                         setCurrentIndex(i);
                         setIsPlaying(true);
-                        // When selecting a new track with video, ensure Stage View is shown
-                        if (track.stageViewVideoUrl) {
-                          openStageView('track-click-with-video');
-                        }
                       }}
                     >
                       <div className="track-number">{i + 1}</div>
-                      {showArtistImages && (
-                        <div className="track-artist-image">
-                          {track.artistImageUrl ? (
-                            <>
-                              <img 
-                                src={track.artistImageUrl} 
-                                alt={trackInfo.artist}
-                                className="artist-thumbnail"
-                                onLoad={() => {
-                                  // Remove from loading set when image loads
-                                  setLoadingImages(prev => {
-                                    const updated = new Set(prev);
-                                    updated.delete(track.id);
-                                    return updated;
-                                  });
-                                }}
-                                onError={() => {
-                                  // Remove from loading set if image fails to load
-                                  setLoadingImages(prev => {
-                                    const updated = new Set(prev);
-                                    updated.delete(track.id);
-                                    return updated;
-                                  });
-                                }}
-                              />
-                              {loadingImages.has(track.id) && (
-                                <div className="artist-image-spinner">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                                  </svg>
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="artist-placeholder">
-                              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                              </svg>
-                            </div>
-                          )}
+                      <div className="track-thumb-image" aria-hidden>
+                        <div className="track-thumb-placeholder">
+                          <Music size={22} strokeWidth={1.75} />
                         </div>
-                      )}
-                      {showArtistImages && <div className="track-splitter"></div>}
+                      </div>
+                      <div className="track-splitter"></div>
                       <div className="track-info">
                         <div className="track-title">
                           {i === currentIndex && isPlaying && (
@@ -1035,17 +1285,13 @@ export default function HomePage() {
                       <div className="track-duration">
                         {loadingDurations.has(cacheKey) ? (
                           <div className="duration-spinner">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                            </svg>
+                            <Spinner size={12} />
                           </div>
                         ) : trackDurations.has(cacheKey) ? (
                           formatDuration(duration)
                         ) : (
                           <div className="duration-spinner">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                            </svg>
+                            <Spinner size={12} />
                           </div>
                         )}
                       </div>
@@ -1066,14 +1312,11 @@ export default function HomePage() {
                   <span>⚙️</span> Audio options
                 </button>
               </div> */}
+              </>
+              )}
             </div>
 
-            {/* Stage View – fixed on the right, uses Google Drive video */}
-            {shouldAttemptShowStageView && (
-              <div className={`stage-view-shell ${isStageViewAutoHidden ? 'is-auto-hidden' : ''}`}>
-                <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
-              </div>
-            )}
+            {/* Stage View – disabled for now */}
 
             {/* Fixed bottom audio bar with smooth appearance */}
             <div className={`player-footer-transition ${currentTrack ? 'visible' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}>
@@ -1093,21 +1336,15 @@ export default function HomePage() {
                   isShuffled={isShuffled}
                   isRepeated={isRepeated}
                   onDurationLoaded={handleDurationLoaded}
-                  cachedImages={cachedImages}
                   getCachedBlobUrl={getCachedBlobUrl}
-                  isStageViewOpen={isStageViewOpen}
+                  isStageViewOpen={false}
                   isSleepTimerExpired={sleepTimerExpired}
                   onTrackPlayed={handleTrackPlayed}
+                  onPlaybackFailed={openAudioLoadErrorModal}
                   onProgressUpdate={setPlaybackProgress}
-                  onToggleStageView={() => {
-                    if (currentTrack?.stageViewVideoUrl) {
-                      if (isStageViewOpen) {
-                        closeStageView('player-toggle-close');
-                      } else {
-                        openStageView('player-toggle-open');
-                      }
-                    }
-                  }}
+                  onToggleStageView={() => {}}
+                  seekDisabled={isFree}
+                  onSeekBlocked={() => showUpgradeFor('feature')}
                 />
               )}
             </div>
@@ -1125,6 +1362,20 @@ export default function HomePage() {
           <path d="M18 15l-6-6-6 6" />
         </svg>
       </button>
+
+      <AlertModal
+        open={audioLoadErrorOpen}
+        onClose={() => setAudioLoadErrorOpen(false)}
+        title="Could not load audio"
+        message="This track could not be played. Check your connection, confirm the file is shared correctly on Google Drive, then try again."
+      />
+
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        reason={upgradeModalReason}
+        remainingPlays={remainingPlays}
+      />
     </main>
   );
 }

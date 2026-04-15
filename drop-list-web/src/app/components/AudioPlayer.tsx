@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, Music } from 'lucide-react';
 import { formatDuration } from '../../utils/time';
 import { parseTrackName } from '../../utils/track';
 import ScrollingText from './ScrollingText';
@@ -25,16 +25,20 @@ type Props = {
     handleShuffleToggle: () => void;
     handleRepeatToggle: () => void;
     onDurationLoaded?: (trackId: string, duration: number) => void;
-    cachedImages?: Map<string, string>;
     getCachedBlobUrl?: (track: TrackType) => string | undefined;
     isStageViewOpen?: boolean;
     onToggleStageView?: () => void;
     /** Called once when playback actually starts (for play-count stats) */
     onTrackPlayed?: (track: TrackType) => void;
+    /** Unrecoverable load/play failure (after retries or immediate play() rejection) */
+    onPlaybackFailed?: () => void;
     /** Called on time update with progress 0–1 */
     onProgressUpdate?: (progress: number) => void;
     /** True when sleep timer is in "finish this track then stop" mode */
     isSleepTimerExpired?: boolean;
+    /** Free tier: same bar as Pro; clicks do not seek and call onSeekBlocked (upgrade) instead */
+    seekDisabled?: boolean;
+    onSeekBlocked?: () => void;
 };
 
 const AUDIO_PLAYBACK_DEBUG = false;
@@ -54,13 +58,15 @@ export default function AudioPlayer({
     handleShuffleToggle,
     handleRepeatToggle,
     onDurationLoaded,
-    cachedImages,
     getCachedBlobUrl,
     isStageViewOpen,
     onToggleStageView,
     onTrackPlayed,
+    onPlaybackFailed,
     onProgressUpdate,
     isSleepTimerExpired,
+    seekDisabled = false,
+    onSeekBlocked,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const trackTitleRef = useRef<HTMLDivElement>(null);
@@ -119,6 +125,7 @@ export default function AudioPlayer({
         trackId: track?.id,
         isPlaying,
         handleNext,
+        onPlaybackFailed,
         debug: false,
     });
     const logAudioPlaybackDebug = useCallback((event: string, payload?: Record<string, unknown>) => {
@@ -203,6 +210,8 @@ export default function AudioPlayer({
                 audio.play().catch((error) => {
                     console.error('Audio play failed:', error);
                     logAudioPlaybackDebug('play() failed', { error });
+                    // Do not call onPlaybackFailed here: load retries run via onError →
+                    // useAudioRetryRecovery; the modal is shown only after those exhaust.
                     onPlayPauseToggle(); // Reset state on failure
                 });
             } else {
@@ -228,7 +237,7 @@ export default function AudioPlayer({
             logAudioPlaybackDebug('requested pause');
             audio.pause();
         }
-    }, [isPlaying, src, cleanupEventListeners, logAudioPlaybackDebug]);
+    }, [isPlaying, src, cleanupEventListeners, logAudioPlaybackDebug, onPlayPauseToggle]);
 
     // Report play once per track start (for stats), and sync UI with play/pause
     const hasReportedPlayRef = useRef(false);
@@ -526,38 +535,8 @@ export default function AudioPlayer({
                 {/* Track Info */}
                 <div className="player-track-info">
                     <div className="player-album-art">
-                        {track?.artistImageUrl ? (
-                            <>
-                                <img 
-                                    src={cachedImages?.get(track.id) || track.artistImageUrl} 
-                                    alt={`${trackInfo.artist} image`}
-                                    className="artist-image"
-                                    onLoad={(e) => {
-                                        // Hide spinner when image loads
-                                        const target = e.target as HTMLImageElement;
-                                        const spinner = target.nextElementSibling as HTMLElement;
-                                        if (spinner) spinner.style.display = 'none';
-                                    }}
-                                    onError={(e) => {
-                                        // Fallback to gradient if image fails to load
-                                        const target = e.target as HTMLImageElement;
-                                        const spinner = target.nextElementSibling as HTMLElement;
-                                        if (spinner) spinner.style.display = 'none';
-                                        target.style.display = 'none';
-                                        target.nextElementSibling?.nextElementSibling?.classList.add('show');
-                                    }}
-                                />
-                                <div className="artist-image-spinner">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                                    </svg>
-                                </div>
-                            </>
-                        ) : null}
-                        <div className={`player-album-art-fallback ${track?.artistImageUrl ? '' : 'show'}`}>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                          </svg>
+                        <div className="player-album-art-fallback show">
+                        <Music size={26} strokeWidth={1.75} />
                         </div>
                     </div>
                     <div className="player-text">
@@ -649,6 +628,7 @@ export default function AudioPlayer({
                                 <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                             </svg>
                         </button>
+                        {/* Stage View: hidden in layout.scss (.stage-view-toggle-btn) until feature returns */}
                         <button
                             className={`control-btn stage-view-toggle-btn ${isStageViewOpen ? 'active' : ''}`}
                             type="button"
@@ -666,6 +646,10 @@ export default function AudioPlayer({
                         <div 
                             className="progress-bar"
                             onMouseDown={(e) => {
+                                if (seekDisabled) {
+                                    e.preventDefault();
+                                    return;
+                                }
                                 if (!duration) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const updateProgress = (clientX: number) => {
@@ -705,6 +689,11 @@ export default function AudioPlayer({
                                 });
                             }}
                             onClick={(e) => {
+                                if (seekDisabled) {
+                                    e.preventDefault();
+                                    onSeekBlocked?.();
+                                    return;
+                                }
                                 if (!duration) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const clickX = e.clientX - rect.left;

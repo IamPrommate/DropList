@@ -5,8 +5,7 @@ export type TrackType = {
     file?: File;
     url?: string; // generic URL source
     googleDriveUrl?: string; // direct streaming URL from Google Drive
-    artistImageUrl?: string; // Google Drive URL for artist image
-    stageViewVideoUrl?: string; // Google Drive URL for stage view video (per artist)
+    stageViewVideoUrl?: string; // Google Drive URL for stage view video (per track)
   };
   
   export type PlaylistType = {
@@ -17,6 +16,17 @@ export type TrackType = {
     isShuffled: boolean;
     isRepeated: boolean;
     volume: number; // 0..1
+  };
+
+  /** A playlist reference persisted in Supabase (not the actual tracks) */
+  export type SavedPlaylist = {
+    id: string;
+    user_id: string;
+    folder_url: string;
+    folder_id: string;
+    name: string;
+    cover_url: string | null;
+    created_at: string;
   };
 
   /** Per-track play count (หนึ่งแทร็กใน playCount) */
