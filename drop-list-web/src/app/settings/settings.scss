@@ -772,6 +772,37 @@
 
 /* ========== In-app settings modal (/app) ========== */
 
+/* Windows/Chrome/Edge: default scrollbars use a light track that clashes with dark UI. */
+@mixin settings-dark-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 65%, var(--bg-primary) 35%)
+    color-mix(in srgb, var(--text-primary) 6%, var(--bg-secondary));
+
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: color-mix(in srgb, var(--text-primary) 4%, var(--bg-secondary));
+    border-radius: 999px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--primary-gradient-middle) 42%, var(--text-muted));
+    border-radius: 999px;
+    border: 2px solid color-mix(in srgb, var(--text-primary) 5%, var(--bg-secondary));
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--primary-gradient-middle) 55%, var(--text-secondary));
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
 @keyframes settingsModalIn {
   from {
     opacity: 0;
@@ -818,6 +849,8 @@
   flex-direction: column;
   color: var(--text-primary);
   font-family: var(--font-inter), system-ui, sans-serif;
+  /* Hint native UI (scrollbars, inputs) toward dark rendering where supported. */
+  color-scheme: dark;
   /* Panel with modest top tint; stronger than 9% mix but softer than full hero gradient. */
   background: linear-gradient(
     to bottom,
@@ -905,4 +938,10 @@
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  @include settings-dark-scrollbar;
+}
+
+/* Horizontal nav on small screens — same track issue as vertical. */
+.settings-page-inner--modal .settings-nav {
+  @include settings-dark-scrollbar;
 }

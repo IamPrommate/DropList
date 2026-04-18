@@ -1,7 +1,7 @@
 // src/components/AudioPlayer.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
 import { Play, Pause, Music } from 'lucide-react';
@@ -43,7 +43,7 @@ type Props = {
 
 const AUDIO_PLAYBACK_DEBUG = false;
 
-export default function AudioPlayer({
+function AudioPlayer({
     track,
     volume,
     onEnded,
@@ -788,3 +788,5 @@ export default function AudioPlayer({
         </div>
     );
 }
+
+export default memo(AudioPlayer);

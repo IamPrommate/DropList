@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, memo } from 'react';
 import { createPortal } from 'react-dom';
 import type { Session } from 'next-auth';
 import Spinner from './Spinner';
@@ -78,7 +78,7 @@ export type SettingsPanelProps = {
   onRefreshProfile: () => void | Promise<void>;
 };
 
-export default function SettingsPanel({
+function SettingsPanel({
   open,
   onClose,
   session,
@@ -667,3 +667,5 @@ export default function SettingsPanel({
 
   return createPortal(drawer, document.body);
 }
+
+export default memo(SettingsPanel);

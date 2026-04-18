@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { TrackType, SavedPlaylist } from '../lib/types';
 import { getPlaylistCoverUrl } from '../lib/playlistCover';
 import GoogleDrivePicker from './GoogleDrivePicker';
@@ -28,7 +28,7 @@ interface SidebarProps {
   loadingPlaylists: boolean;
 }
 
-export default function Sidebar({
+function Sidebar({
   isLoggedIn,
   isPro,
   playlistAddAllowed,
@@ -187,3 +187,5 @@ export default function Sidebar({
     </>
   );
 }
+
+export default memo(Sidebar);

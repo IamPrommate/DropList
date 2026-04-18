@@ -2,7 +2,7 @@
 'use client';
 
 import '@ant-design/v5-patch-for-react-19';
-import { useCallback, useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useCallback, useState, useRef, useEffect, useLayoutEffect, useMemo, startTransition, lazy, Suspense, memo } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import {
   proLevelLabel,
@@ -17,7 +17,7 @@ import AudioPlayer from '../components/AudioPlayer';
 import PlaylistHeader from '../components/PlaylistHeader';
 import { TrackType, SavedPlaylist } from '../lib/types';
 import Sidebar from '../components/Sidebar';
-import SettingsPanel from '../components/SettingsPanel';
+const SettingsPanel = lazy(() => import('../components/SettingsPanel'));
 import { 
   ShuffleState, 
   createInitialShuffleState, 
@@ -38,6 +38,7 @@ import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
 import UpgradeModal from '../components/UpgradeModal';
 import AlertModal from '../components/AlertModal';
 import Spinner from '../components/Spinner';
+import TrackItem from '../components/TrackItem';
 import { findSavedPlaylistById, getPlaylistCoverUrl } from '../lib/playlistCover';
 
 enum KeyboardShortcuts {
@@ -313,7 +314,7 @@ export default function HomePage() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('settings') !== '1') return;
-    setSettingsOpen(true);
+    startTransition(() => setSettingsOpen(true));
     params.delete('settings');
     const q = params.toString();
     window.history.replaceState(null, '', `/app${q ? `?${q}` : ''}${window.location.hash || ''}`);
@@ -540,9 +541,35 @@ export default function HomePage() {
     setAuthDropdownOpen(false);
   }, []);
 
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const handleNameSaved = useCallback((name: string) => setSessionNameOverride(name), []);
+  const refreshProfile = useCallback(() => void loadProfileMeta(), [loadProfileMeta]);
+
+  const togglePlayPause = useCallback(() => setIsPlaying((p) => !p), []);
+  const handleIsPlayingChange = useCallback((v: boolean) => setIsPlaying(v), []);
+  const noopToggleStageView = useCallback(() => {}, []);
+  const handleSeekBlocked = useCallback(() => showUpgradeFor('feature'), [showUpgradeFor]);
+
+  const handleTrackClick = useCallback((index: number) => {
+    if (isFree) {
+      showUpgradeFor('track-select');
+      return;
+    }
+    if (isShuffled) {
+      const newShuffleState = handleManualTrackSelection(tracks, index, shuffleState);
+      setShuffleState(newShuffleState);
+    }
+    maybeCancelExpiredSleepTimerOnManualTrackChange();
+    setPlaybackProgress(0);
+    setCurrentIndex(index);
+    setIsPlaying(true);
+  }, [isFree, isShuffled, tracks, shuffleState, showUpgradeFor, maybeCancelExpiredSleepTimerOnManualTrackChange]);
+
   const toggleAuthDropdown = useCallback((e: { stopPropagation: () => void }) => {
     e.stopPropagation();
-    setAuthDropdownOpen((open) => !open);
+    startTransition(() => {
+      setAuthDropdownOpen((open) => !open);
+    });
   }, []);
 
   useEffect(() => {
@@ -1318,20 +1345,20 @@ export default function HomePage() {
             }}
           />
 
-          {sessionStatus === 'authenticated' && sessionForUi ? (
-            <SettingsPanel
-              open={settingsOpen}
-              onClose={() => setSettingsOpen(false)}
-              session={sessionForUi}
-              profileMeta={profileMeta}
-              profileMetaLoading={profileMetaLoading}
-              subData={subData}
-              subLoading={subLoading}
-              onNameSaved={(name) => {
-                setSessionNameOverride(name);
-              }}
-              onRefreshProfile={() => void loadProfileMeta()}
-            />
+          {sessionStatus === 'authenticated' && sessionForUi && settingsOpen ? (
+            <Suspense fallback={null}>
+              <SettingsPanel
+                open={settingsOpen}
+                onClose={closeSettings}
+                session={sessionForUi}
+                profileMeta={profileMeta}
+                profileMetaLoading={profileMetaLoading}
+                subData={subData}
+                subLoading={subLoading}
+                onNameSaved={handleNameSaved}
+                onRefreshProfile={refreshProfile}
+              />
+            </Suspense>
           ) : null}
 
           {/* Main Content */}
@@ -1462,7 +1489,7 @@ export default function HomePage() {
                         role="menuitem"
                         onClick={() => {
                           closeAuthDropdown();
-                          setSettingsOpen(true);
+                          startTransition(() => setSettingsOpen(true));
                         }}
                       >
                         <span className="header-auth-dropdown-item-icon" aria-hidden>
@@ -1587,63 +1614,21 @@ export default function HomePage() {
                 {tracks.map((track, i) => {
                   const trackInfo = parseTrackName(track.name);
                   const cacheKey = getTrackCacheKey(track);
-                  const duration = trackDurations.get(cacheKey) || 0;
                   return (
-                    <div 
+                    <TrackItem
                       key={track.id}
-                      className={`track-item ${i === currentIndex ? 'active' : ''} ${isFree ? 'track-item-locked' : ''}`}
-                      onClick={() => {
-                        if (isFree) {
-                          showUpgradeFor('track-select');
-                          return;
-                        }
-                        if (isShuffled) {
-                          const newShuffleState = handleManualTrackSelection(tracks, i, shuffleState);
-                          setShuffleState(newShuffleState);
-                        }
-                        maybeCancelExpiredSleepTimerOnManualTrackChange();
-                        setPlaybackProgress(0);
-                        setCurrentIndex(i);
-                        setIsPlaying(true);
-                      }}
-                    >
-                      <div className="track-number">{i + 1}</div>
-                      <div className="track-thumb-image" aria-hidden>
-                        <div className="track-thumb-placeholder">
-                          <Music size={22} strokeWidth={1.75} />
-                        </div>
-                      </div>
-                      <div className="track-splitter"></div>
-                      <div className="track-info">
-                        <div className="track-title">
-                          {i === currentIndex && isPlaying && (
-                            <div className="running-track-indicator"></div>
-                          )}
-                          {trackInfo.title}
-                        </div>
-                        <div className="track-artist">{trackInfo.artist}</div>
-                      </div>
-                      <div className="track-duration">
-                        {loadingDurations.has(cacheKey) ? (
-                          <div className="duration-spinner">
-                            <Spinner size={12} />
-                          </div>
-                        ) : trackDurations.has(cacheKey) ? (
-                          formatDuration(duration)
-                        ) : (
-                          <div className="duration-spinner">
-                            <Spinner size={12} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="track-menu">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                          <circle cx="12" cy="5" r="2"></circle>
-                          <circle cx="12" cy="12" r="2"></circle>
-                          <circle cx="12" cy="19" r="2"></circle>
-                        </svg>
-                      </div>
-                    </div>
+                      index={i}
+                      trackId={track.id}
+                      title={trackInfo.title}
+                      artist={trackInfo.artist}
+                      isActive={i === currentIndex}
+                      isPlaying={i === currentIndex && isPlaying}
+                      isFree={isFree}
+                      duration={trackDurations.get(cacheKey) || 0}
+                      durationLoaded={trackDurations.has(cacheKey)}
+                      durationLoading={loadingDurations.has(cacheKey)}
+                      onClick={handleTrackClick}
+                    />
                   );
                 })}
               </div>
@@ -1667,8 +1652,8 @@ export default function HomePage() {
                   volume={volume}
                   onEnded={handleTrackEnded}
                   onVolumeChange={setVolume}
-                  onPlayPauseToggle={() => setIsPlaying((p) => !p)}
-                  onIsPlayingChange={(v) => setIsPlaying(v)}
+                  onPlayPauseToggle={togglePlayPause}
+                  onIsPlayingChange={handleIsPlayingChange}
                   isPlaying={isPlaying}
                   handlePrev={handlePrev}
                   handleNext={handleNext}
@@ -1683,9 +1668,9 @@ export default function HomePage() {
                   onTrackPlayed={handleTrackPlayed}
                   onPlaybackFailed={openAudioLoadErrorModal}
                   onProgressUpdate={setPlaybackProgress}
-                  onToggleStageView={() => {}}
+                  onToggleStageView={noopToggleStageView}
                   seekDisabled={isFree}
-                  onSeekBlocked={() => showUpgradeFor('feature')}
+                  onSeekBlocked={handleSeekBlocked}
                 />
               )}
             </div>
