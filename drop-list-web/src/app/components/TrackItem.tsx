@@ -46,7 +46,7 @@ function TrackItem({
       <div className="track-info">
         <div className="track-title">
           {isActive && isPlaying && <div className="running-track-indicator"></div>}
-          {title}
+          <span className="track-title-text">{title}</span>
         </div>
         <div className="track-artist">{artist}</div>
       </div>
@@ -58,13 +58,6 @@ function TrackItem({
         ) : (
           <div className="duration-spinner"><Spinner size={12} /></div>
         )}
-      </div>
-      <div className="track-menu">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="5" r="2"></circle>
-          <circle cx="12" cy="12" r="2"></circle>
-          <circle cx="12" cy="19" r="2"></circle>
-        </svg>
       </div>
     </div>
   );

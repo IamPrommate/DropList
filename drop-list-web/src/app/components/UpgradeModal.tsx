@@ -1,24 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   Zap,
   Shuffle,
   Image,
-  Timer,
   Keyboard,
   BarChart3,
   Infinity,
   SlidersHorizontal,
   Library,
 } from 'lucide-react';
+import { snoozeUpgradeEntryModalForToday } from '../lib/upgradeEntrySnooze';
+
+export type UpgradeModalReason = 'daily-limit' | 'track-select' | 'feature' | 'entry';
 
 interface UpgradeModalProps {
   open: boolean;
   onClose: () => void;
-  reason?: 'daily-limit' | 'track-select' | 'feature';
+  reason?: UpgradeModalReason;
   remainingPlays?: number;
+  /** Entry promo: allow “don’t show again today” (snoozes until next local calendar day). */
+  allowDismissUntilTomorrow?: boolean;
 }
 
 /** Shared with marketing landing page */
@@ -28,22 +32,41 @@ export const PRO_FEATURES = [
   { icon: SlidersHorizontal, label: 'Seek inside tracks' },
   { icon: Shuffle, label: 'Pick any track directly' },
   { icon: Shuffle, label: 'Shuffle & Repeat' },
-  { icon: Image, label: 'Album covers' },
-  { icon: Timer, label: 'Sleep timer' },
+  { icon: Image, label: 'Edit album covers' },
   { icon: Keyboard, label: 'Keyboard shortcuts' },
   { icon: BarChart3, label: 'Play statistics' },
 ];
 
-const REASON_MESSAGES: Record<string, string> = {
+const REASON_MESSAGES: Record<UpgradeModalReason, string> = {
   'daily-limit': "You've reached your daily limit of 10 plays.",
   'track-select': 'Track selection is a Pro feature. Free users listen in shuffle mode.',
   'feature': 'This feature is available with DropList Pro.',
+  'entry':
+    'You’re on the Free plan. Upgrade to unlock the full player—unlimited plays, pick any track, seek, and more.',
 };
 
-export default function UpgradeModal({ open, onClose, reason, remainingPlays }: UpgradeModalProps) {
+export default function UpgradeModal({
+  open,
+  onClose,
+  reason,
+  remainingPlays,
+  allowDismissUntilTomorrow = false,
+}: UpgradeModalProps) {
   const [loading, setLoading] = useState(false);
+  const [dismissToday, setDismissToday] = useState(false);
+
+  useEffect(() => {
+    if (open) setDismissToday(false);
+  }, [open]);
 
   if (!open) return null;
+
+  const closeAndMaybeSnooze = () => {
+    if (allowDismissUntilTomorrow && dismissToday) {
+      snoozeUpgradeEntryModalForToday();
+    }
+    onClose();
+  };
 
   const handleUpgrade = async () => {
     setLoading(true);
@@ -63,9 +86,9 @@ export default function UpgradeModal({ open, onClose, reason, remainingPlays }: 
   const message = reason ? REASON_MESSAGES[reason] : REASON_MESSAGES['feature'];
 
   return (
-    <div className="upgrade-modal-overlay" onClick={onClose}>
+    <div className="upgrade-modal-overlay" onClick={closeAndMaybeSnooze}>
       <div className="upgrade-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="upgrade-modal-close" onClick={onClose} aria-label="Close">
+        <button className="upgrade-modal-close" onClick={closeAndMaybeSnooze} aria-label="Close">
           <X size={20} />
         </button>
 
@@ -99,6 +122,17 @@ export default function UpgradeModal({ open, onClose, reason, remainingPlays }: 
         >
           {loading ? 'Redirecting...' : 'Get Pro — $2.99/month'}
         </button>
+
+        {allowDismissUntilTomorrow && (
+          <label className="upgrade-modal-dismiss-row">
+            <input
+              type="checkbox"
+              checked={dismissToday}
+              onChange={(e) => setDismissToday(e.target.checked)}
+            />
+            <span>Don&apos;t show this again today</span>
+          </label>
+        )}
 
         <p className="upgrade-modal-note">Cancel anytime. No commitment.</p>
       </div>

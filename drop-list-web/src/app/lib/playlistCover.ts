@@ -12,6 +12,22 @@ export function getPlaylistCoverUrl(playlist: SavedPlaylist | null | undefined):
   return u;
 }
 
+/**
+ * Client session rev for same-URL updates. Preserves `cb` (or any) query params from DB
+ * so we don't strip the server-persisted cache buster.
+ */
+export function playlistCoverUrlWithCacheBust(url: string | null, rev: number): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    u.searchParams.set('v', String(rev));
+    return u.toString();
+  } catch {
+    const base = url.split('?')[0];
+    return `${base}?v=${rev}`;
+  }
+}
+
 export function findSavedPlaylistById(
   savedPlaylists: SavedPlaylist[],
   activePlaylistId: string | null

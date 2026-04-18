@@ -24,7 +24,8 @@ type Props = {
     handleNext: () => void;
     handleShuffleToggle: () => void;
     handleRepeatToggle: () => void;
-    onDurationLoaded?: (trackId: string, duration: number) => void;
+    /** Uses the same track identity as the parent’s duration map (`getTrackCacheKey`). */
+    onDurationLoaded?: (track: TrackType, duration: number) => void;
     getCachedBlobUrl?: (track: TrackType) => string | undefined;
     isStageViewOpen?: boolean;
     onToggleStageView?: () => void;
@@ -447,7 +448,7 @@ function AudioPlayer({
         
         // Notify parent component about the duration
         if (onDurationLoaded && trackDuration > 0) {
-            onDurationLoaded(track.id, trackDuration);
+            onDurationLoaded(track, trackDuration);
         }
     };
 

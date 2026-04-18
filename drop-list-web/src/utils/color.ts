@@ -19,7 +19,9 @@ function getAlbumColorCacheKey(imageUrl: string): string {
     const url = new URL(imageUrl, typeof window !== 'undefined' ? window.location.origin : 'https://example.com');
     const driveId = url.searchParams.get('id');
     if (driveId) return `drive:${driveId}`;
-    return `${url.origin}${url.pathname}`;
+    // Include query string: same Storage path can get new bytes (e.g. ?cb= from API); pathname-only keys
+    // would keep the previous dominant color in cache and break theme after cover change.
+    return `${url.origin}${url.pathname}${url.search}`;
   } catch {
     return imageUrl;
   }

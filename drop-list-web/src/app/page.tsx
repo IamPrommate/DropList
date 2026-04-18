@@ -12,11 +12,11 @@ import {
   SlidersHorizontal,
   Shuffle,
   ListMusic,
-  Timer,
   Keyboard,
   BarChart3,
-  Disc3,
   Library,
+  Image,
+  Pencil,
   Music,
   TrendingUp,
   CirclePlay,
@@ -188,6 +188,7 @@ export default function LandingPage() {
                 <li>10 plays per day</li>
                 <li>Shuffle playback</li>
                 <li>Save 1 playlist</li>
+                <li><Pencil size={15} aria-hidden /> Rename your playlist</li>
               </ul>
               <button type="button" className="landing-feature-card-btn" onClick={() => void startFree()}>
                 {isAuthed ? 'Open app' : 'Try free'}
@@ -204,10 +205,9 @@ export default function LandingPage() {
                 <li><SlidersHorizontal size={15} aria-hidden /> Seek anywhere in a track</li>
                 <li><ListMusic size={15} aria-hidden /> Pick any track directly</li>
                 <li><Repeat size={15} aria-hidden /> Shuffle &amp; repeat controls</li>
-                <li><Timer size={15} aria-hidden /> Sleep timer</li>
                 <li><Keyboard size={15} aria-hidden /> Keyboard shortcuts</li>
                 <li><BarChart3 size={15} aria-hidden /> Play statistics</li>
-                <li><Disc3 size={15} aria-hidden /> Album covers</li>
+                <li><Image size={15} aria-hidden /> Edit album covers</li>
                 <li><Library size={15} aria-hidden /> Save 5–8 playlists (by rank)</li>
               </ul>
               {isAuthed ? (
@@ -296,9 +296,9 @@ export default function LandingPage() {
               <div className="landing-pricing-row"><SlidersHorizontal size={15} aria-hidden /><span>Seek inside tracks</span></div>
               <div className="landing-pricing-row"><ListMusic size={15} aria-hidden /><span>Pick any track directly</span></div>
               <div className="landing-pricing-row"><Repeat size={15} aria-hidden /><span>Shuffle &amp; repeat</span></div>
-              <div className="landing-pricing-row"><Timer size={15} aria-hidden /><span>Sleep timer</span></div>
               <div className="landing-pricing-row"><Keyboard size={15} aria-hidden /><span>Keyboard shortcuts</span></div>
               <div className="landing-pricing-row"><BarChart3 size={15} aria-hidden /><span>Play statistics</span></div>
+              <div className="landing-pricing-row"><Image size={15} aria-hidden /><span>Edit album covers</span></div>
               <div className="landing-pricing-row"><Library size={15} aria-hidden /><span>5–8 playlists (by rank)</span></div>
               </div>
             {isAuthed ? (

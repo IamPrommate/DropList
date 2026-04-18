@@ -30,16 +30,21 @@ import { formatDuration } from '../../utils/time';
 import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../../utils/track';
 import '../layout.scss';
 import StageViewPanel from '../components/StageViewPanel';
-import SleepTimerControl from '../components/SleepTimerControl';
 import Link from 'next/link';
 import { LoadingLink } from '../components/NavigationLoading';
 import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings } from 'lucide-react';
 import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
-import UpgradeModal from '../components/UpgradeModal';
+import UpgradeModal, { type UpgradeModalReason } from '../components/UpgradeModal';
+import { isUpgradeEntrySnoozedForToday } from '../lib/upgradeEntrySnooze';
 import AlertModal from '../components/AlertModal';
 import Spinner from '../components/Spinner';
 import TrackItem from '../components/TrackItem';
-import { findSavedPlaylistById, getPlaylistCoverUrl } from '../lib/playlistCover';
+import {
+  findSavedPlaylistById,
+  getPlaylistCoverUrl,
+  playlistCoverUrlWithCacheBust,
+} from '../lib/playlistCover';
+import { PLAYLIST_NAME_MAX_LENGTH } from '../lib/playlistNameLimits';
 
 enum KeyboardShortcuts {
   SPACE = 'Space',
@@ -48,6 +53,20 @@ enum KeyboardShortcuts {
   ARROW_UP = 'ArrowUp',
   ARROW_DOWN = 'ArrowDown',
   KEY_V = 'KeyV',
+}
+
+/** In-memory session cache for Drive folder listings (keyed by folder_id). */
+type CachedPlaylist = {
+  tracks: TrackType[];
+  folderName?: string;
+  fetchedAt: number;
+};
+
+function tracksListsEqualByDriveIds(a: TrackType[], b: TrackType[]): boolean {
+  if (a.length !== b.length) return false;
+  const idsA = [...a].map((t) => t.id).sort();
+  const idsB = [...b].map((t) => t.id).sort();
+  return idsA.every((id, i) => id === idsB[i]);
 }
 
 export default function HomePage() {
@@ -90,7 +109,7 @@ export default function HomePage() {
 
   // --- Tier enforcement state ---
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
-  const [upgradeModalReason, setUpgradeModalReason] = useState<'daily-limit' | 'track-select' | 'feature'>('feature');
+  const [upgradeModalReason, setUpgradeModalReason] = useState<UpgradeModalReason>('feature');
   const [remainingPlays, setRemainingPlays] = useState<number>(10);
   const [playCountLoaded, setPlayCountLoaded] = useState(false);
   const [audioLoadErrorOpen, setAudioLoadErrorOpen] = useState(false);
@@ -105,7 +124,11 @@ export default function HomePage() {
   const [savedPlaylistsHydrated, setSavedPlaylistsHydrated] = useState(false);
   /** true once the session effect has run at least once (avoids flash on first render). */
   const [sessionInitialized, setSessionInitialized] = useState(false);
-  
+
+  const playlistContentCache = useRef<Map<string, CachedPlaylist>>(new Map());
+  /** For async playlist refresh: only apply updates if user is still on that playlist. */
+  const activePlaylistIdRef = useRef<string | null>(null);
+
   // Shuffle state
   const [shuffleState, setShuffleState] = useState<ShuffleState>({
     queue: [],
@@ -173,15 +196,32 @@ export default function HomePage() {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
+  /** Signed-in Free users: entry promo (snooze “don’t show again today” in localStorage). */
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    if (!isFree) return;
+    if (isUpgradeEntrySnoozedForToday()) return;
+    setUpgradeModalReason('entry');
+    setUpgradeModalOpen(true);
+  }, [sessionStatus, isFree]);
+
   /** Same `cover_url` drives sidebar row + main album art (future: PATCH + setSavedPlaylists updates both). */
   const activeSavedPlaylist = useMemo(
     () => findSavedPlaylistById(savedPlaylists, activePlaylistId),
     [savedPlaylists, activePlaylistId]
   );
-  const linkedAlbumCoverUrl = useMemo(
+  const rawAlbumCoverUrl = useMemo(
     () => getPlaylistCoverUrl(activeSavedPlaylist),
     [activeSavedPlaylist]
   );
+  /** Bumped on cover upload/remove so same Storage URL still refreshes `<img>`. */
+  const [coverCacheRev, setCoverCacheRev] = useState(0);
+  const bumpCoverCache = useCallback(() => setCoverCacheRev((r) => r + 1), []);
+  const linkedAlbumCoverUrl = useMemo(
+    () => playlistCoverUrlWithCacheBust(rawAlbumCoverUrl, coverCacheRev),
+    [rawAlbumCoverUrl, coverCacheRev]
+  );
+
   const [authDropdownOpen, setAuthDropdownOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileMeta, setProfileMeta] = useState<SettingsProfileMeta | null>(null);
@@ -368,7 +408,40 @@ export default function HomePage() {
     }
   }, []);
 
+  /** Persist audio file count from Drive (sidebar + next GET). */
+  const updatePlaylistAudioTrackCount = useCallback(
+    async (playlistId: string, count: number) => {
+      const n = Math.max(0, Math.floor(count));
+      setSavedPlaylists((prev) =>
+        prev.map((p) => (p.id === playlistId ? { ...p, audio_track_count: n } : p))
+      );
+      if (sessionStatus !== 'authenticated') return;
+      try {
+        const res = await fetch('/api/playlists', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: playlistId, audio_track_count: n }),
+        });
+        const data = (await res.json()) as { playlist?: SavedPlaylist; error?: string };
+        if (res.ok && data.playlist) {
+          setSavedPlaylists((prev) =>
+            prev.map((p) => (p.id === playlistId ? data.playlist! : p))
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [sessionStatus]
+  );
+
   const hasRestoredPlaylist = useRef(false);
+  /** Avoid re-requesting Drive summaries for the same playlist in one session. */
+  const playlistSummaryAttemptedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    activePlaylistIdRef.current = activePlaylistId;
+  }, [activePlaylistId]);
 
   useEffect(() => {
     if (sessionStatus === 'loading') {
@@ -380,6 +453,7 @@ export default function HomePage() {
 
     if (sessionStatus === 'unauthenticated') {
       hasRestoredPlaylist.current = false;
+      playlistSummaryAttemptedRef.current.clear();
       setSavedPlaylists([]);
       setSavedPlaylistsHydrated(true);
       setIsPlaying(false);
@@ -387,12 +461,49 @@ export default function HomePage() {
     }
     if (sessionStatus === 'authenticated') {
       hasRestoredPlaylist.current = false;
+      playlistSummaryAttemptedRef.current.clear();
       setSavedPlaylistsHydrated(false);
       setSavedPlaylists([]);
       setIsPlaying(false);
       fetchSavedPlaylists();
     }
   }, [sessionStatus, fetchSavedPlaylists]);
+
+  /** After playlists load, prefetch track counts from Drive for rows missing `audio_track_count`. */
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated' || !savedPlaylistsHydrated) return;
+    const missing = savedPlaylists.filter((p) => p.audio_track_count == null);
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    void (async () => {
+      await Promise.all(
+        missing.map(async (pl) => {
+          if (playlistSummaryAttemptedRef.current.has(pl.id)) return;
+          playlistSummaryAttemptedRef.current.add(pl.id);
+          try {
+            const res = await fetch('/api/drive-folder', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ folderId: pl.folder_id, summaryOnly: true }),
+            });
+            const data = (await res.json()) as { audioTrackCount?: number };
+            if (cancelled) return;
+            if (typeof data.audioTrackCount !== 'number') {
+              playlistSummaryAttemptedRef.current.delete(pl.id);
+              return;
+            }
+            await updatePlaylistAudioTrackCount(pl.id, data.audioTrackCount);
+          } catch {
+            playlistSummaryAttemptedRef.current.delete(pl.id);
+          }
+        })
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, savedPlaylistsHydrated, savedPlaylists, updatePlaylistAudioTrackCount]);
 
   /** Library list is reloading (e.g. after dev HMR / slow API); do not keep audio running over a loading shell */
   useEffect(() => {
@@ -410,41 +521,64 @@ export default function HomePage() {
     return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
-  const loadPlaylistFromDrive = useCallback(async (folderId: string): Promise<{
-    tracks: TrackType[];
-    folderName?: string;
-  } | null> => {
-    try {
-      const res = await fetch('/api/drive-folder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderId }),
-      });
-      const data = await res.json();
-      if (data.error || !data.files) return null;
+  type LoadPlaylistFromDriveOptions = { skipCache?: boolean };
 
-      const { isAudioFile, FileType } = await import('../lib/common');
+  const loadPlaylistFromDrive = useCallback(
+    async (
+      folderId: string,
+      options?: LoadPlaylistFromDriveOptions
+    ): Promise<{
+      tracks: TrackType[];
+      folderName?: string;
+    } | null> => {
+      if (!options?.skipCache) {
+        const cached = playlistContentCache.current.get(folderId);
+        if (cached) {
+          return {
+            tracks: cached.tracks.map((t) => ({ ...t })),
+            folderName: cached.folderName,
+          };
+        }
+      }
 
-      const audioFiles = data.files.filter((f: { name: string; type?: string }) => isAudioFile(f.name) && f.type === FileType.AUDIO);
+      try {
+        const res = await fetch('/api/drive-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderId }),
+        });
+        const data = await res.json();
+        if (data.error || !data.files) return null;
 
-      // Always same-origin proxy: direct googleapis ?alt=media URLs reject browser <audio> (CORS).
-      const buildUrl = (fileId: string) => `/api/drive-file?id=${fileId}`;
+        const { isAudioFile, FileType } = await import('../lib/common');
 
-      const tracks: TrackType[] = audioFiles.map((file: { id: string; name: string }, i: number) => ({
-        id: `${Date.now()}_${file.id}_${i}`,
-        name: file.name,
-        googleDriveUrl: buildUrl(file.id),
-      }));
+        const audioFiles = data.files.filter(
+          (f: { name: string; type?: string }) => isAudioFile(f.name) && f.type === FileType.AUDIO
+        );
 
-      return { tracks, folderName: data.folderName };
-    } catch {
-      return null;
-    }
-  }, []);
+        // Always same-origin proxy: direct googleapis ?alt=media URLs reject browser <audio> (CORS).
+        const buildUrl = (fileId: string) => `/api/drive-file?id=${fileId}`;
 
-  const sleepTimerRemainingMs = sleepTimerEndAt ? Math.max(0, sleepTimerEndAt - sleepTimerNow) : 0;
-  const isSleepTimerActive = sleepTimerEndAt !== null;
-  const canUseSleepTimer = isPro && Boolean(currentTrack);
+        const tracks: TrackType[] = audioFiles.map((file: { id: string; name: string }) => ({
+          id: file.id,
+          name: file.name,
+          googleDriveUrl: buildUrl(file.id),
+        }));
+
+        const folderName: string | undefined = data.folderName;
+        playlistContentCache.current.set(folderId, {
+          tracks,
+          folderName,
+          fetchedAt: Date.now(),
+        });
+
+        return { tracks, folderName };
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
 
   const clearSleepTimer = useCallback(() => {
     setSleepTimerEndAt(null);
@@ -950,39 +1084,96 @@ export default function HomePage() {
   }, [trackDurations, loadingDurations, getTrackCacheKey, saveDurationsToCache]);
 
   // --- Playlist management handlers ---
-  const handleSelectPlaylist = useCallback(async (playlist: SavedPlaylist) => {
-    if (loadingPlaylistId) return;
-    if (activePlaylistId === playlist.id) return;
+  const handleSelectPlaylist = useCallback(
+    async (playlist: SavedPlaylist) => {
+      if (loadingPlaylistId) return;
+      if (activePlaylistId === playlist.id) return;
 
-    setLoadingPlaylistId(playlist.id);
-    const result = await loadPlaylistFromDrive(playlist.folder_id);
-    setLoadingPlaylistId(null);
+      // Stop the previous playlist immediately (before any await). Otherwise a slow
+      // Drive fetch leaves the old track playing until the new folder loads.
+      setIsPlaying(false);
+      setCurrentIndex(-1);
 
-    if (!result || result.tracks.length === 0) return;
+      const folderId = playlist.folder_id;
+      if (!playlistContentCache.current.has(folderId)) {
+        setLoadingPlaylistId(playlist.id);
+      }
 
-    setTracks(result.tracks);
-    setCurrentIndex(-1);
-    setIsPlaying(false);
-    setActivePlaylistId(playlist.id);
-    setCurrentDriveFolderId(playlist.folder_id);
-    setSelectedFolderName(result.folderName ?? playlist.name);
-    if (isFree) {
-      setIsShuffled(true);
-      setShuffleState(createInitialShuffleState(result.tracks, -1));
-    } else {
-      setShuffleState(resetShuffleState());
-    }
+      const result = await loadPlaylistFromDrive(folderId);
+      setLoadingPlaylistId(null);
 
-    preloadTrackDurations(result.tracks);
-    preloadAudioFiles(result.tracks);
-  }, [loadingPlaylistId, activePlaylistId, isFree, preloadTrackDurations, preloadAudioFiles, loadPlaylistFromDrive]);
+      if (!result || result.tracks.length === 0) return;
+
+      setTracks(result.tracks);
+      setCurrentIndex(-1);
+      setIsPlaying(false);
+      setActivePlaylistId(playlist.id);
+      setCurrentDriveFolderId(playlist.folder_id);
+      const title =
+        playlist.name?.trim() ||
+        result.folderName?.trim() ||
+        'Untitled playlist';
+      setSelectedFolderName(title.slice(0, PLAYLIST_NAME_MAX_LENGTH));
+      if (isFree) {
+        setIsShuffled(true);
+        setShuffleState(createInitialShuffleState(result.tracks, -1));
+      } else {
+        setShuffleState(resetShuffleState());
+      }
+
+      preloadTrackDurations(result.tracks);
+      preloadAudioFiles(result.tracks);
+      void updatePlaylistAudioTrackCount(playlist.id, result.tracks.length);
+
+      void loadPlaylistFromDrive(folderId, { skipCache: true }).then((fresh) => {
+        if (!fresh || activePlaylistIdRef.current !== playlist.id) return;
+        if (tracksListsEqualByDriveIds(result.tracks, fresh.tracks)) return;
+
+        const mapIndex = (prev: number): number => {
+          if (prev < 0) return prev;
+          const oldId = result.tracks[prev]?.id;
+          const newIdx = oldId != null ? fresh.tracks.findIndex((t) => t.id === oldId) : -1;
+          return newIdx >= 0 ? newIdx : fresh.tracks.length > 0 ? 0 : -1;
+        };
+
+        setTracks(fresh.tracks);
+        setCurrentIndex((prev) => {
+          const nextIdx = mapIndex(prev);
+          if (isFree) {
+            setShuffleState(createInitialShuffleState(fresh.tracks, nextIdx));
+          } else {
+            setShuffleState(resetShuffleState());
+          }
+          return nextIdx;
+        });
+
+        preloadTrackDurations(fresh.tracks);
+        void updatePlaylistAudioTrackCount(playlist.id, fresh.tracks.length);
+      });
+    },
+    [
+      loadingPlaylistId,
+      activePlaylistId,
+      isFree,
+      preloadTrackDurations,
+      preloadAudioFiles,
+      loadPlaylistFromDrive,
+      updatePlaylistAudioTrackCount,
+    ]
+  );
 
   const handleDeletePlaylist = useCallback(async (playlistId: string) => {
     const res = await fetch(`/api/playlists?id=${encodeURIComponent(playlistId)}`, { method: 'DELETE' });
     if (!res.ok) {
       throw new Error('Failed to delete playlist');
     }
-    setSavedPlaylists(prev => prev.filter(p => p.id !== playlistId));
+    setSavedPlaylists((prev) => {
+      const victim = prev.find((p) => p.id === playlistId);
+      if (victim?.folder_id) {
+        playlistContentCache.current.delete(victim.folder_id);
+      }
+      return prev.filter((p) => p.id !== playlistId);
+    });
     if (activePlaylistId === playlistId) {
       setTracks([]);
       setCurrentIndex(-1);
@@ -994,17 +1185,57 @@ export default function HomePage() {
     }
   }, [activePlaylistId]);
 
-  const handleEditCover = useCallback(async (playlistId: string, coverUrl: string | null) => {
-    const res = await fetch('/api/playlists', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: playlistId, cover_url: coverUrl }),
-    });
-    const data = await res.json();
-    if (data.playlist) {
-      setSavedPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, cover_url: coverUrl } : p));
+  const handleCoverUploaded = useCallback((playlist: SavedPlaylist) => {
+    setSavedPlaylists((prev) =>
+      prev.map((p) => (p.id === playlist.id ? playlist : p))
+    );
+    bumpCoverCache();
+  }, [bumpCoverCache]);
+
+  const handleCoverRemoved = useCallback(async () => {
+    if (sessionStatus !== 'authenticated' || !activePlaylistId) return;
+    try {
+      const res = await fetch('/api/playlists', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activePlaylistId, cover_url: null }),
+      });
+      const data = (await res.json()) as { playlist?: SavedPlaylist; error?: string };
+      if (!res.ok || !data.playlist) return;
+      setSavedPlaylists((prev) =>
+        prev.map((p) => (p.id === activePlaylistId ? data.playlist! : p))
+      );
+      bumpCoverCache();
+    } catch {
+      /* ignore */
     }
-  }, [activePlaylistId]);
+  }, [sessionStatus, activePlaylistId, bumpCoverCache]);
+
+  const handleAlbumTitleChange = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setSelectedFolderName(trimmed);
+      if (sessionStatus !== 'authenticated' || !activePlaylistId) return;
+      try {
+        const res = await fetch('/api/playlists', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: activePlaylistId, name: trimmed }),
+        });
+        const data = (await res.json()) as { playlist?: SavedPlaylist; error?: string };
+        if (!res.ok) return;
+        if (data.playlist) {
+          setSavedPlaylists((prev) =>
+            prev.map((p) => (p.id === activePlaylistId ? { ...p, name: trimmed } : p))
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [sessionStatus, activePlaylistId]
+  );
 
   // Auto-restore last playlist on login
   useEffect(() => {
@@ -1171,16 +1402,28 @@ export default function HomePage() {
     });
   }, [isFree, showUpgradeFor]);
 
-  const handleDurationLoaded = useCallback((trackId: string, duration: number) => {
-    setTrackDurations(prev => new Map(prev.set(trackId, duration)));
-  }, []);
+  const handleDurationLoaded = useCallback(
+    (track: TrackType, duration: number) => {
+      const cacheKey = getTrackCacheKey(track);
+      setTrackDurations((prev) => new Map(prev.set(cacheKey, duration)));
+    },
+    [getTrackCacheKey]
+  );
 
+  const albumDurationReady = useMemo(() => {
+    if (tracks.length === 0) return true;
+    return tracks.every((t) => trackDurations.has(getTrackCacheKey(t)));
+  }, [tracks, trackDurations, getTrackCacheKey]);
 
-  const totalDuration = tracks.reduce((total, track) => {
-    const cacheKey = getTrackCacheKey(track);
-    const duration = trackDurations.get(cacheKey) || 0;
-    return total + duration;
-  }, 0);
+  const totalDuration = useMemo(
+    () =>
+      tracks.reduce((total, track) => {
+        const cacheKey = getTrackCacheKey(track);
+        const duration = trackDurations.get(cacheKey) || 0;
+        return total + duration;
+      }, 0),
+    [tracks, trackDurations, getTrackCacheKey]
+  );
 
   // Scroll-to-top button visibility 
   useEffect(() => {
@@ -1273,9 +1516,17 @@ export default function HomePage() {
             savedPlaylists={savedPlaylists}
             activePlaylistId={activePlaylistId}
             tracks={tracks}
+            coverCacheRev={coverCacheRev}
             loadingPlaylistId={loadingPlaylistId}
             loadingPlaylists={isAuthPending || isPlaylistCatalogLoading}
             onGoogleDrivePicked={async (picked, folderName, coverUrl, driveFolderId) => {
+              if (driveFolderId) {
+                playlistContentCache.current.set(driveFolderId, {
+                  tracks: picked,
+                  folderName: folderName?.trim() || undefined,
+                  fetchedAt: Date.now(),
+                });
+              }
               setTracks(picked);
               setCurrentIndex(-1);
               setIsPlaying(false);
@@ -1288,7 +1539,11 @@ export default function HomePage() {
                 setShuffleState(resetShuffleState());
               }
 
-              if (folderName) setSelectedFolderName(folderName);
+              if (folderName) {
+                setSelectedFolderName(
+                  folderName.trim().slice(0, PLAYLIST_NAME_MAX_LENGTH) || 'Untitled Playlist'
+                );
+              }
 
               preloadTrackDurations(picked);
               preloadAudioFiles(picked);
@@ -1296,13 +1551,17 @@ export default function HomePage() {
               // Persist playlist to Supabase
               if (driveFolderId && session?.user) {
                 try {
+                  const nameForApi =
+                    (folderName || 'Untitled Playlist')
+                      .trim()
+                      .slice(0, PLAYLIST_NAME_MAX_LENGTH) || 'Untitled Playlist';
                   const res = await fetch('/api/playlists', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       folder_url: `https://drive.google.com/drive/folders/${driveFolderId}`,
                       folder_id: driveFolderId,
-                      name: folderName || 'Untitled Playlist',
+                      name: nameForApi,
                       cover_url: null,
                     }),
                   });
@@ -1315,10 +1574,12 @@ export default function HomePage() {
                     return;
                   }
                   if (data.playlist && !data.alreadyExists) {
-                    setSavedPlaylists(prev => [...prev, data.playlist]);
+                    setSavedPlaylists((prev) => [...prev, data.playlist]);
                     setActivePlaylistId(data.playlist.id);
-                  } else if (data.alreadyExists) {
+                    void updatePlaylistAudioTrackCount(data.playlist.id, picked.length);
+                  } else if (data.alreadyExists && data.playlist) {
                     setActivePlaylistId(data.playlist.id);
+                    void updatePlaylistAudioTrackCount(data.playlist.id, picked.length);
                   }
                 } catch { /* ignore save errors */ }
               }
@@ -1550,32 +1811,15 @@ export default function HomePage() {
               <>
               <div className="header">
                 <div className="header-left">
-                  <div className="image-toggle-control">
-                    {isPro && (
-                      <SleepTimerControl
-                        isActive={isSleepTimerActive}
-                        isExpiredWaiting={sleepTimerExpired}
-                        remainingMs={sleepTimerRemainingMs}
-                        disabled={!canUseSleepTimer}
-                        onSelectMinutes={(minutes) => {
-                          if (minutes === null) {
-                            clearSleepTimer();
-                            return;
-                          }
-                          const now = Date.now();
-                          setSleepTimerNow(now);
-                          setSleepTimerExpired(false);
-                          setSleepTimerEndAt(now + minutes * 60 * 1000);
-                        }}
-                      />
-                    )}
-                    {isFree && session && tracks.length > 0 && (
+                  {isFree && session && tracks.length > 0 && (
+                    <div className="image-toggle-control">
                       <div className={`remaining-plays ${remainingPlays <= 3 ? 'remaining-plays-warn' : ''}`}>
-                        <Shuffle size={12} />
-                        <span className="remaining-plays-count">{remainingPlays}</span> plays left today
+                        <Shuffle size={15} strokeWidth={2.25} aria-hidden />
+                        <span className="remaining-plays-count">{remainingPlays}</span>
+                        <span className="remaining-plays-label">plays left today</span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1583,10 +1827,20 @@ export default function HomePage() {
                 tracks={tracks}
                 selectedFolderName={selectedFolderName}
                 totalDuration={totalDuration}
+                albumDurationReady={albumDurationReady}
                 isPlaying={isPlaying}
                 currentIndex={currentIndex}
                 albumCoverUrl={linkedAlbumCoverUrl}
-                showCoverImage={!!linkedAlbumCoverUrl}
+                showCoverImage={!!rawAlbumCoverUrl}
+                onAlbumTitleChange={handleAlbumTitleChange}
+                canEditAlbumCover={isPro}
+                onAlbumCoverRequiresPro={() => showUpgradeFor('feature')}
+                coverPlaylistId={activePlaylistId}
+                coverUploadEnabled={
+                  sessionStatus === 'authenticated' && Boolean(activePlaylistId)
+                }
+                onCoverUploaded={handleCoverUploaded}
+                onCoverRemoved={handleCoverRemoved}
                 onPlayPause={() => {
                   if (tracks.length > 0) {
                     setIsPlaying(!isPlaying);
@@ -1708,6 +1962,7 @@ export default function HomePage() {
         onClose={() => setUpgradeModalOpen(false)}
         reason={upgradeModalReason}
         remainingPlays={remainingPlays}
+        allowDismissUntilTomorrow={upgradeModalReason === 'entry'}
       />
     </main>
   );

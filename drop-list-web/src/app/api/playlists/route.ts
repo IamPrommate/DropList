@@ -3,6 +3,7 @@ import { getToken } from 'next-auth/jwt';
 import { supabaseAdmin } from '@/app/lib/supabase';
 import { parseUserPlan, UserPlan } from '@/app/lib/userPlan';
 import { maxSavedPlaylists } from '@/app/lib/proLevels';
+import { PLAYLIST_NAME_MAX_LENGTH } from '@/app/lib/playlistNameLimits';
 
 /** GET: list all playlists for the current user (Free: oldest saved only; extras stay in DB for Pro again) */
 export async function GET(req: NextRequest) {
@@ -52,6 +53,18 @@ export async function POST(req: NextRequest) {
 
   if (!body.folder_id || !body.name) {
     return NextResponse.json({ error: 'folder_id and name are required' }, { status: 400 });
+  }
+
+  const postName =
+    typeof body.name === 'string' ? body.name.trim() : '';
+  if (!postName) {
+    return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
+  }
+  if (postName.length > PLAYLIST_NAME_MAX_LENGTH) {
+    return NextResponse.json(
+      { error: `name must be at most ${PLAYLIST_NAME_MAX_LENGTH} characters` },
+      { status: 400 }
+    );
   }
 
   // Same folder may not use .single(): legacy duplicates would error; limit(1) is stable.
@@ -116,7 +129,7 @@ export async function POST(req: NextRequest) {
       user_id: token.userId,
       folder_url: body.folder_url ?? '',
       folder_id: body.folder_id,
-      name: body.name,
+      name: postName,
       cover_url: body.cover_url ?? null,
     })
     .select()
@@ -180,6 +193,7 @@ export async function PATCH(req: NextRequest) {
     id?: string;
     cover_url?: string | null;
     name?: string;
+    audio_track_count?: number | null;
   };
 
   if (!body.id) {
@@ -188,7 +202,26 @@ export async function PATCH(req: NextRequest) {
 
   const updates: Record<string, unknown> = {};
   if (body.cover_url !== undefined) updates.cover_url = body.cover_url;
-  if (body.name !== undefined) updates.name = body.name;
+  if (body.audio_track_count !== undefined) {
+    if (body.audio_track_count !== null && (!Number.isFinite(body.audio_track_count) || body.audio_track_count < 0)) {
+      return NextResponse.json({ error: 'audio_track_count must be a non-negative number or null' }, { status: 400 });
+    }
+    updates.audio_track_count = body.audio_track_count;
+  }
+  if (body.name !== undefined) {
+    const trimmed =
+      typeof body.name === 'string' ? body.name.trim() : '';
+    if (!trimmed) {
+      return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
+    }
+    if (trimmed.length > PLAYLIST_NAME_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: `name must be at most ${PLAYLIST_NAME_MAX_LENGTH} characters` },
+        { status: 400 }
+      );
+    }
+    updates.name = trimmed;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });

@@ -1,16 +1,28 @@
-/* Landing page — uses global tokens from layout.scss */
+/* Landing page — black / purple / white composition; luminance aligned with /app (pageRoot) */
 
 .landing {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
   color: var(--text-primary);
-  background: linear-gradient(
-    165deg,
-    var(--bg-gradient-start) 0%,
-    var(--bg-gradient-middle) 42%,
-    var(--bg-gradient-end) 100%
-  );
+  /* Same base as the product shell — not a deeper black than the app */
+  background-color: var(--bg-primary);
+  background-image:
+    /* Soft white “moonlight” — lifts the hero so it never reads as flat black */
+    radial-gradient(ellipse 100% 58% at 50% -18%, rgba(255, 255, 255, 0.085) 0%, transparent 54%),
+    /* Purple crown — same family as app’s top band */
+    radial-gradient(ellipse 92% 48% at 50% 0%, color-mix(in srgb, var(--bg-gradient-start) 52%, transparent) 0%, transparent 58%),
+    /* Brand corners: pink + blue mist */
+    radial-gradient(ellipse 52% 42% at 0% 14%, color-mix(in srgb, var(--primary-gradient-start) 26%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse 48% 38% at 100% 16%, color-mix(in srgb, var(--primary-gradient-end) 24%, transparent) 0%, transparent 48%),
+    /* Body: violet wash into app charcoal (mirrors pageRoot, stays mid-dark not ink-black) */
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg-gradient-middle) 20%, var(--bg-primary)) 0%,
+      var(--bg-primary) 36%,
+      color-mix(in srgb, var(--bg-primary) 78%, var(--primary-gradient-middle) 22%) 62%,
+      color-mix(in srgb, var(--bg-secondary) 92%, #12121c 8%) 100%
+    );
 }
 
 .landing-glow {
@@ -18,9 +30,11 @@
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(168, 85, 247, 0.35), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 30%, rgba(236, 72, 153, 0.12), transparent 45%),
-    radial-gradient(ellipse 50% 35% at 0% 60%, rgba(59, 130, 246, 0.1), transparent 40%);
+    radial-gradient(ellipse 78% 48% at 50% -22%, rgba(255, 255, 255, 0.055) 0%, transparent 52%),
+    radial-gradient(ellipse 72% 46% at 50% 4%, color-mix(in srgb, var(--primary-gradient-middle) 30%, transparent) 0%, transparent 54%),
+    radial-gradient(ellipse 58% 38% at 100% 28%, rgba(236, 72, 153, 0.13) 0%, transparent 46%),
+    radial-gradient(ellipse 54% 36% at 0% 58%, rgba(59, 130, 246, 0.11) 0%, transparent 44%),
+    radial-gradient(ellipse 88% 45% at 50% 100%, color-mix(in srgb, var(--primary-gradient-middle) 14%, transparent) 0%, transparent 56%);
   z-index: 0;
 }
 
@@ -31,10 +45,10 @@
   top: 0;
   z-index: 50;
   width: 100%;
-  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 74%, rgba(255, 255, 255, 0.05));
   backdrop-filter: blur(16px) saturate(1.2);
   -webkit-backdrop-filter: blur(16px) saturate(1.2);
-  border-bottom: 1px solid var(--border-secondary);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 22%, rgba(255, 255, 255, 0.06));
 }
 
 .landing-nav-inner {
@@ -125,7 +139,12 @@
   height: 1px;
   max-width: 600px;
   margin: 0 auto;
-  background: linear-gradient(90deg, transparent, var(--border-tertiary), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--primary-gradient-middle) 35%, rgba(255, 255, 255, 0.12)),
+    transparent
+  );
 }
 
 /* ── Sections generic ── */
@@ -180,12 +199,12 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--primary-gradient-middle);
+  color: color-mix(in srgb, #ffffff 88%, var(--primary-gradient-middle));
   margin-bottom: 1.25rem;
   padding: 0.35rem 0.85rem;
   border-radius: 999px;
-  background: rgba(168, 85, 247, 0.12);
-  border: 1px solid rgba(168, 85, 247, 0.2);
+  background: color-mix(in srgb, var(--primary-gradient-middle) 18%, rgba(255, 255, 255, 0.06));
+  border: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 32%, rgba(255, 255, 255, 0.14));
 }
 
 .landing-hero h1 {
@@ -290,15 +309,20 @@
 .landing-step {
   padding: 2rem 1.5rem 1.75rem;
   border-radius: 18px;
-  background: rgba(15, 18, 30, 0.5);
-  border: 1px solid var(--border-primary);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--bg-secondary) 78%, rgba(255, 255, 255, 0.09));
+  border: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 20%, rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   text-align: center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
     transform: translateY(-3px);
-    box-shadow: 0 20px 56px rgba(0, 0, 0, 0.3), 0 0 20px rgba(168, 85, 247, 0.08);
+    box-shadow:
+      0 22px 52px rgba(0, 0, 0, 0.22),
+      0 0 28px color-mix(in srgb, var(--primary-gradient-middle) 16%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 }
 
@@ -348,19 +372,22 @@
 .landing-feature-card {
   padding: 2rem 1.75rem;
   border-radius: 20px;
-  background: rgba(15, 18, 30, 0.55);
-  border: 1px solid var(--border-primary);
-  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, rgba(255, 255, 255, 0.07));
+  border: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 18%, rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   display: flex;
   flex-direction: column;
 }
 
 .landing-feature-card--pro {
-  border-color: rgba(168, 85, 247, 0.25);
-  background: rgba(15, 18, 30, 0.7);
+  border-color: color-mix(in srgb, var(--primary-gradient-middle) 38%, rgba(255, 255, 255, 0.1));
+  background: color-mix(in srgb, var(--bg-secondary) 68%, color-mix(in srgb, var(--primary-gradient-middle) 28%, transparent));
   box-shadow:
-    0 20px 56px rgba(0, 0, 0, 0.3),
-    0 0 40px rgba(168, 85, 247, 0.06);
+    0 22px 54px rgba(0, 0, 0, 0.22),
+    0 0 44px color-mix(in srgb, var(--primary-gradient-middle) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .landing-feature-card-badge {
@@ -501,7 +528,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 3px solid rgba(15, 18, 30, 0.9);
+  border: 3px solid color-mix(in srgb, var(--bg-primary) 90%, rgba(255, 255, 255, 0.04));
   flex-shrink: 0;
   position: relative;
   z-index: 1;
@@ -601,11 +628,12 @@
   padding: 2.25rem 2rem;
   border-radius: 22px;
   text-align: center;
-  background: rgba(15, 18, 30, 0.8);
-  border: 1px solid rgba(168, 85, 247, 0.2);
+  background: color-mix(in srgb, var(--bg-secondary) 76%, rgba(255, 255, 255, 0.08));
+  border: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 32%, rgba(255, 255, 255, 0.1));
   box-shadow:
-    0 28px 72px rgba(0, 0, 0, 0.45),
-    0 0 48px rgba(168, 85, 247, 0.1);
+    0 26px 64px rgba(0, 0, 0, 0.26),
+    0 0 48px color-mix(in srgb, var(--primary-gradient-middle) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .landing-pricing-badge {
@@ -720,7 +748,7 @@
 .landing-footer {
   position: relative;
   z-index: 1;
-  border-top: 1px solid var(--border-secondary);
+  border-top: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 18%, rgba(255, 255, 255, 0.06));
   padding: 1.75rem 2rem;
   text-align: center;
   font-size: 0.8125rem;

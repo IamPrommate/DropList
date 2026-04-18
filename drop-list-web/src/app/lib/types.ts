@@ -30,6 +30,8 @@ export type TrackType = {
     name: string;
     cover_url: string | null;
     created_at: string;
+    /** Cached from Google Drive folder listing; null until first prefetch or open */
+    audio_track_count?: number | null;
   };
 
   /** Per-track play count (หนึ่งแทร็กใน playCount) */

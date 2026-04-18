@@ -148,7 +148,7 @@ export default function GoogleDrivePicker({
 
           const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
 
-          const filePromises = audioFiles.map(async (file, i) => {
+          const filePromises = audioFiles.map(async (file) => {
             const url = await buildStreamUrl(file.id);
 
             let stageViewVideoUrl = undefined;
@@ -158,7 +158,7 @@ export default function GoogleDrivePicker({
             }
 
             return {
-              id: `${Date.now()}_${file.id}_${i}`,
+              id: file.id,
               name: file.name,
               googleDriveUrl: url,
               stageViewVideoUrl,

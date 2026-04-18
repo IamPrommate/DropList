@@ -110,8 +110,9 @@ async function fetchTracksFromSubfolder(folderId: string): Promise<Array<{ id: s
 
 export async function POST(request: NextRequest) {
   try {
-    const { folderId } = await request.json();
-    
+    const body = (await request.json()) as { folderId?: string; summaryOnly?: boolean };
+    const { folderId, summaryOnly } = body;
+
     if (!folderId) {
       return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
     }
@@ -279,10 +280,19 @@ export async function POST(request: NextRequest) {
       // Strict check: if tracks folder is specified but not found, fail
       if (!tracksFolderId) {
         console.warn(`Tracks folder "${CONFIG.TRACKS_FOLDER}" not found`);
-        return NextResponse.json({ 
-          error: `Tracks folder "${CONFIG.TRACKS_FOLDER}" not found. Please create the folder or check your NEXT_PUBLIC_TRACKS_FOLDER configuration.`,
+        const err = `Tracks folder "${CONFIG.TRACKS_FOLDER}" not found. Please create the folder or check your NEXT_PUBLIC_TRACKS_FOLDER configuration.`;
+        if (summaryOnly) {
+          return NextResponse.json({
+            error: err,
+            folderName,
+            audioTrackCount: 0,
+            albumCoverUrl: null,
+          });
+        }
+        return NextResponse.json({
+          error: err,
           files: [],
-          folderName
+          folderName,
         });
       }
     }
@@ -293,10 +303,19 @@ export async function POST(request: NextRequest) {
       filesToProcess = await fetchTracksFromSubfolder(tracksFolderId);
       if (!filesToProcess) {
         console.warn(`Failed to fetch tracks from "${CONFIG.TRACKS_FOLDER}" subfolder`);
-        return NextResponse.json({ 
-          error: `Failed to access "${CONFIG.TRACKS_FOLDER}" subfolder. Make sure the folder exists and is shared publicly.`,
+        const err = `Failed to access "${CONFIG.TRACKS_FOLDER}" subfolder. Make sure the folder exists and is shared publicly.`;
+        if (summaryOnly) {
+          return NextResponse.json({
+            error: err,
+            folderName,
+            audioTrackCount: 0,
+            albumCoverUrl: null,
+          });
+        }
+        return NextResponse.json({
+          error: err,
           files: [],
-          folderName
+          folderName,
         });
       }
     } else {
@@ -332,9 +351,15 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    
+
+    // Metadata-only: audio files come from the tracks folder / root listing only (not artist/video).
+    if (summaryOnly) {
+      const audioTrackCount = files.filter((f) => f.type === FileType.AUDIO).length;
+      return NextResponse.json({ folderName, audioTrackCount, albumCoverUrl: null });
+    }
+
     console.log('Found files:', files.length, files);
-    
+
     // Fetch images from artist subfolder only (performance optimized)
     if (artistSubfolderId) {
       try {

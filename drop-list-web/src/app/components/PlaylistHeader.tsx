@@ -1,9 +1,51 @@
-import { useCallback, useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Cloud, File } from 'lucide-react';
+import {
+  useCallback,
+  useState,
+  useRef,
+  useEffect,
+  type ChangeEvent,
+  type FocusEvent,
+} from 'react';
+import { Play, Pause, Download, Cloud, File, Pencil, Image, Trash2 } from 'lucide-react';
+import {
+  PLAYLIST_NAME_MAX_LENGTH,
+  truncatePlaylistNameForDisplay,
+} from '../lib/playlistNameLimits';
 import { Progress } from 'antd';
 import { formatDuration } from '../../utils/time';
 import JSZip from 'jszip';
-import { extractDominantColor, lightenColor, darkenColor, saturateColor, shiftHue, hexToRgba, rgbToHsl, hexToRgb } from '../../utils/color';
+import { extractDominantColor, darkenColor, saturateColor } from '../../utils/color';
+import { squareCenterCropToJpegBlob } from '../../utils/squareCenterCrop';
+import type { SavedPlaylist } from '../lib/types';
+
+/** Inline vars this screen may set; removing them restores :root purple theme from layout.scss */
+const ALBUM_THEME_VARS_TO_CLEAR = [
+  '--bg-gradient-start',
+  '--bg-gradient-middle',
+  '--bg-gradient-end',
+  '--switch-bg',
+  '--switch-border',
+  '--switch-checked-bg',
+  '--switch-checked-border',
+  '--switch-hover',
+  '--switch-checked-hover',
+  '--shadow-primary',
+  '--shadow-primary-glow',
+  '--playlist-active-shadow',
+  '--player-border',
+  '--primary-gradient-start',
+  '--primary-gradient-middle',
+  '--primary-gradient-end',
+  '--primary-gradient-hover-start',
+  '--primary-gradient-hover-middle',
+  '--primary-gradient-hover-end',
+] as const;
+
+function clearAlbumDrivenThemeOverrides() {
+  for (const v of ALBUM_THEME_VARS_TO_CLEAR) {
+    document.documentElement.style.removeProperty(v);
+  }
+}
 
 interface TrackType {
   id: string;
@@ -17,142 +59,123 @@ interface PlaylistHeaderProps {
   tracks: TrackType[];
   selectedFolderName: string | null;
   totalDuration: number;
+  /** False while per-track lengths are still loading — avoids a climbing partial total in the subtitle. */
+  albumDurationReady?: boolean;
   isPlaying: boolean;
   currentIndex: number;
   albumCoverUrl?: string | null;
   showCoverImage?: boolean;
   onPlayPause: () => void;
   onPlayFirst: () => void;
+  /** When set, shows the Edit control; after editing, called with the new playlist display name (PATCH `/api/playlists` when saved). */
+  onAlbumTitleChange?: (name: string) => void | Promise<void>;
+  /** Pro-only: full album cover menu (change / remove). Free users see the same pencil in edit mode but tap opens `onAlbumCoverRequiresPro`. */
+  canEditAlbumCover?: boolean;
+  /** Free (or non-Pro): album cover pencil in edit mode opens upgrade. */
+  onAlbumCoverRequiresPro?: () => void;
+  /** Saved playlist id required for cover upload; omit or null to hide cover overlay. */
+  coverPlaylistId?: string | null;
+  /** Authenticated user with a saved active playlist — enables cover overlay while editing title. */
+  coverUploadEnabled?: boolean;
+  /** Called after POST `/api/playlists/cover` succeeds with the updated row. */
+  onCoverUploaded?: (playlist: SavedPlaylist) => void;
+  /** Clear custom cover (PATCH `cover_url: null`); optional gradient-only state. */
+  onCoverRemoved?: () => void | Promise<void>;
 }
 
 export default function PlaylistHeader({
   tracks,
   selectedFolderName,
   totalDuration,
+  albumDurationReady = true,
   isPlaying,
   currentIndex,
   albumCoverUrl,
   showCoverImage = true,
   onPlayPause,
   onPlayFirst,
+  onAlbumTitleChange,
+  canEditAlbumCover = true,
+  onAlbumCoverRequiresPro,
+  coverPlaylistId = null,
+  coverUploadEnabled = false,
+  onCoverUploaded,
+  onCoverRemoved,
 }: PlaylistHeaderProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const downloadAbortController = useRef<AbortController | null>(null);
   const [isAlbumCoverLoading, setIsAlbumCoverLoading] = useState(!!albumCoverUrl);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const titleSnapshotRef = useRef('');
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+  /** Synced in handlers so blur-after-Escape does not commit. */
+  const titleEditingRef = useRef(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+
+  const hasPlaylistRenameHandler = Boolean(onAlbumTitleChange);
+  /** Free + Pro: rename playlist title. */
+  const allowTitleRename = hasPlaylistRenameHandler;
+
+  const showProCoverEditUi =
+    canEditAlbumCover &&
+    titleEditing &&
+    coverUploadEnabled &&
+    Boolean(coverPlaylistId) &&
+    Boolean(onCoverUploaded);
+
+  /** Free: same pencil as Pro while editing title; click opens upgrade. */
+  const showFreeCoverEditTeaser =
+    !canEditAlbumCover &&
+    titleEditing &&
+    coverUploadEnabled &&
+    Boolean(coverPlaylistId);
+
+  const showAlbumCoverEditChrome = showProCoverEditUi || showFreeCoverEditTeaser;
+
+  const hasCustomCover = Boolean(showCoverImage && albumCoverUrl);
+  const [coverMenuOpen, setCoverMenuOpen] = useState(false);
+  const coverMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const rawAlbumTitle =
+    tracks.length > 0 ? (selectedFolderName?.trim() || 'Untitled playlist') : null;
+  const displayAlbumTitle = rawAlbumTitle
+    ? truncatePlaylistNameForDisplay(rawAlbumTitle)
+    : null;
+  const albumTitleTooltip =
+    rawAlbumTitle && rawAlbumTitle.length > PLAYLIST_NAME_MAX_LENGTH
+      ? rawAlbumTitle
+      : undefined;
   
-  // Extract and apply dynamic colors when album cover loads
+  // Extract accent for the main page background gradient only; everything else uses :root purple (layout.scss).
   useEffect(() => {
-    if (albumCoverUrl && showCoverImage) {
-      setIsAlbumCoverLoading(true);
-      
-      extractDominantColor(albumCoverUrl)
-        .then((dominantColor) => {
-          console.log('Extracted dominant color:', dominantColor);
-          
-          // Generate shades for TYPE 1 variables with 10% saturation boost
-          // Start: extracted color darkened by 5% + 10% saturation
-          const gradientStart = saturateColor(darkenColor(dominantColor, 20), 50);
-          // Middle: 30% darker than start + 10% saturation
-          const gradientMiddle = saturateColor(darkenColor(dominantColor, 35), 50);
-          // End is always fixed
-          const gradientEnd = '#1f1f2e';
-          
-          // Apply to background gradient
-          document.documentElement.style.setProperty('--bg-gradient-start', gradientStart);
-          document.documentElement.style.setProperty('--bg-gradient-middle', gradientMiddle);
-          document.documentElement.style.setProperty('--bg-gradient-end', gradientEnd);
-          
-          // Apply to switch colors
-          document.documentElement.style.setProperty('--switch-bg', hexToRgba(lightenColor(dominantColor, 25), 0.3));
-          document.documentElement.style.setProperty('--switch-border', hexToRgba(lightenColor(dominantColor, 25), 0.5));
-          document.documentElement.style.setProperty('--switch-checked-bg', hexToRgba(lightenColor(dominantColor, 25), 0.8));
-          document.documentElement.style.setProperty('--switch-checked-border', lightenColor(dominantColor, 25));
-          document.documentElement.style.setProperty('--switch-hover', hexToRgba(lightenColor(dominantColor, 25), 0.4));
-          document.documentElement.style.setProperty('--switch-checked-hover', hexToRgba(lightenColor(dominantColor, 25), 0.9));
-          
-          // Apply to shadow colors for consistent theming
-          const [r, g, b] = hexToRgb(dominantColor);
-          document.documentElement.style.setProperty('--shadow-primary', `rgba(${r}, ${g}, ${b}, 0.25)`);
-          document.documentElement.style.setProperty('--shadow-primary-glow', `rgba(${r}, ${g}, ${b}, 0.35)`);
-          document.documentElement.style.setProperty('--playlist-active-shadow', `rgba(${r}, ${g}, ${b}, 0.15)`);
-          
-          // Apply to player border for consistent theming
-          document.documentElement.style.setProperty('--player-border', hexToRgba(lightenColor(dominantColor, 25), 0.2));
-          
-          console.log('Applied TYPE 1 colors:', { dominantColor, gradientStart, gradientMiddle, gradientEnd });
-          
-          // TYPE 2: Apply hue angle shift to primary gradient colors
-          // Anchor middle (must match :root --primary-gradient-middle in layout.scss)
-          const originalMiddle = '#9333ea';
-          
-          // Get hues for original middle color and extracted color
-          const [origR, origG, origB] = hexToRgb(originalMiddle);
-          const originalHue = rgbToHsl(origR, origG, origB);
-          const [extR, extG, extB] = hexToRgb(dominantColor);
-          const extractedHue = rgbToHsl(extR, extG, extB);
-          
-          // Calculate hue angle difference
-          let hueShift = extractedHue[0] - originalHue[0];
-          
-          // Normalize the shift
-          if (hueShift > 180) hueShift -= 360;
-          if (hueShift < -180) hueShift += 360;
-          
-          // Apply same hue shift to all primary gradient colors
-          const originalColors = {
-            start: '#ec4899',
-            middle: '#9333ea',
-            end: '#3b82f6',
-            hoverStart: '#f472b6',
-            hoverMiddle: '#c084fc',
-            hoverEnd: '#60a5fa'
-          };
-          
-          // Shift all colors by the same hue angle
-          document.documentElement.style.setProperty('--primary-gradient-start', shiftHue(originalColors.start, hueShift));
-          document.documentElement.style.setProperty('--primary-gradient-middle', shiftHue(originalColors.middle, hueShift));
-          document.documentElement.style.setProperty('--primary-gradient-end', shiftHue(originalColors.end, hueShift));
-          document.documentElement.style.setProperty('--primary-gradient-hover-start', shiftHue(originalColors.hoverStart, hueShift));
-          document.documentElement.style.setProperty('--primary-gradient-hover-middle', shiftHue(originalColors.hoverMiddle, hueShift));
-          document.documentElement.style.setProperty('--primary-gradient-hover-end', shiftHue(originalColors.hoverEnd, hueShift));
-          
-          console.log('Applied TYPE 2 hue shift:', { hueShift, originalHue: originalHue[0], extractedHue: extractedHue[0] });
-        })
-        .catch((error) => {
-          console.error('Failed to extract color:', error);
-        })
-        .finally(() => {
-          setIsAlbumCoverLoading(false);
-        });
-    } else if (!showCoverImage) {
-      // Reset to default purple colors when cover is hidden
-      document.documentElement.style.setProperty('--bg-gradient-start', '#562aa3');
-      document.documentElement.style.setProperty('--bg-gradient-middle', '#4a1a72');
-      document.documentElement.style.setProperty('--bg-gradient-end', '#1f1f2e');
-      
-      document.documentElement.style.setProperty('--switch-bg', 'rgba(147, 51, 234, 0.32)');
-      document.documentElement.style.setProperty('--switch-border', 'rgba(147, 51, 234, 0.52)');
-      document.documentElement.style.setProperty('--switch-checked-bg', 'rgba(147, 51, 234, 0.82)');
-      document.documentElement.style.setProperty('--switch-checked-border', '#9333ea');
-      document.documentElement.style.setProperty('--switch-hover', 'rgba(147, 51, 234, 0.42)');
-      document.documentElement.style.setProperty('--switch-checked-hover', 'rgba(147, 51, 234, 0.9)');
-      
-      // Reset shadow colors to default
-      document.documentElement.style.setProperty('--shadow-primary', 'rgba(147, 51, 234, 0.22)');
-      document.documentElement.style.setProperty('--shadow-primary-glow', 'rgba(236, 72, 153, 0.28)');
-      document.documentElement.style.setProperty('--playlist-active-shadow', 'rgba(236, 72, 153, 0.16)');
-      
-      // Reset player border to default
-      document.documentElement.style.setProperty('--player-border', 'rgba(255, 255, 255, 0.1)');
-      
-      document.documentElement.style.setProperty('--primary-gradient-start', '#ec4899');
-      document.documentElement.style.setProperty('--primary-gradient-middle', '#9333ea');
-      document.documentElement.style.setProperty('--primary-gradient-end', '#3b82f6');
-      document.documentElement.style.setProperty('--primary-gradient-hover-start', '#f472b6');
-      document.documentElement.style.setProperty('--primary-gradient-hover-middle', '#c084fc');
-      document.documentElement.style.setProperty('--primary-gradient-hover-end', '#60a5fa');
+    if (!albumCoverUrl || !showCoverImage) {
+      clearAlbumDrivenThemeOverrides();
+      setIsAlbumCoverLoading(false);
+      return;
     }
+
+    setIsAlbumCoverLoading(true);
+
+    extractDominantColor(albumCoverUrl)
+      .then((dominantColor) => {
+        clearAlbumDrivenThemeOverrides();
+        const gradientStart = saturateColor(darkenColor(dominantColor, 20), 50);
+        const gradientMiddle = saturateColor(darkenColor(dominantColor, 35), 50);
+        const gradientEnd = '#1f1f2e';
+        document.documentElement.style.setProperty('--bg-gradient-start', gradientStart);
+        document.documentElement.style.setProperty('--bg-gradient-middle', gradientMiddle);
+        document.documentElement.style.setProperty('--bg-gradient-end', gradientEnd);
+      })
+      .catch(() => {
+        clearAlbumDrivenThemeOverrides();
+      })
+      .finally(() => {
+        setIsAlbumCoverLoading(false);
+      });
   }, [albumCoverUrl, showCoverImage]);
 
   // Extract file ID from Google Drive URL
@@ -307,9 +330,110 @@ export default function PlaylistHeader({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
+  const startTitleEdit = useCallback(() => {
+    if (!allowTitleRename || tracks.length === 0) return;
+    const current = selectedFolderName?.trim() || 'Untitled playlist';
+    titleSnapshotRef.current = current;
+    setTitleDraft(current.slice(0, PLAYLIST_NAME_MAX_LENGTH));
+    titleEditingRef.current = true;
+    setTitleEditing(true);
+  }, [allowTitleRename, tracks.length, selectedFolderName]);
+
+  const cancelTitleEdit = useCallback(() => {
+    titleEditingRef.current = false;
+    setTitleDraft(titleSnapshotRef.current);
+    setTitleEditing(false);
+  }, []);
+
+  const commitTitleEdit = useCallback(async () => {
+    if (!titleEditingRef.current || !onAlbumTitleChange) {
+      return;
+    }
+    let next = titleDraft.trim();
+    if (!next) {
+      next = titleSnapshotRef.current || 'Untitled playlist';
+    }
+    next = next.slice(0, PLAYLIST_NAME_MAX_LENGTH);
+    titleEditingRef.current = false;
+    setTitleEditing(false);
+    if (next !== titleSnapshotRef.current) {
+      await Promise.resolve(onAlbumTitleChange(next));
+    }
+  }, [onAlbumTitleChange, titleDraft]);
+
+  /** Blur commits title unless focus moves into album art (cover menu / overlay). */
+  const handleTitleInputBlur = useCallback(
+    (e: FocusEvent<HTMLInputElement>) => {
+      const next = e.relatedTarget as HTMLElement | null;
+      if (next?.closest?.('.album-art-cover-hit') || next?.closest?.('.album-art')) {
+        return;
+      }
+      void commitTitleEdit();
+    },
+    [commitTitleEdit]
+  );
+
+  const handleCoverFileChange = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !coverPlaylistId || !onCoverUploaded) return;
+      try {
+        setCoverUploading(true);
+        setCoverError(null);
+        const blob = await squareCenterCropToJpegBlob(file);
+        const formData = new FormData();
+        formData.append('file', blob, 'cover.jpg');
+        formData.append('playlistId', coverPlaylistId);
+        const res = await fetch('/api/playlists/cover', { method: 'POST', body: formData });
+        const data = (await res.json()) as { error?: string; playlist?: SavedPlaylist };
+        if (!res.ok) {
+          setCoverError(data.error ?? 'Upload failed');
+          return;
+        }
+        if (data.playlist) {
+          onCoverUploaded(data.playlist);
+        }
+      } catch (err) {
+        setCoverError(err instanceof Error ? err.message : 'Upload failed');
+      } finally {
+        setCoverUploading(false);
+      }
+    },
+    [coverPlaylistId, onCoverUploaded]
+  );
+
+  useEffect(() => {
+    if (!titleEditing) {
+      setCoverError(null);
+      setCoverMenuOpen(false);
+    }
+  }, [titleEditing]);
+
+  useEffect(() => {
+    if (!coverMenuOpen) return;
+    const onDocDown = (ev: MouseEvent) => {
+      const el = coverMenuRef.current;
+      if (el && !el.contains(ev.target as Node)) {
+        setCoverMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [coverMenuOpen]);
+
+  useEffect(() => {
+    if (titleEditing && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [titleEditing]);
+
   return (
     <div className={`main-content ${tracks.length === 0 ? 'centered' : ''}`}>
-      <div className="album-art">
+      <div
+        className={`album-art${showAlbumCoverEditChrome ? ' album-art--cover-edit' : ''}`}
+      >
         {albumCoverUrl && showCoverImage ? (
           <>
             <img 
@@ -337,13 +461,154 @@ export default function PlaylistHeader({
           </>
         ) : null}
         <div className="album-art-default" style={{ display: (albumCoverUrl && showCoverImage) ? 'none' : 'flex' }}></div>
+        {showProCoverEditUi && (
+          <>
+            <input
+              ref={coverFileInputRef}
+              type="file"
+              className="album-art-file-input"
+              accept="image/*"
+              aria-hidden
+              tabIndex={-1}
+              onChange={(e) => void handleCoverFileChange(e)}
+            />
+            <div className="album-art-cover-hit" ref={coverMenuRef}>
+              <button
+                type="button"
+                className={`album-art-cover-overlay${coverUploading ? ' album-art-cover-overlay--busy' : ''}`}
+                disabled={coverUploading}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  if (coverUploading) return;
+                  setCoverError(null);
+                  setCoverMenuOpen((o) => !o);
+                }}
+                aria-expanded={coverMenuOpen}
+                aria-haspopup="menu"
+                aria-label="Album cover options"
+              >
+                {coverUploading ? (
+                  <span className="album-art-cover-overlay-spinner" aria-hidden>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                  </span>
+                ) : (
+                  <Pencil size={32} strokeWidth={2} aria-hidden />
+                )}
+              </button>
+              {coverMenuOpen && !coverUploading && (
+                <div className="album-art-cover-menu" role="menu">
+                  <button
+                    type="button"
+                    className="album-art-cover-menu-item"
+                    role="menuitem"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setCoverMenuOpen(false);
+                      setCoverError(null);
+                      coverFileInputRef.current?.click();
+                    }}
+                  >
+                    <Image size={17} strokeWidth={2} className="album-art-cover-menu-icon" aria-hidden />
+                    <span>Change image</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="album-art-cover-menu-item"
+                    role="menuitem"
+                    disabled={!hasCustomCover || !onCoverRemoved}
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (!hasCustomCover || !onCoverRemoved) return;
+                      setCoverMenuOpen(false);
+                      void Promise.resolve(onCoverRemoved());
+                    }}
+                  >
+                    <Trash2 size={17} strokeWidth={2} className="album-art-cover-menu-icon" aria-hidden />
+                    <span>Remove cover</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {showFreeCoverEditTeaser && (
+          <div className="album-art-cover-hit">
+            <button
+              type="button"
+              className="album-art-cover-overlay"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => onAlbumCoverRequiresPro?.()}
+              aria-label="Album cover editing requires Pro"
+            >
+              <Pencil size={32} strokeWidth={2} aria-hidden />
+            </button>
+          </div>
+        )}
+        {coverError && (
+          <div className="album-art-cover-error" role="alert">
+            {coverError}
+          </div>
+        )}
       </div>
       <div className="info-section">
-        <h1 className="title">{selectedFolderName || `Drop your playlist here!`}</h1> 
+        {tracks.length === 0 ? (
+          <h1
+            className="title"
+            title={
+              selectedFolderName && selectedFolderName.trim().length > PLAYLIST_NAME_MAX_LENGTH
+                ? selectedFolderName.trim()
+                : undefined
+            }
+          >
+            {selectedFolderName?.trim()
+              ? truncatePlaylistNameForDisplay(selectedFolderName.trim())
+              : `Drop your playlist here!`}
+          </h1>
+        ) : hasPlaylistRenameHandler ? (
+          titleEditing ? (
+            <div className="album-title-row album-title-row--editing">
+              <input
+                ref={titleInputRef}
+                className="title album-title-input"
+                value={titleDraft}
+                maxLength={PLAYLIST_NAME_MAX_LENGTH}
+                aria-label="Album name"
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={handleTitleInputBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void commitTitleEdit();
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelTitleEdit();
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <h1
+              className="title album-title-text"
+              title={albumTitleTooltip}
+              onDoubleClick={startTitleEdit}
+            >
+              {displayAlbumTitle}
+            </h1>
+          )
+        ) : (
+          <h1 className="title" title={albumTitleTooltip}>
+            {displayAlbumTitle}
+          </h1>
+        )}
         <p className="subtitle">
           {tracks.length > 0 ? (
             <>
-              {tracks.length} tracks, {formatDuration(totalDuration)}
+              {tracks.length} tracks{albumDurationReady ? `, ${formatDuration(totalDuration)}` : ''}
               {tracks.some(track => track.googleDriveUrl) ? (
                 <Cloud size={16} style={{ marginLeft: '8px', opacity: 0.8 }} />
               ) : (
@@ -389,6 +654,17 @@ export default function PlaylistHeader({
                   </>
                 )}
               </button>
+              {hasPlaylistRenameHandler && !titleEditing && (
+                <button
+                  type="button"
+                  className="playlist-header-edit-btn"
+                  onClick={startTitleEdit}
+                  aria-label="Edit playlist name"
+                >
+                  <Pencil size={19} strokeWidth={2} aria-hidden />
+                  Edit
+                </button>
+              )}
             </>
           )}
           {isDownloading && (

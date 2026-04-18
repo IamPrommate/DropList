@@ -2,7 +2,11 @@
 
 import { useState, useCallback, memo } from 'react';
 import { TrackType, SavedPlaylist } from '../lib/types';
-import { getPlaylistCoverUrl } from '../lib/playlistCover';
+import {
+  PLAYLIST_NAME_MAX_LENGTH,
+  truncatePlaylistNameForDisplay,
+} from '../lib/playlistNameLimits';
+import { getPlaylistCoverUrl, playlistCoverUrlWithCacheBust } from '../lib/playlistCover';
 import GoogleDrivePicker from './GoogleDrivePicker';
 import ConfirmModal from './ConfirmModal';
 import Spinner from './Spinner';
@@ -26,6 +30,8 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   loadingPlaylistId: string | null;
   loadingPlaylists: boolean;
+  /** Bumped when any playlist cover changes so thumbnails refetch the same Storage URL. */
+  coverCacheRev?: number;
 }
 
 function Sidebar({
@@ -43,6 +49,7 @@ function Sidebar({
   onToggleCollapse,
   loadingPlaylistId,
   loadingPlaylists,
+  coverCacheRev = 0,
 }: SidebarProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleteInProgress, setDeleteInProgress] = useState(false);
@@ -88,21 +95,23 @@ function Sidebar({
                   <h3 className="playlists-title">Playlists</h3>
                 </div>
 
-                <div className="sidebar-add-buttons">
-                  {!isLoggedIn ? (
-                    <button className="sidebar-add-main-btn" onClick={() => signIn('google')}>
-                      <LogIn size={16} />
-                      <span>Sign in to add music</span>
-                    </button>
-                  ) : (
-                    <GoogleDrivePicker
-                      onPicked={onGoogleDrivePicked}
-                      variant="sidebar"
-                      addBlocked={!playlistAddAllowed}
-                      onAddBlocked={onAddBlocked}
-                    />
-                  )}
-                </div>
+                {!loadingPlaylists && (
+                  <div className="sidebar-add-buttons">
+                    {!isLoggedIn ? (
+                      <button className="sidebar-add-main-btn" onClick={() => signIn('google')}>
+                        <LogIn size={16} />
+                        <span>Sign in to add music</span>
+                      </button>
+                    ) : (
+                      <GoogleDrivePicker
+                        onPicked={onGoogleDrivePicked}
+                        variant="sidebar"
+                        addBlocked={!playlistAddAllowed}
+                        onAddBlocked={onAddBlocked}
+                      />
+                    )}
+                  </div>
+                )}
 
                 <div className="playlists-list">
                   {loadingPlaylists ? (
@@ -114,6 +123,15 @@ function Sidebar({
                     <>
                   {savedPlaylists.map((pl) => {
                     const rowCoverUrl = getPlaylistCoverUrl(pl);
+                    const rowCoverSrc = playlistCoverUrlWithCacheBust(rowCoverUrl, coverCacheRev);
+                    const displayTrackCount =
+                      loadingPlaylistId === pl.id
+                        ? null
+                        : pl.id === activePlaylistId && tracks.length > 0
+                          ? tracks.length
+                          : typeof pl.audio_track_count === 'number'
+                            ? pl.audio_track_count
+                            : null;
                     return (
                     <div
                       key={pl.id}
@@ -121,22 +139,28 @@ function Sidebar({
                       onClick={() => onSelectPlaylist(pl)}
                     >
                       <div className="playlist-icon" aria-hidden>
-                        {rowCoverUrl ? (
-                          <img src={rowCoverUrl} alt="" className="playlist-cover-thumb" />
+                        {rowCoverSrc ? (
+                          <img src={rowCoverSrc} alt="" className="playlist-cover-thumb" />
                         ) : (
                           <div className="playlist-thumb-default" />
                         )}
                       </div>
                       <div className="playlist-info">
-                        <div className="playlist-name">{pl.name}</div>
-                        {pl.id === activePlaylistId && tracks.length > 0 && (
-                          <div className="playlist-count">{tracks.length} tracks</div>
-                        )}
-                        {loadingPlaylistId === pl.id && (
+                        <div
+                          className="playlist-name"
+                          title={
+                            pl.name.length > PLAYLIST_NAME_MAX_LENGTH ? pl.name : undefined
+                          }
+                        >
+                          {truncatePlaylistNameForDisplay(pl.name)}
+                        </div>
+                        {loadingPlaylistId === pl.id ? (
                           <div className="playlist-count">
                             <Spinner size={12} /> Loading…
                           </div>
-                        )}
+                        ) : displayTrackCount != null ? (
+                          <div className="playlist-count">{displayTrackCount} tracks</div>
+                        ) : null}
                       </div>
                       <div className="playlist-actions" onClick={(e) => e.stopPropagation()}>
                         <button
