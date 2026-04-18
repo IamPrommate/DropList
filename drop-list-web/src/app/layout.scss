@@ -2,19 +2,22 @@
 
 /* CSS Variables for Modern Color Scheme */
 :root {
-  /* Primary Colors */
+  /*
+   * Primary accent: vivid pink → purple-600 → blue (livelier than the muted pass; middle is
+   * #9333ea not #a855f7 so it stays a touch less neon on harsh displays).
+   */
   --primary-gradient-start: #ec4899;
-  --primary-gradient-middle: #a855f7;
+  --primary-gradient-middle: #9333ea;
   --primary-gradient-end: #3b82f6;
   --primary-gradient-hover-start: #f472b6;
   --primary-gradient-hover-middle: #c084fc;
   --primary-gradient-hover-end: #60a5fa;
-  
-  /* Background Colors */
+
+  /* Ambient page gradient — rich purple band (between “dull” and original #5b21b6). */
   --bg-primary: #1f1f2e;
   --bg-secondary: #1a1a2e;
-  --bg-gradient-start: #5b21b6;
-  --bg-gradient-middle: #581c87;
+  --bg-gradient-start: #562aa3;
+  --bg-gradient-middle: #4a1a72;
   --bg-gradient-end: #1f1f2e;
   
   /* Text Colors */
@@ -43,13 +46,13 @@
   --btn-ggd-bg: rgba(15, 20, 25, 0.8);
   --btn-ggd-hover: rgba(15, 20, 25, 0.95);
   
-  /* Switch Colors */
-  --switch-bg: rgba(168, 85, 247, 0.3);
-  --switch-border: rgba(168, 85, 247, 0.5);
-  --switch-checked-bg: rgba(168, 85, 247, 0.8);
-  --switch-checked-border: rgba(168, 85, 247, 1);
-  --switch-hover: rgba(168, 85, 247, 0.4);
-  --switch-checked-hover: rgba(168, 85, 247, 0.9);
+  /* Switch Colors — tied to --primary-gradient-middle (#9333ea) */
+  --switch-bg: rgba(147, 51, 234, 0.32);
+  --switch-border: rgba(147, 51, 234, 0.52);
+  --switch-checked-bg: rgba(147, 51, 234, 0.82);
+  --switch-checked-border: rgba(147, 51, 234, 1);
+  --switch-hover: rgba(147, 51, 234, 0.42);
+  --switch-checked-hover: rgba(147, 51, 234, 0.9);
   
   /* Track Colors */
   --track-active-bg: rgba(0, 255, 136, 0.06);
@@ -73,9 +76,9 @@
   --shadow-medium: rgba(0, 0, 0, 0.3);
   --shadow-heavy: rgba(0, 0, 0, 0.4);
   --shadow-white: rgba(255, 255, 255, 0.1);
-  --shadow-primary: rgba(168, 85, 247, 0.2);
-  --shadow-primary-glow: rgba(236, 72, 153, 0.3);
-  --playlist-active-shadow: rgba(236, 72, 153, 0.15);
+  --shadow-primary: rgba(147, 51, 234, 0.22);
+  --shadow-primary-glow: rgba(236, 72, 153, 0.28);
+  --playlist-active-shadow: rgba(236, 72, 153, 0.16);
   
   /* Button Shadow Colors */
   --btn-shadow-primary: rgba(0, 212, 255, 0.2);
@@ -2676,7 +2679,7 @@
   border-radius: 20px;
   padding: 36px 32px 28px;
   text-align: center;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 40px rgba(168, 85, 247, 0.1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 40px rgba(147, 51, 234, 0.12);
   animation: modalSlideUp 0.25s ease;
 }
 

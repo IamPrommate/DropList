@@ -83,9 +83,8 @@ export default function PlaylistHeader({
           console.log('Applied TYPE 1 colors:', { dominantColor, gradientStart, gradientMiddle, gradientEnd });
           
           // TYPE 2: Apply hue angle shift to primary gradient colors
-          // Original middle color: #a855f7 (purple)
-          // We need to calculate the hue shift from purple to extracted color
-          const originalMiddle = '#a855f7';
+          // Anchor middle (must match :root --primary-gradient-middle in layout.scss)
+          const originalMiddle = '#9333ea';
           
           // Get hues for original middle color and extracted color
           const [origR, origG, origB] = hexToRgb(originalMiddle);
@@ -103,7 +102,7 @@ export default function PlaylistHeader({
           // Apply same hue shift to all primary gradient colors
           const originalColors = {
             start: '#ec4899',
-            middle: '#a855f7',
+            middle: '#9333ea',
             end: '#3b82f6',
             hoverStart: '#f472b6',
             hoverMiddle: '#c084fc',
@@ -128,27 +127,27 @@ export default function PlaylistHeader({
         });
     } else if (!showCoverImage) {
       // Reset to default purple colors when cover is hidden
-      document.documentElement.style.setProperty('--bg-gradient-start', '#5b21b6');
-      document.documentElement.style.setProperty('--bg-gradient-middle', '#581c87');
+      document.documentElement.style.setProperty('--bg-gradient-start', '#562aa3');
+      document.documentElement.style.setProperty('--bg-gradient-middle', '#4a1a72');
       document.documentElement.style.setProperty('--bg-gradient-end', '#1f1f2e');
       
-      document.documentElement.style.setProperty('--switch-bg', 'rgba(168, 85, 247, 0.3)');
-      document.documentElement.style.setProperty('--switch-border', 'rgba(168, 85, 247, 0.5)');
-      document.documentElement.style.setProperty('--switch-checked-bg', 'rgba(168, 85, 247, 0.8)');
-      document.documentElement.style.setProperty('--switch-checked-border', '#a855f7');
-      document.documentElement.style.setProperty('--switch-hover', 'rgba(168, 85, 247, 0.4)');
-      document.documentElement.style.setProperty('--switch-checked-hover', 'rgba(168, 85, 247, 0.9)');
+      document.documentElement.style.setProperty('--switch-bg', 'rgba(147, 51, 234, 0.32)');
+      document.documentElement.style.setProperty('--switch-border', 'rgba(147, 51, 234, 0.52)');
+      document.documentElement.style.setProperty('--switch-checked-bg', 'rgba(147, 51, 234, 0.82)');
+      document.documentElement.style.setProperty('--switch-checked-border', '#9333ea');
+      document.documentElement.style.setProperty('--switch-hover', 'rgba(147, 51, 234, 0.42)');
+      document.documentElement.style.setProperty('--switch-checked-hover', 'rgba(147, 51, 234, 0.9)');
       
       // Reset shadow colors to default
-      document.documentElement.style.setProperty('--shadow-primary', 'rgba(168, 85, 247, 0.2)');
-      document.documentElement.style.setProperty('--shadow-primary-glow', 'rgba(236, 72, 153, 0.3)');
-      document.documentElement.style.setProperty('--playlist-active-shadow', 'rgba(236, 72, 153, 0.15)');
+      document.documentElement.style.setProperty('--shadow-primary', 'rgba(147, 51, 234, 0.22)');
+      document.documentElement.style.setProperty('--shadow-primary-glow', 'rgba(236, 72, 153, 0.28)');
+      document.documentElement.style.setProperty('--playlist-active-shadow', 'rgba(236, 72, 153, 0.16)');
       
       // Reset player border to default
       document.documentElement.style.setProperty('--player-border', 'rgba(255, 255, 255, 0.1)');
       
       document.documentElement.style.setProperty('--primary-gradient-start', '#ec4899');
-      document.documentElement.style.setProperty('--primary-gradient-middle', '#a855f7');
+      document.documentElement.style.setProperty('--primary-gradient-middle', '#9333ea');
       document.documentElement.style.setProperty('--primary-gradient-end', '#3b82f6');
       document.documentElement.style.setProperty('--primary-gradient-hover-start', '#f472b6');
       document.documentElement.style.setProperty('--primary-gradient-hover-middle', '#c084fc');
