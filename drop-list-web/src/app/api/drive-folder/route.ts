@@ -4,7 +4,6 @@ import { google } from 'googleapis';
 
 // Configurable folder names from environment variables
 const CONFIG = {
-  TRACKS_FOLDER: process.env.NEXT_PUBLIC_TRACKS_FOLDER || 'track', // Default: empty (root folder)
   ARTIST_FOLDER: process.env.NEXT_PUBLIC_ARTIST_FOLDER || 'artist', // Default: 'artist'
   VIDEO_FOLDER: process.env.NEXT_PUBLIC_VIDEO_FOLDER || 'video', // Default: 'video'
 };
@@ -110,12 +109,21 @@ async function fetchTracksFromSubfolder(folderId: string): Promise<Array<{ id: s
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as { folderId?: string; summaryOnly?: boolean };
+    const body = (await request.json()) as {
+      folderId?: string;
+      summaryOnly?: boolean;
+      /** Omit = legacy (use env). Present string (incl. "") = per-request override; "" = audio at shared folder root. */
+      tracksSubfolder?: string | null;
+    };
     const { folderId, summaryOnly } = body;
 
     if (!folderId) {
       return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
     }
+
+    const effectiveTracksFolder: string = Object.prototype.hasOwnProperty.call(body, 'tracksSubfolder')
+      ? (body.tracksSubfolder ?? '').trim()
+      : (process.env.NEXT_PUBLIC_TRACKS_FOLDER || 'track').trim();
 
     const drive = getDriveClient();
     let folderName = 'Google Drive Folder';
@@ -212,9 +220,12 @@ export async function POST(request: NextRequest) {
             videoSubfolderId = file.id;
             console.log(`Found "${CONFIG.VIDEO_FOLDER}" subfolder via API:`, file.id);
           }
-          if (CONFIG.TRACKS_FOLDER && fileName.includes(CONFIG.TRACKS_FOLDER.toLowerCase())) {
+          if (
+            effectiveTracksFolder !== '' &&
+            fileName === effectiveTracksFolder.toLowerCase()
+          ) {
             tracksFolderId = file.id;
-            console.log(`Found "${CONFIG.TRACKS_FOLDER}" subfolder via API:`, file.id);
+            console.log(`Found "${effectiveTracksFolder}" subfolder via API:`, file.id);
           }
         }
       }
@@ -265,7 +276,10 @@ export async function POST(request: NextRequest) {
                 if (normalizedName === CONFIG.VIDEO_FOLDER.toLowerCase().trim()) {
                   videoSubfolderId = fileId;
                 }
-                if (CONFIG.TRACKS_FOLDER && normalizedName.includes(CONFIG.TRACKS_FOLDER.toLowerCase())) {
+                if (
+                  effectiveTracksFolder !== '' &&
+                  normalizedName === effectiveTracksFolder.toLowerCase()
+                ) {
                   tracksFolderId = fileId;
                 }
               }
@@ -276,11 +290,11 @@ export async function POST(request: NextRequest) {
     }
     
     // Determine if we should look for tracks in a subfolder or root
-    if (CONFIG.TRACKS_FOLDER && CONFIG.TRACKS_FOLDER.trim() !== '') {
+    if (effectiveTracksFolder !== '') {
       // Strict check: if tracks folder is specified but not found, fail
       if (!tracksFolderId) {
-        console.warn(`Tracks folder "${CONFIG.TRACKS_FOLDER}" not found`);
-        const err = `Tracks folder "${CONFIG.TRACKS_FOLDER}" not found. Please create the folder or check your NEXT_PUBLIC_TRACKS_FOLDER configuration.`;
+        console.warn(`Tracks folder "${effectiveTracksFolder}" not found`);
+        const err = `Tracks folder "${effectiveTracksFolder}" not found. Create that folder under the shared link, or leave "Tracks folder" blank to use the folder root.`;
         if (summaryOnly) {
           return NextResponse.json({
             error: err,
@@ -302,8 +316,8 @@ export async function POST(request: NextRequest) {
     if (tracksFolderId) {
       filesToProcess = await fetchTracksFromSubfolder(tracksFolderId);
       if (!filesToProcess) {
-        console.warn(`Failed to fetch tracks from "${CONFIG.TRACKS_FOLDER}" subfolder`);
-        const err = `Failed to access "${CONFIG.TRACKS_FOLDER}" subfolder. Make sure the folder exists and is shared publicly.`;
+        console.warn(`Failed to fetch tracks from "${effectiveTracksFolder}" subfolder`);
+        const err = `Failed to access "${effectiveTracksFolder}" subfolder. Make sure the folder exists and is shared publicly.`;
         if (summaryOnly) {
           return NextResponse.json({
             error: err,
@@ -324,7 +338,10 @@ export async function POST(request: NextRequest) {
     }
     
     if (filesToProcess) {
-      console.log('Processing files from:', tracksFolderId ? `"${CONFIG.TRACKS_FOLDER}" subfolder` : 'root folder');
+      console.log(
+        'Processing files from:',
+        tracksFolderId ? `"${effectiveTracksFolder}" subfolder` : 'root folder'
+      );
       
       for (const file of filesToProcess) {
         const fileId = file.id;

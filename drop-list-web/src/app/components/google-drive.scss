@@ -223,4 +223,27 @@
     min-height: 156px;
     resize: vertical;
   }
+
+  .drive-modal-tracks-subfolder {
+    margin-top: 2px;
+
+    .drive-modal-tracks-subfolder-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .drive-modal-tracks-subfolder-hint {
+      margin: 8px 0 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-muted);
+
+      code {
+        font-size: 0.95em;
+      }
+    }
+  }
 }

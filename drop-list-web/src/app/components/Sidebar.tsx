@@ -22,7 +22,13 @@ interface SidebarProps {
   savedPlaylists: SavedPlaylist[];
   activePlaylistId: string | null;
   tracks: TrackType[];
-  onGoogleDrivePicked: (picked: TrackType[], folderName?: string, albumCoverUrl?: string | null, driveFolderId?: string | null) => void;
+  onGoogleDrivePicked: (
+    picked: TrackType[],
+    folderName?: string,
+    albumCoverUrl?: string | null,
+    driveFolderId?: string | null,
+    tracksSubfolder?: string
+  ) => void;
   onSelectPlaylist: (playlist: SavedPlaylist) => void;
   onDeletePlaylist: (playlistId: string) => Promise<void>;
   onAddBlocked: () => void;

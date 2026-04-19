@@ -323,6 +323,7 @@ function SettingsPanel({
                   readOnly={!profileEditing}
                   maxLength={DISPLAY_NAME_MAX_LENGTH}
                   autoComplete="name"
+                  spellCheck={false}
                   aria-describedby={profileEditing ? 'settings-display-name-hint' : undefined}
                 />
                 {profileEditing ? (

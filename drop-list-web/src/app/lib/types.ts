@@ -32,6 +32,12 @@ export type TrackType = {
     created_at: string;
     /** Cached from Google Drive folder listing; null until first prefetch or open */
     audio_track_count?: number | null;
+    /**
+     * Child folder name under `folder_id` where audio lives.
+     * null = legacy (use env NEXT_PUBLIC_TRACKS_FOLDER on load).
+     * '' = shared folder root.
+     */
+    tracks_subfolder?: string | null;
   };
 
   /** Per-track play count (หนึ่งแทร็กใน playCount) */

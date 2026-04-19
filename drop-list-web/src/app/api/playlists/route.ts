@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
     folder_id?: string;
     name?: string;
     cover_url?: string | null;
+    /** Per-import tracks subfolder; omit for legacy clients */
+    tracks_subfolder?: string | null;
   };
 
   if (!body.folder_id || !body.name) {
@@ -123,6 +125,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const tracksSubfolderInsert =
+    body.tracks_subfolder !== undefined ? body.tracks_subfolder : null;
+
   const { data, error } = await supabaseAdmin
     .from('playlists')
     .insert({
@@ -131,6 +136,7 @@ export async function POST(req: NextRequest) {
       folder_id: body.folder_id,
       name: postName,
       cover_url: body.cover_url ?? null,
+      tracks_subfolder: tracksSubfolderInsert,
     })
     .select()
     .single();

@@ -10,7 +10,14 @@ import Spinner from "./Spinner";
 import "./google-drive.scss";
 
 type Props = {
-  onPicked: (tracks: TrackType[], folderName?: string, albumCoverUrl?: string | null, driveFolderId?: string | null) => void;
+  onPicked: (
+    tracks: TrackType[],
+    folderName?: string,
+    albumCoverUrl?: string | null,
+    driveFolderId?: string | null,
+    /** Trimmed subfolder name, or "" when importing from the shared folder root */
+    tracksSubfolder?: string
+  ) => void;
   variant?: 'button' | 'dropdown' | 'sidebar';
   /** When false (at plan/rank playlist cap), open upgrade or limit modal instead of the Drive modal */
   addBlocked?: boolean;
@@ -47,17 +54,18 @@ async function buildStreamUrl(fileId: string): Promise<string> {
 
 // Use server-side API to fetch folder contents (no CORS issues)
 async function fetchFolderFiles(
-  folderId: string
+  folderId: string,
+  tracksSubfolder: string
 ): Promise<{ files: DriveFolderFile[]; folderName?: string; albumCoverUrl?: string | null; error?: string }> {
   try {
-    console.log("Fetching folder via server API:", folderId);
+    console.log("Fetching folder via server API:", folderId, "tracksSubfolder:", tracksSubfolder);
 
     const response = await fetch("/api/drive-folder", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ folderId }),
+      body: JSON.stringify({ folderId, tracksSubfolder }),
     });
 
     if (!response.ok) {
@@ -107,6 +115,7 @@ export default function GoogleDrivePicker({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
+  const [tracksSubfolder, setTracksSubfolder] = useState("");
   const [loading, setLoading] = useState(false);
   const handleConfirm = async () => {
     const lines = raw
@@ -126,7 +135,7 @@ export default function GoogleDrivePicker({
       try {
         const folderId = extractDriveFolderId(line);
         if (folderId) {
-          const folderData = await fetchFolderFiles(folderId);
+          const folderData = await fetchFolderFiles(folderId, tracksSubfolder.trim());
 
           // Check if there's an error from the backend
           if (folderData.error) {
@@ -189,9 +198,10 @@ export default function GoogleDrivePicker({
     }
 
     if (tracks.length > 0) {
-      onPicked(tracks, folderName, null, firstDriveFolderId);
+      onPicked(tracks, folderName, null, firstDriveFolderId, tracksSubfolder.trim());
       setOpen(false);
       setRaw("");
+      setTracksSubfolder("");
     } else {
       const errorMessage = lastError || "No valid Google Drive folder links found. Please paste Google Drive folder share links only.";
       alert(errorMessage);
@@ -235,7 +245,12 @@ export default function GoogleDrivePicker({
         width={420}
         wrapClassName="drive-modal-wrap"
         onOk={handleConfirm}
-        onCancel={() => { if (!loading) setOpen(false); }}
+        onCancel={() => {
+          if (!loading) {
+            setOpen(false);
+            setTracksSubfolder("");
+          }
+        }}
         okText={loading ? 'Loading…' : 'Add'}
         okButtonProps={{ disabled: loading }}
         cancelButtonProps={{ disabled: loading }}
@@ -255,12 +270,30 @@ export default function GoogleDrivePicker({
               <span>Fetching playlist from Drive…</span>
             </div>
           ) : (
-            <Input.TextArea
-              rows={7}
-              placeholder="Google Drive folder share links"
-              value={raw}
-              onChange={(e) => setRaw(e.target.value)}
-            />
+            <>
+              <Input.TextArea
+                rows={7}
+                placeholder="Google Drive folder share links"
+                value={raw}
+                onChange={(e) => setRaw(e.target.value)}
+              />
+              <div className="drive-modal-tracks-subfolder">
+                <label className="drive-modal-tracks-subfolder-label" htmlFor="drive-tracks-subfolder">
+                  Tracks folder (optional)
+                </label>
+                <Input
+                  id="drive-tracks-subfolder"
+                  placeholder="Leave blank for audio in the shared folder root"
+                  value={tracksSubfolder}
+                  onChange={(e) => setTracksSubfolder(e.target.value)}
+                  disabled={loading}
+                />
+                <p className="drive-modal-tracks-subfolder-hint">
+                  Leave blank to import audio from the folder you shared (root only). If your MP3s live one level down,
+                  enter that subfolder name exactly — case does not matter.
+                </p>
+              </div>
+            </>
           )}
         </Space>
       </Modal>

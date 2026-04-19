@@ -70,9 +70,9 @@ NEXT_PUBLIC_ARTIST_FOLDER=photos
 
 ## How It Works
 
-1. **Tracks Folder**: Set `NEXT_PUBLIC_TRACKS_FOLDER` to the name of the folder containing audio files
-   - Leave empty (`""`) to use the root folder
-   - Set to folder name (e.g., `"tracks"`) to use a subfolder
+1. **Tracks folder (two layers)**  
+   - **In-app import (Google Drive modal):** You can set an optional “Tracks folder” field per import. Leave it **blank** to list audio from the **shared link folder only** (the folder root). Enter a **subfolder name** (exact match, case-insensitive) if audio lives one level down (e.g. `track`, `tracks`, `mytrack`). That choice is **saved on the playlist** so reopening the app uses the same resolution.  
+   - **API / legacy callers:** If the request to `/api/drive-folder` **does not** include `tracksSubfolder`, the app uses `NEXT_PUBLIC_TRACKS_FOLDER` (default `track` in code). That matches older playlists whose `tracks_subfolder` column is `NULL` in the database.
 
 2. **Artist Images Folder**: Set `NEXT_PUBLIC_ARTIST_FOLDER` to the name of the folder containing artist images
    - Images are matched to tracks based on artist names extracted from filenames
@@ -80,7 +80,7 @@ NEXT_PUBLIC_ARTIST_FOLDER=photos
 
 ## Benefits
 
-- ✅ **No code changes needed** - Just update environment variables
+- ✅ **No code changes needed** for server defaults — update environment variables for API/legacy behavior; the Drive import UI can override per playlist
 - ✅ **Flexible structure** - Support any folder naming convention
 - ✅ **Easy migration** - Change structure without breaking existing playlists
 - ✅ **Backward compatible** - Default values work with current structure

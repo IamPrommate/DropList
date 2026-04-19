@@ -55,12 +55,17 @@ enum KeyboardShortcuts {
   KEY_V = 'KeyV',
 }
 
-/** In-memory session cache for Drive folder listings (keyed by folder_id). */
+/** In-memory session cache for Drive folder listings. */
 type CachedPlaylist = {
   tracks: TrackType[];
   folderName?: string;
   fetchedAt: number;
 };
+
+/** Distinguishes legacy playlists (omit API `tracksSubfolder`) from explicit root (`""`). */
+function playlistContentCacheKey(folderId: string, tracksSubfolder: string | null | undefined) {
+  return `${folderId}\t${tracksSubfolder == null ? '__legacy__' : tracksSubfolder}`;
+}
 
 function tracksListsEqualByDriveIds(a: TrackType[], b: TrackType[]): boolean {
   if (a.length !== b.length) return false;
@@ -485,7 +490,11 @@ export default function HomePage() {
             const res = await fetch('/api/drive-folder', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ folderId: pl.folder_id, summaryOnly: true }),
+              body: JSON.stringify({
+                folderId: pl.folder_id,
+                summaryOnly: true,
+                ...(pl.tracks_subfolder != null ? { tracksSubfolder: pl.tracks_subfolder } : {}),
+              }),
             });
             const data = (await res.json()) as { audioTrackCount?: number };
             if (cancelled) return;
@@ -526,13 +535,15 @@ export default function HomePage() {
   const loadPlaylistFromDrive = useCallback(
     async (
       folderId: string,
+      tracksSubfolder: string | null | undefined,
       options?: LoadPlaylistFromDriveOptions
     ): Promise<{
       tracks: TrackType[];
       folderName?: string;
     } | null> => {
+      const cacheKey = playlistContentCacheKey(folderId, tracksSubfolder);
       if (!options?.skipCache) {
-        const cached = playlistContentCache.current.get(folderId);
+        const cached = playlistContentCache.current.get(cacheKey);
         if (cached) {
           return {
             tracks: cached.tracks.map((t) => ({ ...t })),
@@ -542,10 +553,14 @@ export default function HomePage() {
       }
 
       try {
+        const body: Record<string, unknown> = { folderId };
+        if (tracksSubfolder != null) {
+          body.tracksSubfolder = tracksSubfolder;
+        }
         const res = await fetch('/api/drive-folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderId }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
         if (data.error || !data.files) return null;
@@ -566,7 +581,7 @@ export default function HomePage() {
         }));
 
         const folderName: string | undefined = data.folderName;
-        playlistContentCache.current.set(folderId, {
+        playlistContentCache.current.set(cacheKey, {
           tracks,
           folderName,
           fetchedAt: Date.now(),
@@ -1095,11 +1110,12 @@ export default function HomePage() {
       setCurrentIndex(-1);
 
       const folderId = playlist.folder_id;
-      if (!playlistContentCache.current.has(folderId)) {
+      const sub = playlist.tracks_subfolder;
+      if (!playlistContentCache.current.has(playlistContentCacheKey(folderId, sub))) {
         setLoadingPlaylistId(playlist.id);
       }
 
-      const result = await loadPlaylistFromDrive(folderId);
+      const result = await loadPlaylistFromDrive(folderId, sub);
       setLoadingPlaylistId(null);
 
       if (!result || result.tracks.length === 0) return;
@@ -1125,7 +1141,7 @@ export default function HomePage() {
       preloadAudioFiles(result.tracks);
       void updatePlaylistAudioTrackCount(playlist.id, result.tracks.length);
 
-      void loadPlaylistFromDrive(folderId, { skipCache: true }).then((fresh) => {
+      void loadPlaylistFromDrive(folderId, sub, { skipCache: true }).then((fresh) => {
         if (!fresh || activePlaylistIdRef.current !== playlist.id) return;
         if (tracksListsEqualByDriveIds(result.tracks, fresh.tracks)) return;
 
@@ -1170,7 +1186,9 @@ export default function HomePage() {
     setSavedPlaylists((prev) => {
       const victim = prev.find((p) => p.id === playlistId);
       if (victim?.folder_id) {
-        playlistContentCache.current.delete(victim.folder_id);
+        playlistContentCache.current.delete(
+          playlistContentCacheKey(victim.folder_id, victim.tracks_subfolder)
+        );
       }
       return prev.filter((p) => p.id !== playlistId);
     });
@@ -1519,9 +1537,9 @@ export default function HomePage() {
             coverCacheRev={coverCacheRev}
             loadingPlaylistId={loadingPlaylistId}
             loadingPlaylists={isAuthPending || isPlaylistCatalogLoading}
-            onGoogleDrivePicked={async (picked, folderName, coverUrl, driveFolderId) => {
+            onGoogleDrivePicked={async (picked, folderName, coverUrl, driveFolderId, tracksSubfolder = '') => {
               if (driveFolderId) {
-                playlistContentCache.current.set(driveFolderId, {
+                playlistContentCache.current.set(playlistContentCacheKey(driveFolderId, tracksSubfolder), {
                   tracks: picked,
                   folderName: folderName?.trim() || undefined,
                   fetchedAt: Date.now(),
@@ -1563,6 +1581,7 @@ export default function HomePage() {
                       folder_id: driveFolderId,
                       name: nameForApi,
                       cover_url: null,
+                      tracks_subfolder: tracksSubfolder,
                     }),
                   });
                   const data = await res.json();
