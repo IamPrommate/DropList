@@ -6,9 +6,12 @@ export const COVER_OUTPUT_SIZE = 1024;
 
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg',
+  'image/jpg',
+  'image/pjpeg',
   'image/png',
   'image/webp',
   'image/gif',
+  '',
 ]);
 
 /**

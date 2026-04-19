@@ -380,9 +380,12 @@ export default function PlaylistHeader({
 
   const handleCoverFileChange = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      e.target.value = '';
-      if (!file || !coverPlaylistId || !onCoverUploaded) return;
+      const input = e.target;
+      const file = input.files?.[0];
+      if (!file || !coverPlaylistId || !onCoverUploaded) {
+        input.value = '';
+        return;
+      }
       try {
         setCoverUploading(true);
         setCoverError(null);
@@ -403,6 +406,7 @@ export default function PlaylistHeader({
         setCoverError(err instanceof Error ? err.message : 'Upload failed');
       } finally {
         setCoverUploading(false);
+        input.value = '';
       }
     },
     [coverPlaylistId, onCoverUploaded]
@@ -510,11 +514,11 @@ export default function PlaylistHeader({
                     type="button"
                     className="album-art-cover-menu-item"
                     role="menuitem"
-                    onPointerDown={(e) => e.preventDefault()}
                     onClick={() => {
-                      setCoverMenuOpen(false);
                       setCoverError(null);
+                      // Open picker in the same user gesture as this click (Safari / iOS); then close menu.
                       coverFileInputRef.current?.click();
+                      setCoverMenuOpen(false);
                     }}
                   >
                     <Image size={17} strokeWidth={2} className="album-art-cover-menu-icon" aria-hidden />
@@ -525,7 +529,6 @@ export default function PlaylistHeader({
                     className="album-art-cover-menu-item"
                     role="menuitem"
                     disabled={!hasCustomCover || !onCoverRemoved}
-                    onPointerDown={(e) => e.preventDefault()}
                     onClick={() => {
                       if (!hasCustomCover || !onCoverRemoved) return;
                       setCoverMenuOpen(false);
