@@ -491,6 +491,7 @@
       transform: scaleY(1);
     }
   }
+
 }
 
 .playlist-icon {
@@ -554,6 +555,73 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.playlist-count-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/** Animated equalizer — always primary purple (does not inherit active row text color). */
+.playlist-playing-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 12px;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--primary-gradient-middle);
+  opacity: 0.95;
+}
+
+.playlist-playing-eq__bar {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: linear-gradient(
+    180deg,
+    var(--primary-gradient-start),
+    var(--primary-gradient-middle) 45%,
+    var(--primary-gradient-end)
+  );
+  transform-origin: bottom center;
+  animation: playlist-eq-bar 0.5s ease-in-out infinite alternate;
+}
+
+.playlist-playing-eq__bar:nth-child(1) {
+  height: 5px;
+  animation-delay: 0s;
+}
+
+.playlist-playing-eq__bar:nth-child(2) {
+  height: 10px;
+  animation-delay: 0.15s;
+}
+
+.playlist-playing-eq__bar:nth-child(3) {
+  height: 7px;
+  animation-delay: 0.3s;
+}
+
+@keyframes playlist-eq-bar {
+  from {
+    transform: scaleY(0.35);
+    opacity: 0.55;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playlist-playing-eq__bar {
+    animation: none;
+    opacity: 0.9;
+    transform: scaleY(0.72);
+  }
 }
 
 .playlist-empty {
@@ -2083,11 +2151,35 @@
   min-width: 0;
 }
 
+.album-title-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  margin-bottom: 0.675rem;
+
+  .title {
+    margin-bottom: 0;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 /* Title edit: cap width relative to info column (not full main area). */
 .album-title-row--editing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   width: 70%;
   max-width: 100%;
   margin-bottom: 0.675rem;
+  min-width: 0;
+}
+
+.album-title-row--editing .album-title-input.title {
+  flex: 1;
+  min-width: 0;
+  width: auto;
 }
 
 .album-title-input.title {

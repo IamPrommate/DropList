@@ -62,6 +62,8 @@ interface PlaylistHeaderProps {
   /** False while per-track lengths are still loading — avoids a climbing partial total in the subtitle. */
   albumDurationReady?: boolean;
   isPlaying: boolean;
+  /** When false, audio is from another playlist — header shows Play, not Pause, while `isPlaying` may still be true globally. */
+  playbackIsFromThisPlaylist?: boolean;
   currentIndex: number;
   albumCoverUrl?: string | null;
   showCoverImage?: boolean;
@@ -89,6 +91,7 @@ export default function PlaylistHeader({
   totalDuration,
   albumDurationReady = true,
   isPlaying,
+  playbackIsFromThisPlaylist = true,
   currentIndex,
   albumCoverUrl,
   showCoverImage = true,
@@ -115,6 +118,8 @@ export default function PlaylistHeader({
   const titleEditingRef = useRef(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
+
+  const headerShowsPause = isPlaying && playbackIsFromThisPlaylist;
 
   const hasPlaylistRenameHandler = Boolean(onAlbumTitleChange);
   /** Free + Pro: rename playlist title. */
@@ -592,18 +597,22 @@ export default function PlaylistHeader({
               />
             </div>
           ) : (
-            <h1
-              className="title album-title-text"
-              title={albumTitleTooltip}
-              onDoubleClick={startTitleEdit}
-            >
-              {displayAlbumTitle}
-            </h1>
+            <div className="album-title-heading">
+              <h1
+                className="title album-title-text"
+                title={albumTitleTooltip}
+                onDoubleClick={startTitleEdit}
+              >
+                {displayAlbumTitle}
+              </h1>
+            </div>
           )
         ) : (
-          <h1 className="title" title={albumTitleTooltip}>
-            {displayAlbumTitle}
-          </h1>
+          <div className="album-title-heading">
+            <h1 className="title" title={albumTitleTooltip}>
+              {displayAlbumTitle}
+            </h1>
+          </div>
         )}
         <p className="subtitle">
           {tracks.length > 0 ? (
@@ -625,15 +634,17 @@ export default function PlaylistHeader({
               <button 
                 className="play-btn"
                 onClick={() => {
-                  if (currentIndex === -1) {
+                  if (headerShowsPause) {
+                    onPlayPause();
+                  } else if (currentIndex === -1) {
                     onPlayFirst();
                   } else {
                     onPlayPause();
                   }
                 }}
               >
-                {isPlaying ? <Pause size={19} /> : <Play size={19} />}
-                {isPlaying ? 'Pause' : 'Play'}
+                {headerShowsPause ? <Pause size={19} /> : <Play size={19} />}
+                {headerShowsPause ? 'Pause' : 'Play'}
               </button>
               <button 
                 className="download-btn" 

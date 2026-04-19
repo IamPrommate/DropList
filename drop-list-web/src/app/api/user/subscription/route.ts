@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { supabaseAdmin } from '@/app/lib/supabase';
-import { stripe } from '@/app/lib/stripe';
+import { getStripe, isStripeConfigured } from '@/app/lib/stripe';
 import { UserPlan, parseUserPlan } from '@/app/lib/userPlan';
 
 /** Stripe retrieve payload (snake_case); SDK types may not expose all fields on `Subscription`. */
@@ -36,8 +36,15 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  if (!isStripeConfigured) {
+    return NextResponse.json({
+      plan,
+      subscription: null,
+    });
+  }
+
   try {
-    const raw = await stripe.subscriptions.retrieve(user.stripe_subscription_id);
+    const raw = await getStripe().subscriptions.retrieve(user.stripe_subscription_id);
     const sub = raw as unknown as SubscriptionShape;
     const currentPeriodEnd = sub.current_period_end;
     return NextResponse.json({

@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/app/lib/stripe';
+import { getStripe, isStripeConfigured } from '@/app/lib/stripe';
 import { supabaseAdmin } from '@/app/lib/supabase';
 import { isProLevelRank } from '@/app/lib/proLevels';
 import { UserPlan } from '@/app/lib/userPlan';
 import Stripe from 'stripe';
 
 export async function POST(req: NextRequest) {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (!isStripeConfigured || !webhookSecret) {
+    return NextResponse.json(
+      { error: 'Stripe webhook is not configured', code: 'WEBHOOK_DISABLED' },
+      { status: 503 }
+    );
+  }
+
   const body = await req.text();
   const signature = req.headers.get('stripe-signature');
 
@@ -13,12 +21,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
+  const stripe = getStripe();
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

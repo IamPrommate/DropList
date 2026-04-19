@@ -38,6 +38,10 @@ interface SidebarProps {
   loadingPlaylists: boolean;
   /** Bumped when any playlist cover changes so thumbnails refetch the same Storage URL. */
   coverCacheRev?: number;
+  /** Saved playlist id that currently owns footer playback; omit when not applicable. */
+  playbackPlaylistId?: string | null;
+  /** True while the footer is actively playing audio. */
+  isAudioPlaying?: boolean;
 }
 
 function Sidebar({
@@ -56,6 +60,8 @@ function Sidebar({
   loadingPlaylistId,
   loadingPlaylists,
   coverCacheRev = 0,
+  playbackPlaylistId = null,
+  isAudioPlaying = false,
 }: SidebarProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleteInProgress, setDeleteInProgress] = useState(false);
@@ -138,10 +144,12 @@ function Sidebar({
                           : typeof pl.audio_track_count === 'number'
                             ? pl.audio_track_count
                             : null;
+                    const rowOwnsPlayback =
+                      isAudioPlaying && playbackPlaylistId != null && pl.id === playbackPlaylistId;
                     return (
                     <div
                       key={pl.id}
-                      className={`playlist-item ${pl.id === activePlaylistId ? 'active' : ''} ${loadingPlaylistId === pl.id ? 'loading' : ''}`}
+                      className={`playlist-item ${pl.id === activePlaylistId ? 'active' : ''} ${loadingPlaylistId === pl.id ? 'loading' : ''} ${rowOwnsPlayback ? 'playlist-item--playback-source' : ''}`}
                       onClick={() => onSelectPlaylist(pl)}
                     >
                       <div className="playlist-icon" aria-hidden>
@@ -165,7 +173,20 @@ function Sidebar({
                             <Spinner size={12} /> Loading…
                           </div>
                         ) : displayTrackCount != null ? (
-                          <div className="playlist-count">{displayTrackCount} tracks</div>
+                          <div className="playlist-count playlist-count-row">
+                            {rowOwnsPlayback ? (
+                              <span
+                                className="playlist-playing-eq"
+                                title="Playing from this playlist"
+                                aria-label="Playing"
+                              >
+                                <span className="playlist-playing-eq__bar" />
+                                <span className="playlist-playing-eq__bar" />
+                                <span className="playlist-playing-eq__bar" />
+                              </span>
+                            ) : null}
+                            <span>{displayTrackCount} tracks</span>
+                          </div>
                         ) : null}
                       </div>
                       <div className="playlist-actions" onClick={(e) => e.stopPropagation()}>

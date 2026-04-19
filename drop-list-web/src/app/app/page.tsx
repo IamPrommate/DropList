@@ -78,7 +78,11 @@ export default function HomePage() {
   const SIDEBAR_COLLAPSE_TRANSITION_MS = 180;
   const STAGE_VIEW_OPEN_DEBUG = true;
   const [tracks, setTracks] = useState<TrackType[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  /** Audio queue (may differ from visible `tracks` when another playlist is still playing). */
+  const [playbackTracks, setPlaybackTracks] = useState<TrackType[]>([]);
+  const [playbackIndex, setPlaybackIndex] = useState(-1);
+  /** Saved playlist id for the current playback queue; null = local/import not tied to a row. */
+  const [playbackPlaylistId, setPlaybackPlaylistId] = useState<string | null>(null);
   const [isShuffled, setIsShuffled] = useState(false);
   const [isRepeated, setIsRepeated] = useState(false);
   const [volume, setVolume] = useState(0.8);
@@ -133,9 +137,10 @@ export default function HomePage() {
   const playlistContentCache = useRef<Map<string, CachedPlaylist>>(new Map());
   /** For async playlist refresh: only apply updates if user is still on that playlist. */
   const activePlaylistIdRef = useRef<string | null>(null);
+  const playbackPlaylistIdRef = useRef<string | null>(null);
 
-  // Shuffle state
-  const [shuffleState, setShuffleState] = useState<ShuffleState>({
+  // Shuffle state for the playback queue (Free: forced shuffle uses this too)
+  const [playbackShuffleState, setPlaybackShuffleState] = useState<ShuffleState>({
     queue: [],
     queueIndex: 0,
     recentlyPlayed: []
@@ -197,10 +202,6 @@ export default function HomePage() {
     );
   }, [sessionStatus, session?.user, session?.user?.plan, session?.user?.proLevel, proLevelOverride, savedPlaylists.length]);
 
-  useEffect(() => {
-    isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
-
   /** Signed-in Free users: entry promo (snooze “don’t show again today” in localStorage). */
   useEffect(() => {
     if (sessionStatus !== 'authenticated') return;
@@ -238,7 +239,15 @@ export default function HomePage() {
   /** Wall clock when we last credited listen seconds (Pro only). */
   const listenWallClockRef = useRef<number | null>(null);
   const isPlayingRef = useRef(false);
-  const currentTrack = tracks[currentIndex];
+  /** Same-frame as `isPlaying` (effects run too late for async handlers). */
+  isPlayingRef.current = isPlaying;
+  const currentTrack =
+    playbackIndex >= 0 && playbackIndex < playbackTracks.length
+      ? playbackTracks[playbackIndex]
+      : undefined;
+  /** Index into visible `tracks` for header Play / Pause vs Play-first (detached = -1). */
+  const headerPlaybackIndex =
+    playbackPlaylistId != null && playbackPlaylistId === activePlaylistId ? playbackIndex : -1;
   const hasStageViewVideo = Boolean(currentTrack?.stageViewVideoUrl);
 
   const shouldAttemptShowStageView = hasStageViewVideo && isStageViewOpen;
@@ -447,6 +456,10 @@ export default function HomePage() {
   useEffect(() => {
     activePlaylistIdRef.current = activePlaylistId;
   }, [activePlaylistId]);
+
+  useEffect(() => {
+    playbackPlaylistIdRef.current = playbackPlaylistId;
+  }, [playbackPlaylistId]);
 
   useEffect(() => {
     if (sessionStatus === 'loading') {
@@ -705,14 +718,24 @@ export default function HomePage() {
       return;
     }
     if (isShuffled) {
-      const newShuffleState = handleManualTrackSelection(tracks, index, shuffleState);
-      setShuffleState(newShuffleState);
+      const newShuffleState = handleManualTrackSelection(tracks, index, playbackShuffleState);
+      setPlaybackShuffleState(newShuffleState);
     }
     maybeCancelExpiredSleepTimerOnManualTrackChange();
     setPlaybackProgress(0);
-    setCurrentIndex(index);
+    setPlaybackTracks(tracks);
+    setPlaybackPlaylistId(activePlaylistId);
+    setPlaybackIndex(index);
     setIsPlaying(true);
-  }, [isFree, isShuffled, tracks, shuffleState, showUpgradeFor, maybeCancelExpiredSleepTimerOnManualTrackChange]);
+  }, [
+    isFree,
+    isShuffled,
+    tracks,
+    playbackShuffleState,
+    activePlaylistId,
+    showUpgradeFor,
+    maybeCancelExpiredSleepTimerOnManualTrackChange,
+  ]);
 
   const toggleAuthDropdown = useCallback((e: { stopPropagation: () => void }) => {
     e.stopPropagation();
@@ -1104,10 +1127,14 @@ export default function HomePage() {
       if (loadingPlaylistId) return;
       if (activePlaylistId === playlist.id) return;
 
-      // Stop the previous playlist immediately (before any await). Otherwise a slow
-      // Drive fetch leaves the old track playing until the new folder loads.
-      setIsPlaying(false);
-      setCurrentIndex(-1);
+      /** Snapshot at click time — must use `isPlaying` state (not only ref) and keep callback deps in sync. */
+      const preservePlaybackAtClick =
+        isPlaying && playbackIndex >= 0 && playbackTracks.length > 0;
+
+      if (!preservePlaybackAtClick) {
+        setIsPlaying(false);
+        setPlaybackIndex(-1);
+      }
 
       const folderId = playlist.folder_id;
       const sub = playlist.tracks_subfolder;
@@ -1121,8 +1148,6 @@ export default function HomePage() {
       if (!result || result.tracks.length === 0) return;
 
       setTracks(result.tracks);
-      setCurrentIndex(-1);
-      setIsPlaying(false);
       setActivePlaylistId(playlist.id);
       setCurrentDriveFolderId(playlist.folder_id);
       const title =
@@ -1130,16 +1155,26 @@ export default function HomePage() {
         result.folderName?.trim() ||
         'Untitled playlist';
       setSelectedFolderName(title.slice(0, PLAYLIST_NAME_MAX_LENGTH));
-      if (isFree) {
-        setIsShuffled(true);
-        setShuffleState(createInitialShuffleState(result.tracks, -1));
-      } else {
-        setShuffleState(resetShuffleState());
-      }
 
-      preloadTrackDurations(result.tracks);
-      preloadAudioFiles(result.tracks);
-      void updatePlaylistAudioTrackCount(playlist.id, result.tracks.length);
+      if (preservePlaybackAtClick) {
+        preloadTrackDurations(result.tracks);
+        preloadAudioFiles(result.tracks);
+        void updatePlaylistAudioTrackCount(playlist.id, result.tracks.length);
+      } else {
+        setPlaybackTracks(result.tracks);
+        setPlaybackPlaylistId(playlist.id);
+        setPlaybackIndex(-1);
+        if (isFree) {
+          setIsShuffled(true);
+          setPlaybackShuffleState(createInitialShuffleState(result.tracks, -1));
+        } else {
+          setPlaybackShuffleState(resetShuffleState());
+        }
+        setIsPlaying(false);
+        preloadTrackDurations(result.tracks);
+        preloadAudioFiles(result.tracks);
+        void updatePlaylistAudioTrackCount(playlist.id, result.tracks.length);
+      }
 
       void loadPlaylistFromDrive(folderId, sub, { skipCache: true }).then((fresh) => {
         if (!fresh || activePlaylistIdRef.current !== playlist.id) return;
@@ -1153,15 +1188,19 @@ export default function HomePage() {
         };
 
         setTracks(fresh.tracks);
-        setCurrentIndex((prev) => {
-          const nextIdx = mapIndex(prev);
-          if (isFree) {
-            setShuffleState(createInitialShuffleState(fresh.tracks, nextIdx));
-          } else {
-            setShuffleState(resetShuffleState());
-          }
-          return nextIdx;
-        });
+
+        if (playbackPlaylistIdRef.current === playlist.id) {
+          setPlaybackTracks(fresh.tracks);
+          setPlaybackIndex((prev) => {
+            const nextIdx = mapIndex(prev);
+            if (isFree) {
+              setPlaybackShuffleState(createInitialShuffleState(fresh.tracks, nextIdx));
+            } else {
+              setPlaybackShuffleState(resetShuffleState());
+            }
+            return nextIdx;
+          });
+        }
 
         preloadTrackDurations(fresh.tracks);
         void updatePlaylistAudioTrackCount(playlist.id, fresh.tracks.length);
@@ -1171,6 +1210,9 @@ export default function HomePage() {
       loadingPlaylistId,
       activePlaylistId,
       isFree,
+      isPlaying,
+      playbackIndex,
+      playbackTracks.length,
       preloadTrackDurations,
       preloadAudioFiles,
       loadPlaylistFromDrive,
@@ -1192,16 +1234,21 @@ export default function HomePage() {
       }
       return prev.filter((p) => p.id !== playlistId);
     });
+    if (playbackPlaylistId === playlistId) {
+      setPlaybackTracks([]);
+      setPlaybackIndex(-1);
+      setPlaybackPlaylistId(null);
+      setPlaybackShuffleState(resetShuffleState());
+      setIsPlaying(false);
+    }
     if (activePlaylistId === playlistId) {
       setTracks([]);
-      setCurrentIndex(-1);
-      setIsPlaying(false);
       setActivePlaylistId(null);
       setCurrentDriveFolderId(null);
       setSelectedFolderName(null);
       localStorage.removeItem('droplist_last_playlist_id');
     }
-  }, [activePlaylistId]);
+  }, [activePlaylistId, playbackPlaylistId]);
 
   const handleCoverUploaded = useCallback((playlist: SavedPlaylist) => {
     setSavedPlaylists((prev) =>
@@ -1298,16 +1345,18 @@ export default function HomePage() {
       file: f,
     }));
     setTracks(next);
-    setCurrentIndex(-1);
+    setPlaybackTracks(next);
+    setPlaybackIndex(-1);
+    setPlaybackPlaylistId(null);
     setIsPlaying(false);
     setCurrentDriveFolderId(null); // Local playlist: no Drive folder for stats
 
     // Free users: always force shuffle on
     if (isFree) {
       setIsShuffled(true);
-      setShuffleState(createInitialShuffleState(next, -1));
+      setPlaybackShuffleState(createInitialShuffleState(next, -1));
     } else {
-      setShuffleState(resetShuffleState());
+      setPlaybackShuffleState(resetShuffleState());
     }
 
     preloadTrackDurations(next);
@@ -1331,7 +1380,7 @@ export default function HomePage() {
   }, [handleFilesSelected]);
 
   const handleNext = useCallback(async () => {
-    if (tracks.length === 0) return;
+    if (playbackTracks.length === 0) return;
 
     if (!assertFreePlayQuota()) {
       setIsPlaying(false);
@@ -1344,20 +1393,28 @@ export default function HomePage() {
     // Free users always shuffle; Pro users respect the toggle
     const shouldShuffle = isFree || isShuffled;
     if (shouldShuffle) {
-      const result = getNextShuffleTrack(tracks, currentIndex, shuffleState);
+      const result = getNextShuffleTrack(playbackTracks, playbackIndex, playbackShuffleState);
       if (result) {
-        setCurrentIndex(result.nextIndex);
-        setShuffleState(result.newState);
+        setPlaybackIndex(result.nextIndex);
+        setPlaybackShuffleState(result.newState);
       }
     } else {
-      const nextIndex = (currentIndex + 1) % tracks.length;
-      setCurrentIndex(nextIndex);
+      const nextIndex = (playbackIndex + 1) % playbackTracks.length;
+      setPlaybackIndex(nextIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled, isFree, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange, assertFreePlayQuota]);
+  }, [
+    playbackTracks,
+    isShuffled,
+    isFree,
+    playbackIndex,
+    playbackShuffleState,
+    maybeCancelExpiredSleepTimerOnManualTrackChange,
+    assertFreePlayQuota,
+  ]);
 
   const handlePrev = useCallback(async () => {
-    if (tracks.length === 0) return;
+    if (playbackTracks.length === 0) return;
 
     if (!assertFreePlayQuota()) {
       setIsPlaying(false);
@@ -1368,24 +1425,32 @@ export default function HomePage() {
     setPlaybackProgress(0);
     const shouldShuffle = isFree || isShuffled;
     if (shouldShuffle) {
-      const result = getPrevShuffleTrack(tracks, currentIndex, shuffleState);
+      const result = getPrevShuffleTrack(playbackTracks, playbackIndex, playbackShuffleState);
       if (result) {
-        setCurrentIndex(result.prevIndex);
-        setShuffleState(result.newState);
+        setPlaybackIndex(result.prevIndex);
+        setPlaybackShuffleState(result.newState);
       }
     } else {
-      const prevIndex = (currentIndex - 1 + tracks.length) % tracks.length;
-      setCurrentIndex(prevIndex);
+      const prevIndex = (playbackIndex - 1 + playbackTracks.length) % playbackTracks.length;
+      setPlaybackIndex(prevIndex);
     }
     setIsPlaying(true);
-  }, [tracks, isShuffled, isFree, currentIndex, shuffleState, maybeCancelExpiredSleepTimerOnManualTrackChange, assertFreePlayQuota]);
+  }, [
+    playbackTracks,
+    isShuffled,
+    isFree,
+    playbackIndex,
+    playbackShuffleState,
+    maybeCancelExpiredSleepTimerOnManualTrackChange,
+    assertFreePlayQuota,
+  ]);
 
   const handleTrackEnded = useCallback(() => {
     // Time is up: let current song finish, then stop and do not advance.
     if (sleepTimerExpired) {
       setIsPlaying(false);
       setPlaybackProgress(0);
-      setCurrentIndex(-1); // clear active selection in playlist after sleep stop
+      setPlaybackIndex(-1);
       clearSleepTimer();
       return;
     }
@@ -1395,18 +1460,17 @@ export default function HomePage() {
   const handleShuffleToggle = useCallback(() => {
     if (isFree) { showUpgradeFor('feature'); return; }
     setIsShuffled((s) => {
-      const newShuffleState = !s;
+      const toggled = !s;
       
-      if (newShuffleState) {
+      if (toggled) {
         setIsRepeated(false);
-        const newShuffleState = createInitialShuffleState(tracks, currentIndex);
-        setShuffleState(newShuffleState);
+        setPlaybackShuffleState(createInitialShuffleState(playbackTracks, playbackIndex));
       } else {
-        setShuffleState(resetShuffleState());
+        setPlaybackShuffleState(resetShuffleState());
       }
-      return newShuffleState;
+      return toggled;
     });
-  }, [tracks, currentIndex, isFree, showUpgradeFor]);
+  }, [playbackTracks, playbackIndex, isFree, showUpgradeFor]);
 
   const handleRepeatToggle = useCallback(() => {
     if (isFree) { showUpgradeFor('feature'); return; }
@@ -1414,7 +1478,7 @@ export default function HomePage() {
       const newRepeatState = !r;
       if (newRepeatState) {
         setIsShuffled(false);
-        setShuffleState(resetShuffleState());
+        setPlaybackShuffleState(resetShuffleState());
       }
       return newRepeatState;
     });
@@ -1484,7 +1548,7 @@ export default function HomePage() {
       switch (e.code) {
         case KeyboardShortcuts.SPACE:
           e.preventDefault();
-          if (tracks.length > 0) {
+          if (playbackTracks.length > 0) {
             setIsPlaying(!isPlaying);
           }
           break;
@@ -1506,7 +1570,7 @@ export default function HomePage() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [tracks.length, isPlaying, isFree, handlePrev, handleNext, currentTrack, isStageViewOpen, closeStageView, openStageView]);
+  }, [playbackTracks.length, isPlaying, isFree, handlePrev, handleNext, currentTrack, isStageViewOpen, closeStageView, openStageView]);
 
   const isAuthPending = sessionStatus === 'loading' || !sessionInitialized;
   const isPlaylistCatalogLoading = sessionStatus === 'authenticated' && !savedPlaylistsHydrated;
@@ -1535,6 +1599,8 @@ export default function HomePage() {
             activePlaylistId={activePlaylistId}
             tracks={tracks}
             coverCacheRev={coverCacheRev}
+            playbackPlaylistId={playbackPlaylistId}
+            isAudioPlaying={isPlaying}
             loadingPlaylistId={loadingPlaylistId}
             loadingPlaylists={isAuthPending || isPlaylistCatalogLoading}
             onGoogleDrivePicked={async (picked, folderName, coverUrl, driveFolderId, tracksSubfolder = '') => {
@@ -1546,15 +1612,17 @@ export default function HomePage() {
                 });
               }
               setTracks(picked);
-              setCurrentIndex(-1);
+              setPlaybackTracks(picked);
+              setPlaybackIndex(-1);
+              setPlaybackPlaylistId(null);
               setIsPlaying(false);
               setCurrentDriveFolderId(driveFolderId ?? null);
 
               if (isFree) {
                 setIsShuffled(true);
-                setShuffleState(createInitialShuffleState(picked, -1));
+                setPlaybackShuffleState(createInitialShuffleState(picked, -1));
               } else {
-                setShuffleState(resetShuffleState());
+                setPlaybackShuffleState(resetShuffleState());
               }
 
               if (folderName) {
@@ -1595,9 +1663,11 @@ export default function HomePage() {
                   if (data.playlist && !data.alreadyExists) {
                     setSavedPlaylists((prev) => [...prev, data.playlist]);
                     setActivePlaylistId(data.playlist.id);
+                    setPlaybackPlaylistId(data.playlist.id);
                     void updatePlaylistAudioTrackCount(data.playlist.id, picked.length);
                   } else if (data.alreadyExists && data.playlist) {
                     setActivePlaylistId(data.playlist.id);
+                    setPlaybackPlaylistId(data.playlist.id);
                     void updatePlaylistAudioTrackCount(data.playlist.id, picked.length);
                   }
                 } catch { /* ignore save errors */ }
@@ -1848,7 +1918,8 @@ export default function HomePage() {
                 totalDuration={totalDuration}
                 albumDurationReady={albumDurationReady}
                 isPlaying={isPlaying}
-                currentIndex={currentIndex}
+                playbackIsFromThisPlaylist={playbackPlaylistId === activePlaylistId}
+                currentIndex={headerPlaybackIndex}
                 albumCoverUrl={linkedAlbumCoverUrl}
                 showCoverImage={!!rawAlbumCoverUrl}
                 onAlbumTitleChange={handleAlbumTitleChange}
@@ -1869,12 +1940,14 @@ export default function HomePage() {
                   if (tracks.length > 0) {
                     if (!assertFreePlayQuota()) return;
                     maybeCancelExpiredSleepTimerOnManualTrackChange();
+                    setPlaybackTracks(tracks);
+                    setPlaybackPlaylistId(activePlaylistId);
                     if (isFree) {
                       const randomIndex = Math.floor(Math.random() * tracks.length);
-                      setCurrentIndex(randomIndex);
-                      setShuffleState(createInitialShuffleState(tracks, randomIndex));
+                      setPlaybackIndex(randomIndex);
+                      setPlaybackShuffleState(createInitialShuffleState(tracks, randomIndex));
                     } else {
-                      setCurrentIndex(0);
+                      setPlaybackIndex(0);
                     }
                     setIsPlaying(true);
                   }
@@ -1887,6 +1960,11 @@ export default function HomePage() {
                 {tracks.map((track, i) => {
                   const trackInfo = parseTrackName(track.name);
                   const cacheKey = getTrackCacheKey(track);
+                  const playingId =
+                    playbackIndex >= 0 && playbackIndex < playbackTracks.length
+                      ? playbackTracks[playbackIndex]?.id
+                      : null;
+                  const isPlaybackRow = playingId != null && track.id === playingId;
                   return (
                     <TrackItem
                       key={track.id}
@@ -1894,8 +1972,8 @@ export default function HomePage() {
                       trackId={track.id}
                       title={trackInfo.title}
                       artist={trackInfo.artist}
-                      isActive={i === currentIndex}
-                      isPlaying={i === currentIndex && isPlaying}
+                      isActive={isPlaybackRow}
+                      isPlaying={isPlaybackRow && isPlaying}
                       isFree={isFree}
                       duration={trackDurations.get(cacheKey) || 0}
                       durationLoaded={trackDurations.has(cacheKey)}
