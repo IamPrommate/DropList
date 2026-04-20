@@ -510,6 +510,18 @@ function AudioPlayer({
                     return;
                 }
 
+                if (trackSwitchPauseRef.current) {
+                    logAudioPlaybackDebug('visibility reconcile suppressed (track-switch in progress)');
+                    return;
+                }
+
+                if (audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+                    logAudioPlaybackDebug('visibility reconcile skipped (media not loaded yet)', {
+                        readyState: audio.readyState,
+                    });
+                    return;
+                }
+
                 const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState >= 2;
                 if (isPlaying !== actuallyPlaying) {
                     if (!actuallyPlaying && shouldSuppressPauseSync(audio)) {
