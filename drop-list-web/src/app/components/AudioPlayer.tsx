@@ -149,9 +149,6 @@ function AudioPlayer({
             audio.load();
         }
         console.log('[AudioDebug] track-switch layout pause', { trackId: track?.id, paused: audio.paused });
-        queueMicrotask(() => {
-            trackSwitchPauseRef.current = false;
-        });
     }, [track?.id]);
 
     const src =
@@ -273,6 +270,7 @@ function AudioPlayer({
             return;
         }
 
+        trackSwitchPauseRef.current = false;
         cleanupEventListeners();
         logAudioPlaybackDebug('playback effect start', { src, isPlaying });
 
