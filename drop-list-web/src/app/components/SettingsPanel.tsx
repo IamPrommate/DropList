@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, memo } from 'react';
 import { createPortal } from 'react-dom';
 import type { Session } from 'next-auth';
 import Spinner from './Spinner';
+import ProBadge from './ProBadge';
+import FreeBadge from './FreeBadge';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import { X, User, CreditCard, Zap, Copy, Check, Trophy } from 'lucide-react';
@@ -26,10 +28,6 @@ function formatRegisteredSince(iso: string | null): string {
   if (!iso) return '—';
   const d = dayjs(iso);
   return d.isValid() ? d.format('MMMM D, YYYY') : '—';
-}
-
-function tierLabel(plan: UserPlan): string {
-  return plan === UserPlan.Pro ? 'Pro' : 'Free';
 }
 
 function formatListenTime(totalSeconds: number): string {
@@ -340,16 +338,10 @@ function SettingsPanel({
                 <div className="settings-tier-row" role="status" aria-labelledby="settings-tier-label">
                   {profileMetaLoading ? (
                     <span className="settings-muted">…</span>
+                  ) : effectiveProfilePlan === UserPlan.Pro ? (
+                    <ProBadge size="md" className="settings-tier-badge" />
                   ) : (
-                    <span
-                      className={`header-auth-plan-badge settings-tier-badge ${
-                        effectiveProfilePlan === UserPlan.Pro
-                          ? 'header-auth-plan-badge--pro'
-                          : 'header-auth-plan-badge--free'
-                      }`}
-                    >
-                      {tierLabel(effectiveProfilePlan)}
-                    </span>
+                    <FreeBadge size="md" className="settings-tier-badge" />
                   )}
                 </div>
                 <label className="settings-label" htmlFor="settings-email">
@@ -639,7 +631,7 @@ function SettingsPanel({
               {!subLoading && isPro && (
                 <>
                   <div className="settings-row">
-                    <span className="settings-badge-pro">Pro</span>
+                    <ProBadge size="md" />
                     {sub && daysLeft !== null && (
                       <span className="settings-days">
                         {sub.cancelAtPeriodEnd

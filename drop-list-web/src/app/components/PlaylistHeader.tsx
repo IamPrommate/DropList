@@ -373,6 +373,16 @@ export default function PlaylistHeader({
       if (next?.closest?.('.album-art-cover-hit') || next?.closest?.('.album-art')) {
         return;
       }
+      // WebKit often sets relatedTarget to null when moving focus to a menu button; defer
+      // so we don't exit edit mode and unmount the menu before "Remove cover" receives click.
+      if (next == null) {
+        requestAnimationFrame(() => {
+          const a = document.activeElement;
+          if (a?.closest?.('.album-art-cover-hit') || a?.closest?.('.album-art')) return;
+          void commitTitleEdit();
+        });
+        return;
+      }
       void commitTitleEdit();
     },
     [commitTitleEdit]
@@ -514,6 +524,7 @@ export default function PlaylistHeader({
                     type="button"
                     className="album-art-cover-menu-item"
                     role="menuitem"
+                    onPointerDown={(e) => e.preventDefault()}
                     onClick={() => {
                       setCoverError(null);
                       // Open picker in the same user gesture as this click (Safari / iOS); then close menu.
@@ -529,6 +540,7 @@ export default function PlaylistHeader({
                     className="album-art-cover-menu-item"
                     role="menuitem"
                     disabled={!hasCustomCover || !onCoverRemoved}
+                    onPointerDown={(e) => e.preventDefault()}
                     onClick={() => {
                       if (!hasCustomCover || !onCoverRemoved) return;
                       setCoverMenuOpen(false);

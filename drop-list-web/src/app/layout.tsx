@@ -12,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DropList - Modern Music Player",
+  title: "DropList - Google Drive Music Player",
   description: "A modern, beautiful music player with Google Drive integration",
 };
 

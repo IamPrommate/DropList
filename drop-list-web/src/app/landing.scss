@@ -62,14 +62,17 @@
 }
 
 .landing-logo {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle), var(--primary-gradient-end));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
   text-decoration: none;
+  color: inherit;
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary-gradient-middle) 65%, transparent);
+    outline-offset: 4px;
+    border-radius: 8px;
+  }
 }
 
 .landing-nav-links {
@@ -390,25 +393,9 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.landing-feature-card-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.3rem 0.75rem;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-secondary);
+.landing-feature-card-badge-slot {
   margin-bottom: 1.25rem;
   width: fit-content;
-}
-
-.landing-feature-card-badge--pro {
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle));
-  color: #fff;
 }
 
 .landing-feature-list {
@@ -636,18 +623,9 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.landing-pricing-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.35rem 0.85rem;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary-gradient-start), var(--primary-gradient-middle));
-  color: #fff;
+.landing-pricing-badge-slot {
+  display: flex;
+  justify-content: center;
   margin-bottom: 1.25rem;
 }
 
@@ -753,6 +731,13 @@
   text-align: center;
   font-size: 0.8125rem;
   color: var(--text-muted);
+
+  .landing-footer-mark {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-right: 0.35rem;
+  }
 
   a,
   .landing-footer-link-btn {

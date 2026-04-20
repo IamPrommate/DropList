@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="240 80 200 200" role="img" aria-label="DropList">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#252538"/>
+      <stop offset="100%" stop-color="#13131c"/>
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899"/>
+      <stop offset="50%" stop-color="#9333ea"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect x="240" y="80" width="200" height="200" rx="44" fill="url(#bgGrad)"/>
+  <rect x="267" y="155" width="16" height="50" rx="8" fill="url(#waveGrad)"/>
+  <rect x="289" y="136" width="16" height="88" rx="8" fill="url(#waveGrad)"/>
+  <rect x="311" y="120" width="16" height="120" rx="8" fill="url(#waveGrad)"/>
+  <rect x="333" y="133" width="16" height="94" rx="8" fill="url(#waveGrad)"/>
+  <rect x="355" y="148" width="16" height="64" rx="8" fill="url(#waveGrad)"/>
+  <rect x="377" y="139" width="16" height="82" rx="8" fill="url(#waveGrad)"/>
+  <rect x="399" y="157" width="16" height="46" rx="8" fill="url(#waveGrad)"/>
+</svg>

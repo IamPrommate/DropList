@@ -10,6 +10,7 @@ import { getPlaylistCoverUrl, playlistCoverUrlWithCacheBust } from '../lib/playl
 import GoogleDrivePicker from './GoogleDrivePicker';
 import ConfirmModal from './ConfirmModal';
 import Spinner from './Spinner';
+import DropListLogo from './DropListLogo';
 import { Music, Trash2, LogIn } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 
@@ -87,7 +88,9 @@ function Sidebar({
         <div className="sidebar-content">
           <div className="sidebar-header">
             {!collapsed && (
-              <h2 className="sidebar-title">{isPro ? 'DropList Pro' : 'DropList'}</h2>
+              <div className="sidebar-brand">
+                <DropListLogo height={42} isPro={isPro} />
+              </div>
             )}
             <button className="sidebar-toggle" onClick={onToggleCollapse}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

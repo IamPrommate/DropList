@@ -33,6 +33,8 @@ import StageViewPanel from '../components/StageViewPanel';
 import Link from 'next/link';
 import { LoadingLink } from '../components/NavigationLoading';
 import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings } from 'lucide-react';
+import ProBadge from '../components/ProBadge';
+import FreeBadge from '../components/FreeBadge';
 import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
 import UpgradeModal, { type UpgradeModalReason } from '../components/UpgradeModal';
 import { isUpgradeEntrySnoozedForToday } from '../lib/upgradeEntrySnooze';
@@ -1785,11 +1787,11 @@ export default function HomePage() {
                         <span className="header-auth-dropdown-name">
                           {sessionForUi.user?.name || sessionForUi.user?.email || 'Account'}
                         </span>
-                        <span
-                          className={`header-auth-plan-badge ${isPro ? 'header-auth-plan-badge--pro' : 'header-auth-plan-badge--free'}`}
-                        >
-                          {isPro ? 'Pro' : 'Free'}
-                        </span>
+                        {isPro ? (
+                          <ProBadge size="xs" />
+                        ) : (
+                          <FreeBadge size="xs" />
+                        )}
                         {sessionForUi.user?.proLevel != null && isProLevelRank(sessionForUi.user.proLevel) ? (
                           <span
                             className={`ranks-your-card-badge ranks-catalog-card--${PRO_LEVEL_DISPLAY[sessionForUi.user.proLevel as ProLevelRank].name.toLowerCase()}`}

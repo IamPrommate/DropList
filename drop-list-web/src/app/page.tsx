@@ -7,7 +7,6 @@ import {
   Link2,
   Play,
   Headphones,
-  Zap,
   ChevronDown,
   SlidersHorizontal,
   Shuffle,
@@ -25,6 +24,9 @@ import {
 import './layout.scss';
 import './landing.scss';
 import { PRO_LEVEL_DISPLAY, PRO_LEVEL_RANKS } from './lib/proLevels';
+import DropListLogo from './components/DropListLogo';
+import ProBadge from './components/ProBadge';
+import FreeBadge from './components/FreeBadge';
 
 export default function LandingPage() {
   const { data: session, status } = useSession();
@@ -73,7 +75,9 @@ export default function LandingPage() {
       {/* ── Nav ── */}
       <header className="landing-nav">
         <div className="landing-nav-inner">
-          <Link href="/" className="landing-logo">DropList</Link>
+          <Link href="/" className="landing-logo" aria-label="DropList home">
+            <DropListLogo height={44} />
+          </Link>
           <nav className="landing-nav-links" aria-label="Marketing">
             <a href="#how-it-works" onClick={(e) => { e.preventDefault(); scrollToId('how-it-works'); }}>
               How it works
@@ -182,7 +186,9 @@ export default function LandingPage() {
           <div className="landing-features-grid">
             {/* Free column */}
             <div className="landing-feature-card">
-              <div className="landing-feature-card-badge">Free</div>
+              <div className="landing-feature-card-badge-slot">
+                <FreeBadge size="lg" />
+              </div>
               <ul className="landing-feature-list">
                 <li>Stream audio from Google Drive</li>
                 <li>10 plays per day</li>
@@ -197,8 +203,8 @@ export default function LandingPage() {
 
             {/* Pro column */}
             <div className="landing-feature-card landing-feature-card--pro">
-              <div className="landing-feature-card-badge landing-feature-card-badge--pro">
-                <Zap size={13} aria-hidden /> Pro
+              <div className="landing-feature-card-badge-slot">
+                <ProBadge size="lg" />
                 </div>
               <ul className="landing-feature-list">
                 <li><CirclePlay size={15} aria-hidden /> Unlimited plays</li>
@@ -285,8 +291,8 @@ export default function LandingPage() {
             One plan. One price. Cancel anytime.
           </p>
           <div className="landing-pricing">
-            <div className="landing-pricing-badge">
-              <Zap size={16} aria-hidden /> Pro
+            <div className="landing-pricing-badge-slot">
+              <ProBadge size="xl" />
             </div>
             <p className="landing-pricing-price">
               $2.99<span className="landing-pricing-period">/month</span>
@@ -337,7 +343,9 @@ export default function LandingPage() {
     </main>
 
       <footer className="landing-footer">
-        <span>DropList</span>
+        <span className="landing-footer-mark">
+          <DropListLogo height={26} />
+        </span>
         {isAuthed ? (
           <>
             <Link href="/app">Player</Link>

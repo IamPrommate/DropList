@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import {
   X,
-  Zap,
   Shuffle,
   Image,
   Keyboard,
@@ -13,6 +12,7 @@ import {
   Library,
 } from 'lucide-react';
 import { snoozeUpgradeEntryModalForToday } from '../lib/upgradeEntrySnooze';
+import ProBadge from './ProBadge';
 
 export type UpgradeModalReason = 'daily-limit' | 'track-select' | 'feature' | 'entry';
 
@@ -93,7 +93,7 @@ export default function UpgradeModal({
         </button>
 
         <div className="upgrade-modal-icon">
-          <Zap size={32} />
+          <ProBadge size="2xl" />
         </div>
 
         <h2 className="upgrade-modal-title">Upgrade to Pro</h2>
