@@ -8,6 +8,7 @@ type Props = {
   onSelect: (name: string) => void;
 };
 
+//test
 export default function AlbumList({ albums, onSelect }: Props) {
   return (
     <List
