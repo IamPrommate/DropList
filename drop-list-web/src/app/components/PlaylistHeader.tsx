@@ -144,6 +144,12 @@ export default function PlaylistHeader({
   const hasCustomCover = Boolean(showCoverImage && albumCoverUrl);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
   const coverMenuRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Safari (esp. iOS): blur on the title often runs with relatedTarget null and activeElement still
+   * on BODY before the cover overlay receives focus/click. We record pointer/touch on the album
+   * (capture phase) so we don't commit and unmount the cover UI before the menu can open.
+   */
+  const albumCoverEditPointerRef = useRef(false);
 
   const rawAlbumTitle =
     tracks.length > 0 ? (selectedFolderName?.trim() || 'Untitled playlist') : null;
@@ -370,17 +376,31 @@ export default function PlaylistHeader({
   const handleTitleInputBlur = useCallback(
     (e: FocusEvent<HTMLInputElement>) => {
       const next = e.relatedTarget as HTMLElement | null;
-      if (next?.closest?.('.album-art-cover-hit') || next?.closest?.('.album-art')) {
+      const inCoverHit = Boolean(next?.closest?.('.album-art-cover-hit'));
+      const inAlbumArt = Boolean(next?.closest?.('.album-art'));
+      if (inCoverHit || inAlbumArt) {
         return;
       }
-      // WebKit often sets relatedTarget to null when moving focus to a menu button; defer
-      // so we don't exit edit mode and unmount the menu before "Remove cover" receives click.
+      // WebKit often sets relatedTarget to null when moving focus to cover UI; defer so we
+      // don't exit edit before overlay/menu clicks run. Double rAF: Safari may apply focus after paint.
       if (next == null) {
         requestAnimationFrame(() => {
-          const a = document.activeElement;
-          if (a?.closest?.('.album-art-cover-hit') || a?.closest?.('.album-art')) return;
-          void commitTitleEdit();
+          requestAnimationFrame(() => {
+            const a = document.activeElement;
+            const stay =
+              Boolean(a?.closest?.('.album-art-cover-hit') || a?.closest?.('.album-art'));
+            if (stay) return;
+            if (albumCoverEditPointerRef.current) {
+              albumCoverEditPointerRef.current = false;
+              return;
+            }
+            void commitTitleEdit();
+          });
         });
+        return;
+      }
+      if (albumCoverEditPointerRef.current) {
+        albumCoverEditPointerRef.current = false;
         return;
       }
       void commitTitleEdit();
@@ -388,12 +408,25 @@ export default function PlaylistHeader({
     [commitTitleEdit]
   );
 
+  const refocusTitleAfterCoverFlow = useCallback(() => {
+    if (!titleEditingRef.current) return;
+    // File dialog / upload async path often leaves the input unfocused; without focus, clicking
+    // "outside" never blurs and edit mode never exits.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        titleInputRef.current?.focus();
+        titleInputRef.current?.select();
+      });
+    });
+  }, []);
+
   const handleCoverFileChange = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
       const input = e.target;
       const file = input.files?.[0];
       if (!file || !coverPlaylistId || !onCoverUploaded) {
         input.value = '';
+        refocusTitleAfterCoverFlow();
         return;
       }
       try {
@@ -417,9 +450,10 @@ export default function PlaylistHeader({
       } finally {
         setCoverUploading(false);
         input.value = '';
+        refocusTitleAfterCoverFlow();
       }
     },
-    [coverPlaylistId, onCoverUploaded]
+    [coverPlaylistId, onCoverUploaded, refocusTitleAfterCoverFlow]
   );
 
   useEffect(() => {
@@ -428,6 +462,22 @@ export default function PlaylistHeader({
       setCoverMenuOpen(false);
     }
   }, [titleEditing]);
+
+  /** See `albumCoverEditPointerRef` — update on capture so it precedes title input blur on Safari. */
+  useEffect(() => {
+    if (!showAlbumCoverEditChrome) return;
+    const root = '.album-art--cover-edit';
+    const syncPointerTarget = (ev: Event) => {
+      const t = ev.target as HTMLElement | null;
+      albumCoverEditPointerRef.current = Boolean(t?.closest?.(root));
+    };
+    document.addEventListener('pointerdown', syncPointerTarget, true);
+    document.addEventListener('touchstart', syncPointerTarget, true);
+    return () => {
+      document.removeEventListener('pointerdown', syncPointerTarget, true);
+      document.removeEventListener('touchstart', syncPointerTarget, true);
+    };
+  }, [showAlbumCoverEditChrome]);
 
   useEffect(() => {
     if (!coverMenuOpen) return;
@@ -496,9 +546,6 @@ export default function PlaylistHeader({
                 type="button"
                 className={`album-art-cover-overlay${coverUploading ? ' album-art-cover-overlay--busy' : ''}`}
                 disabled={coverUploading}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                }}
                 onClick={() => {
                   if (coverUploading) return;
                   setCoverError(null);
@@ -524,10 +571,10 @@ export default function PlaylistHeader({
                     type="button"
                     className="album-art-cover-menu-item"
                     role="menuitem"
-                    onPointerDown={(e) => e.preventDefault()}
                     onClick={() => {
                       setCoverError(null);
                       // Open picker in the same user gesture as this click (Safari / iOS); then close menu.
+                      // Do not call preventDefault on pointerdown here — it breaks the file dialog on Safari/WebKit.
                       coverFileInputRef.current?.click();
                       setCoverMenuOpen(false);
                     }}
@@ -544,7 +591,9 @@ export default function PlaylistHeader({
                     onClick={() => {
                       if (!hasCustomCover || !onCoverRemoved) return;
                       setCoverMenuOpen(false);
-                      void Promise.resolve(onCoverRemoved());
+                      void Promise.resolve(onCoverRemoved()).finally(() => {
+                        refocusTitleAfterCoverFlow();
+                      });
                     }}
                   >
                     <Trash2 size={17} strokeWidth={2} className="album-art-cover-menu-icon" aria-hidden />
@@ -560,7 +609,6 @@ export default function PlaylistHeader({
             <button
               type="button"
               className="album-art-cover-overlay"
-              onPointerDown={(e) => e.preventDefault()}
               onClick={() => onAlbumCoverRequiresPro?.()}
               aria-label="Album cover editing requires Pro"
             >

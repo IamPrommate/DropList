@@ -2130,6 +2130,12 @@
 /* Cover upload (Edit mode): stacking above image / placeholder */
 .album-art--cover-edit {
   isolation: isolate;
+  /* Safari: let taps reach the absolutely positioned overlay stack instead of the <img> / spinner. */
+  .album-art-image,
+  .album-art-default,
+  .album-art-spinner {
+    pointer-events: none;
+  }
 }
 
 .album-art-cover-hit {
