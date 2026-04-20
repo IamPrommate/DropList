@@ -43,7 +43,7 @@ type Props = {
     onSeekBlocked?: () => void;
 };
 
-const AUDIO_PLAYBACK_DEBUG = false;
+const AUDIO_PLAYBACK_DEBUG = true;
 
 function AudioPlayer({
     track,
@@ -77,6 +77,8 @@ function AudioPlayer({
     const manualPauseTogglePendingRef = useRef(false);
     const unexpectedPauseResumeInFlightRef = useRef(false);
     const pendingUnexpectedPauseResumeOnVisibleRef = useRef(false);
+    /** Set `true` during intentional track-switch pause so handlePause doesn't flip isPlaying. */
+    const trackSwitchPauseRef = useRef(false);
     const [duration, setDuration] = useState<number>(0);
     const [currentTime, setCurrentTime] = useState<number>(0);
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
@@ -121,8 +123,15 @@ function AudioPlayer({
         const remote = track.googleDriveUrl || track.url;
         if (!remote?.includes('/api/drive-file')) return;
         let cancelled = false;
-        void resolveDriveStreamUrl(track.id).then((url) => {
-            if (!cancelled) setResolvedMedia({ tid: track.id, url });
+        const tid = track.id;
+        console.log('[AudioDebug] resolving stream URL', { trackId: tid });
+        void resolveDriveStreamUrl(tid).then((url) => {
+            if (!cancelled) {
+                console.log('[AudioDebug] stream URL resolved', { trackId: tid, url: url.substring(0, 80), isPlayingRef: isPlayingRef.current });
+                setResolvedMedia({ tid, url });
+            } else {
+                console.log('[AudioDebug] stream URL resolved but cancelled', { trackId: tid });
+            }
         });
         return () => {
             cancelled = true;
@@ -132,12 +141,17 @@ function AudioPlayer({
     useLayoutEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
+        trackSwitchPauseRef.current = true;
         audio.pause();
         audio.currentTime = 0;
         if (!track?.id) {
             audio.src = '';
             audio.load();
         }
+        console.log('[AudioDebug] track-switch layout pause', { trackId: track?.id, paused: audio.paused });
+        queueMicrotask(() => {
+            trackSwitchPauseRef.current = false;
+        });
     }, [track?.id]);
 
     const src =
@@ -255,12 +269,12 @@ function AudioPlayer({
         const audio = audioRef.current;
         if (!audio) return;
         if (!src) {
-            audio.pause();
+            logAudioPlaybackDebug('playback effect: no src yet, skipping (isPlaying kept)', { isPlaying });
             return;
         }
 
         cleanupEventListeners();
-        logAudioPlaybackDebug('playback effect start');
+        logAudioPlaybackDebug('playback effect start', { src, isPlaying });
 
         const isNotAllowedError = (error: unknown) =>
             error instanceof DOMException
@@ -268,7 +282,15 @@ function AudioPlayer({
                 : error instanceof Error && error.name === 'NotAllowedError';
 
         const tryPlay = () => {
-            if (!isPlayingRef.current) return;
+            if (!isPlayingRef.current) {
+                logAudioPlaybackDebug('tryPlay: isPlayingRef is false, aborting');
+                return;
+            }
+            logAudioPlaybackDebug('tryPlay: calling audio.play()', {
+                readyState: audio.readyState,
+                paused: audio.paused,
+                currentSrc: audio.currentSrc,
+            });
             void audio.play().catch((error: unknown) => {
                 if (isNotAllowedError(error)) {
                     logAudioPlaybackDebug('play() NotAllowedError; retry when buffer advances');
@@ -276,6 +298,7 @@ function AudioPlayer({
                         audio.removeEventListener('canplay', retry);
                         audio.removeEventListener('loadeddata', retry);
                         if (!isPlayingRef.current) return;
+                        logAudioPlaybackDebug('retrying play() after NotAllowedError');
                         void audio.play().catch(() => {
                             /* user can tap play again */
                         });
@@ -366,6 +389,11 @@ function AudioPlayer({
             }
         };
         const handlePause = () => {
+            if (trackSwitchPauseRef.current) {
+                logAudioPlaybackDebug('native pause event suppressed (track-switch pause)');
+                return;
+            }
+
             if (shouldSuppressPauseSync(audio)) {
                 logAudioPlaybackDebug('native pause event suppressed during recovery');
                 return;
