@@ -912,7 +912,13 @@ function AudioPlayer({
                 onEnded={handleEnded}
                 onLoadedMetadata={handleLoadedMetadata}
                 onTimeUpdate={handleTimeUpdate}
-                onError={handleAudioError}
+                onError={(e) => {
+                    if (trackSwitchPauseRef.current) {
+                        logAudioPlaybackDebug('audio error suppressed (track-switch in progress)');
+                        return;
+                    }
+                    handleAudioError(e);
+                }}
             />
         </div>
     );
