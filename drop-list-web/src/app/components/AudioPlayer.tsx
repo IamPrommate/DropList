@@ -71,6 +71,8 @@ function AudioPlayer({
     onSeekBlocked,
 }: Props) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    /** Mirrors `isPlaying` for async play() callbacks (must not rely on stale closure). */
+    const isPlayingRef = useRef(isPlaying);
     const trackTitleRef = useRef<HTMLDivElement>(null);
     const manualPauseTogglePendingRef = useRef(false);
     const unexpectedPauseResumeInFlightRef = useRef(false);
@@ -142,6 +144,10 @@ function AudioPlayer({
         track?.id && resolvedMedia?.tid === track.id && resolvedMedia.url
             ? resolvedMedia.url
             : undefined;
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -253,39 +259,80 @@ function AudioPlayer({
             return;
         }
 
-        // Clean up any existing event listeners
         cleanupEventListeners();
         logAudioPlaybackDebug('playback effect start');
-        
+
+        const isNotAllowedError = (error: unknown) =>
+            error instanceof DOMException
+                ? error.name === 'NotAllowedError'
+                : error instanceof Error && error.name === 'NotAllowedError';
+
+        const tryPlay = () => {
+            if (!isPlayingRef.current) return;
+            void audio.play().catch((error: unknown) => {
+                if (isNotAllowedError(error)) {
+                    logAudioPlaybackDebug('play() NotAllowedError; retry when buffer advances');
+                    const retry = () => {
+                        audio.removeEventListener('canplay', retry);
+                        audio.removeEventListener('loadeddata', retry);
+                        if (!isPlayingRef.current) return;
+                        void audio.play().catch(() => {
+                            /* user can tap play again */
+                        });
+                    };
+                    audio.addEventListener('canplay', retry);
+                    audio.addEventListener('loadeddata', retry);
+                    eventListenersRef.current.push(() => {
+                        audio.removeEventListener('canplay', retry);
+                        audio.removeEventListener('loadeddata', retry);
+                    });
+                    return;
+                }
+                console.error('Audio play failed:', error);
+                logAudioPlaybackDebug('play() failed', { error });
+                onPlayPauseToggle();
+            });
+        };
+
         if (isPlaying) {
             logAudioPlaybackDebug('requested play');
-            // Check if audio is ready before playing
-            if (audio.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+            if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
                 logAudioPlaybackDebug('play immediately (readyState >= 2)');
-                audio.play().catch((error) => {
-                    console.error('Audio play failed:', error);
-                    logAudioPlaybackDebug('play() failed', { error });
-                    // Do not call onPlaybackFailed here: load retries run via onError →
-                    // useAudioRetryRecovery; the modal is shown only after those exhaust.
-                    onPlayPauseToggle(); // Reset state on failure
-                });
+                tryPlay();
             } else {
-                logAudioPlaybackDebug('play deferred; waiting canplay');
-                // Wait for audio to be ready
-                const handleCanPlay = () => {
-                    audio.removeEventListener('canplay', handleCanPlay);
-                    logAudioPlaybackDebug('canplay received; attempting play');
-                    audio.play().catch((error) => {
-                        console.error('Audio play failed after ready:', error);
-                        logAudioPlaybackDebug('play() failed after canplay', { error });
-                        onPlayPauseToggle();
-                    });
+                logAudioPlaybackDebug('play deferred; waiting for media');
+                const onReady = () => {
+                    audio.removeEventListener('canplay', onReady);
+                    audio.removeEventListener('loadeddata', onReady);
+                    audio.removeEventListener('canplaythrough', onReady);
+                    logAudioPlaybackDebug('media ready; attempting play');
+                    tryPlay();
                 };
-                audio.addEventListener('canplay', handleCanPlay);
-                
-                // Track this event listener for cleanup
+                audio.addEventListener('canplay', onReady);
+                audio.addEventListener('loadeddata', onReady);
+                audio.addEventListener('canplaythrough', onReady);
                 eventListenersRef.current.push(() => {
-                    audio.removeEventListener('canplay', handleCanPlay);
+                    audio.removeEventListener('canplay', onReady);
+                    audio.removeEventListener('loadeddata', onReady);
+                    audio.removeEventListener('canplaythrough', onReady);
+                });
+                queueMicrotask(() => {
+                    if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && isPlayingRef.current) {
+                        audio.removeEventListener('canplay', onReady);
+                        audio.removeEventListener('loadeddata', onReady);
+                        audio.removeEventListener('canplaythrough', onReady);
+                        logAudioPlaybackDebug('play after microtask (readyState catch-up)');
+                        tryPlay();
+                    }
+                });
+                requestAnimationFrame(() => {
+                    if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && isPlayingRef.current) {
+                        audio.removeEventListener('canplay', onReady);
+                        audio.removeEventListener('loadeddata', onReady);
+                        audio.removeEventListener('canplaythrough', onReady);
+                        logAudioPlaybackDebug('play after rAF (readyState catch-up)');
+                        tryPlay();
+                    }
                 });
             }
         } else {

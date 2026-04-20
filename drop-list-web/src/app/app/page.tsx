@@ -38,6 +38,7 @@ import FreeBadge from '../components/FreeBadge';
 import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
 import UpgradeModal, { type UpgradeModalReason } from '../components/UpgradeModal';
 import { isUpgradeEntrySnoozedForToday } from '../lib/upgradeEntrySnooze';
+import { buildStreamUrlPath, resolveDriveStreamUrl, trackUsesDriveStreamProxy } from '../lib/driveStreamUrlClient';
 import AlertModal from '../components/AlertModal';
 import Spinner from '../components/Spinner';
 import TrackItem from '../components/TrackItem';
@@ -256,7 +257,7 @@ export default function HomePage() {
       if (i >= playbackTracks.length) break;
       const t = playbackTracks[i];
       if (t?.id) {
-        void fetch(`/api/stream-url?id=${encodeURIComponent(t.id)}`);
+        void fetch(buildStreamUrlPath(t.id));
       }
     }
   }, [playbackIndex, playbackTracks]);
@@ -726,30 +727,41 @@ export default function HomePage() {
   const noopToggleStageView = useCallback(() => {}, []);
   const handleSeekBlocked = useCallback(() => showUpgradeFor('feature'), [showUpgradeFor]);
 
-  const handleTrackClick = useCallback((index: number) => {
-    if (isFree) {
-      showUpgradeFor('track-select');
-      return;
-    }
-    if (isShuffled) {
-      const newShuffleState = handleManualTrackSelection(tracks, index, playbackShuffleState);
-      setPlaybackShuffleState(newShuffleState);
-    }
-    maybeCancelExpiredSleepTimerOnManualTrackChange();
-    setPlaybackProgress(0);
-    setPlaybackTracks(tracks);
-    setPlaybackPlaylistId(activePlaylistId);
-    setPlaybackIndex(index);
-    setIsPlaying(true);
-  }, [
-    isFree,
-    isShuffled,
-    tracks,
-    playbackShuffleState,
-    activePlaylistId,
-    showUpgradeFor,
-    maybeCancelExpiredSleepTimerOnManualTrackChange,
-  ]);
+  const handleTrackClick = useCallback(
+    async (index: number) => {
+      if (isFree) {
+        showUpgradeFor('track-select');
+        return;
+      }
+      if (isShuffled) {
+        const newShuffleState = handleManualTrackSelection(tracks, index, playbackShuffleState);
+        setPlaybackShuffleState(newShuffleState);
+      }
+      const t = tracks[index];
+      if (t?.id && trackUsesDriveStreamProxy(t)) {
+        try {
+          await resolveDriveStreamUrl(t.id);
+        } catch {
+          /* AudioPlayer resolves again */
+        }
+      }
+      maybeCancelExpiredSleepTimerOnManualTrackChange();
+      setPlaybackProgress(0);
+      setPlaybackTracks(tracks);
+      setPlaybackPlaylistId(activePlaylistId);
+      setPlaybackIndex(index);
+      setIsPlaying(true);
+    },
+    [
+      isFree,
+      isShuffled,
+      tracks,
+      playbackShuffleState,
+      activePlaylistId,
+      showUpgradeFor,
+      maybeCancelExpiredSleepTimerOnManualTrackChange,
+    ]
+  );
 
   const toggleAuthDropdown = useCallback((e: { stopPropagation: () => void }) => {
     e.stopPropagation();

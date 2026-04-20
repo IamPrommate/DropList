@@ -1,5 +1,7 @@
 import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
+export { getR2ObjectKey, normalizeR2QualityTier } from './r2StreamKey';
+
 let s3Client: S3Client | null = null;
 
 /** All of these must be set for R2 caching; otherwise `/api/stream-url` falls back to `/api/drive-file`. */

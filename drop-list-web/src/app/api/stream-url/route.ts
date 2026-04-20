@@ -7,6 +7,7 @@ import {
   isR2Configured,
   r2ObjectExists,
 } from '@/app/lib/r2Client';
+import { getR2ObjectKey, normalizeR2QualityTier } from '@/app/lib/r2StreamKey';
 
 /** Drive download URL (same as `/api/drive-file`). */
 const driveDownloadUrl = (fileId: string) =>
@@ -15,8 +16,10 @@ const driveDownloadUrl = (fileId: string) =>
 const DRIVE_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
 
-function objectKey(fileId: string): string {
-  return `audio/${fileId}`;
+function tierForRequest(req: NextRequest): string | null {
+  const fromQuery = normalizeR2QualityTier(req.nextUrl.searchParams.get('q'));
+  if (fromQuery) return fromQuery;
+  return normalizeR2QualityTier(process.env.R2_AUDIO_TIER);
 }
 
 function proxyFallback(fileId: string) {
@@ -26,7 +29,7 @@ function proxyFallback(fileId: string) {
   });
 }
 
-/** Dedupe concurrent first-time uploads for the same Drive file id. */
+/** Dedupe concurrent first-time uploads for the same R2 object key. */
 const inflightUploads = new Map<string, Promise<void>>();
 
 export const runtime = 'nodejs';
@@ -40,7 +43,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
   const fileId = id.trim();
-  const key = objectKey(fileId);
+  const tier = tierForRequest(req);
+  const key = getR2ObjectKey(fileId, tier);
 
   if (!isR2Configured()) {
     return proxyFallback(fileId);
@@ -56,10 +60,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         url: getR2PublicObjectUrl(key),
         source: 'r2' as const,
+        tier: tier ?? undefined,
       });
     }
 
-    let upload = inflightUploads.get(fileId);
+    let upload = inflightUploads.get(key);
     if (!upload) {
       upload = (async () => {
         const driveRes = await fetch(driveDownloadUrl(fileId), {
@@ -86,10 +91,10 @@ export async function GET(req: NextRequest) {
         });
         await uploader.done();
       })();
-      inflightUploads.set(fileId, upload);
+      inflightUploads.set(key, upload);
       upload.finally(() => {
-        if (inflightUploads.get(fileId) === upload) {
-          inflightUploads.delete(fileId);
+        if (inflightUploads.get(key) === upload) {
+          inflightUploads.delete(key);
         }
       });
     }
@@ -99,6 +104,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       url: getR2PublicObjectUrl(key),
       source: 'r2' as const,
+      tier: tier ?? undefined,
     });
   } catch {
     return proxyFallback(fileId);
