@@ -243,21 +243,28 @@ export default function PlaylistHeader({
           // Local file - add directly
           zip.file(track.name, track.file);
         } else if (track.googleDriveUrl) {
-          // Google Drive file - use API endpoint
+          // Same-origin proxy or absolute URL (e.g. public R2)
           try {
-            const fileId = extractFileId(track.googleDriveUrl);
-            if (fileId) {
-              const response = await fetch(`/api/drive-file?id=${fileId}`, {
-                signal: abortController.signal
-              });
-              if (response.ok) {
-                const blob = await response.blob();
-                zip.file(track.name, blob);
-              } else {
-                console.warn(`Failed to download ${track.name} from Google Drive`);
-              }
+            const streamUrl = track.googleDriveUrl;
+            const isAbsolute = /^https?:\/\//i.test(streamUrl);
+            let response: Response;
+            if (isAbsolute) {
+              response = await fetch(streamUrl, { signal: abortController.signal });
             } else {
-              console.warn(`Could not extract file ID from ${track.googleDriveUrl}`);
+              const fileId = extractFileId(streamUrl);
+              if (!fileId) {
+                console.warn(`Could not extract file ID from ${streamUrl}`);
+                continue;
+              }
+              response = await fetch(`/api/drive-file?id=${encodeURIComponent(fileId)}`, {
+                signal: abortController.signal,
+              });
+            }
+            if (response.ok) {
+              const blob = await response.blob();
+              zip.file(track.name, blob);
+            } else {
+              console.warn(`Failed to download ${track.name}`);
             }
           } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {

@@ -21,19 +21,23 @@ export async function POST(request: Request) {
               // Local file - add directly
               zip.file(track.name, track.file);
             } else if (track.googleDriveUrl) {
-              // Google Drive file - fetch and add
-              const fileId = extractFileId(track.googleDriveUrl);
-              if (fileId) {
-                const response = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`, {
+              const u = track.googleDriveUrl as string;
+              let response: Response;
+              if (/^https?:\/\//i.test(u)) {
+                response = await fetch(u);
+              } else {
+                const fileId = extractFileId(u);
+                if (!fileId) continue;
+                response = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`, {
                   headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                  }
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                  },
                 });
-                
-                if (response.ok) {
-                  const arrayBuffer = await response.arrayBuffer();
-                  zip.file(track.name, arrayBuffer);
-                }
+              }
+
+              if (response.ok) {
+                const arrayBuffer = await response.arrayBuffer();
+                zip.file(track.name, arrayBuffer);
               }
             }
           } catch (error) {

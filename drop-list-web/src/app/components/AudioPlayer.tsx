@@ -1,7 +1,7 @@
 // src/components/AudioPlayer.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, memo } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
 import { Play, Pause, Music } from 'lucide-react';
@@ -9,6 +9,7 @@ import { formatDuration } from '../../utils/time';
 import { parseTrackName } from '../../utils/track';
 import ScrollingText from './ScrollingText';
 import { useAudioRetryRecovery } from '../hooks/useAudioRetryRecovery';
+import { resolveDriveStreamUrl } from '../lib/driveStreamUrlClient';
 
 type Props = {
     track?: TrackType;
@@ -80,17 +81,67 @@ function AudioPlayer({
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
     const [shouldScroll, setShouldScroll] = useState<boolean>(false);
 
-    // Memoize source: prefer remote URLs over local blob
-    const src = useMemo(() => {
-        if (!track) return undefined;
-        if (track.googleDriveUrl) return track.googleDriveUrl;
-        if (track.url) return track.url;
-        if (track.file) {
-            // Use cached blob URL from parent component
-            return getCachedBlobUrl?.(track) || undefined;
+    /**
+     * Resolved URL is stored with the track id it belongs to. While switching tracks, `src` is omitted
+     * until this matches the current `track.id`, so the old file cannot keep playing during async resolve.
+     * (Never use `src=""` — React warns and the browser may request the HTML document.)
+     */
+    const [resolvedMedia, setResolvedMedia] = useState<{ tid: string; url: string } | null>(null);
+
+    useLayoutEffect(() => {
+        if (!track) {
+            setResolvedMedia(null);
+            return;
         }
-        return undefined;
-    }, [track?.id, track?.file, getCachedBlobUrl]); // Depend on cached blob URL function
+        if (track.file) {
+            const u = getCachedBlobUrl?.(track);
+            setResolvedMedia(u ? { tid: track.id, url: u } : null);
+            return;
+        }
+        const remote = track.googleDriveUrl || track.url;
+        if (!remote) {
+            setResolvedMedia(null);
+            return;
+        }
+        if (/^https?:\/\//i.test(remote)) {
+            setResolvedMedia({ tid: track.id, url: remote });
+            return;
+        }
+        if (remote.includes('/api/drive-file') && track.id) {
+            setResolvedMedia(null);
+            return;
+        }
+        setResolvedMedia({ tid: track.id, url: remote });
+    }, [track?.id, track?.googleDriveUrl, track?.url, track?.file, getCachedBlobUrl]);
+
+    useEffect(() => {
+        if (!track?.id) return;
+        const remote = track.googleDriveUrl || track.url;
+        if (!remote?.includes('/api/drive-file')) return;
+        let cancelled = false;
+        void resolveDriveStreamUrl(track.id).then((url) => {
+            if (!cancelled) setResolvedMedia({ tid: track.id, url });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [track?.id, track?.googleDriveUrl, track?.url]);
+
+    useLayoutEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        audio.pause();
+        audio.currentTime = 0;
+        if (!track?.id) {
+            audio.src = '';
+            audio.load();
+        }
+    }, [track?.id]);
+
+    const src =
+        track?.id && resolvedMedia?.tid === track.id && resolvedMedia.url
+            ? resolvedMedia.url
+            : undefined;
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -197,7 +248,11 @@ function AudioPlayer({
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        
+        if (!src) {
+            audio.pause();
+            return;
+        }
+
         // Clean up any existing event listeners
         cleanupEventListeners();
         logAudioPlaybackDebug('playback effect start');
@@ -780,7 +835,7 @@ function AudioPlayer({
 
             <audio
                 ref={audioRef}
-                src={src}
+                {...(src ? { src } : {})}
                 onEnded={handleEnded}
                 onLoadedMetadata={handleLoadedMetadata}
                 onTimeUpdate={handleTimeUpdate}

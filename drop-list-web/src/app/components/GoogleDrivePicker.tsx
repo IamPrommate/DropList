@@ -46,10 +46,8 @@ function extractDriveFolderId(input: string): string | null {
   }
 }
 
-
-async function buildStreamUrl(fileId: string): Promise<string> {
-  // Same-origin only: googleapis ?alt=media is not CORS-safe for <audio>/<video> in the browser.
-  return `/api/drive-file?id=${fileId}`;
+function driveProxyStreamUrl(fileId: string): string {
+  return `/api/drive-file?id=${encodeURIComponent(fileId)}`;
 }
 
 // Use server-side API to fetch folder contents (no CORS issues)
@@ -157,15 +155,13 @@ export default function GoogleDrivePicker({
 
           const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
 
-          const filePromises = audioFiles.map(async (file) => {
-            const url = await buildStreamUrl(file.id);
-
-            let stageViewVideoUrl = undefined;
+          const folderTracks = audioFiles.map((file) => {
+            const url = driveProxyStreamUrl(file.id);
+            let stageViewVideoUrl: string | undefined;
             const videoId = artistVideoMap.get(file.id);
             if (videoId) {
-              stageViewVideoUrl = await buildStreamUrl(videoId);
+              stageViewVideoUrl = driveProxyStreamUrl(videoId);
             }
-
             return {
               id: file.id,
               name: file.name,
@@ -173,8 +169,6 @@ export default function GoogleDrivePicker({
               stageViewVideoUrl,
             };
           });
-
-          const folderTracks = await Promise.all(filePromises);
           tracks.push(...folderTracks);
           
           if (!firstDriveFolderId) {

@@ -247,6 +247,20 @@ export default function HomePage() {
     playbackIndex >= 0 && playbackIndex < playbackTracks.length
       ? playbackTracks[playbackIndex]
       : undefined;
+
+  /** Warm R2 for upcoming tracks (fire-and-forget; does not block UI). */
+  useEffect(() => {
+    if (playbackIndex < 0 || playbackTracks.length === 0) return;
+    for (let offset = 1; offset <= 2; offset += 1) {
+      const i = playbackIndex + offset;
+      if (i >= playbackTracks.length) break;
+      const t = playbackTracks[i];
+      if (t?.id) {
+        void fetch(`/api/stream-url?id=${encodeURIComponent(t.id)}`);
+      }
+    }
+  }, [playbackIndex, playbackTracks]);
+
   /** Index into visible `tracks` for header Play / Pause vs Play-first (detached = -1). */
   const headerPlaybackIndex =
     playbackPlaylistId != null && playbackPlaylistId === activePlaylistId ? playbackIndex : -1;
@@ -586,13 +600,11 @@ export default function HomePage() {
           (f: { name: string; type?: string }) => isAudioFile(f.name) && f.type === FileType.AUDIO
         );
 
-        // Always same-origin proxy: direct googleapis ?alt=media URLs reject browser <audio> (CORS).
-        const buildUrl = (fileId: string) => `/api/drive-file?id=${fileId}`;
-
+        // Proxy URL only here — R2 is resolved lazily in AudioPlayer (one track at a time).
         const tracks: TrackType[] = audioFiles.map((file: { id: string; name: string }) => ({
           id: file.id,
           name: file.name,
-          googleDriveUrl: buildUrl(file.id),
+          googleDriveUrl: `/api/drive-file?id=${encodeURIComponent(file.id)}`,
         }));
 
         const folderName: string | undefined = data.folderName;
