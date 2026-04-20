@@ -728,7 +728,7 @@ export default function HomePage() {
   const handleSeekBlocked = useCallback(() => showUpgradeFor('feature'), [showUpgradeFor]);
 
   const handleTrackClick = useCallback(
-    async (index: number) => {
+    (index: number) => {
       if (isFree) {
         showUpgradeFor('track-select');
         return;
@@ -739,11 +739,7 @@ export default function HomePage() {
       }
       const t = tracks[index];
       if (t?.id && trackUsesDriveStreamProxy(t)) {
-        try {
-          await resolveDriveStreamUrl(t.id);
-        } catch {
-          /* AudioPlayer resolves again */
-        }
+        void resolveDriveStreamUrl(t.id);
       }
       maybeCancelExpiredSleepTimerOnManualTrackChange();
       setPlaybackProgress(0);
@@ -1405,7 +1401,7 @@ export default function HomePage() {
     input.click();
   }, [handleFilesSelected]);
 
-  const handleNext = useCallback(async () => {
+  const handleNext = useCallback(() => {
     if (playbackTracks.length === 0) return;
 
     if (!assertFreePlayQuota()) {
@@ -1439,7 +1435,7 @@ export default function HomePage() {
     assertFreePlayQuota,
   ]);
 
-  const handlePrev = useCallback(async () => {
+  const handlePrev = useCallback(() => {
     if (playbackTracks.length === 0) return;
 
     if (!assertFreePlayQuota()) {
