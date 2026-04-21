@@ -154,6 +154,8 @@ export default function HomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const planRedirectHandled = useRef(false);
+
   /** After checkout or billing redirect, reload JWT so plan matches DB. */
   useEffect(() => {
     if (sessionStatus !== 'authenticated') return;
@@ -161,14 +163,12 @@ export default function HomePage() {
     const downgraded = searchParams.get('downgraded') === 'true';
     const billingReturn = searchParams.get('billing_return') === 'true';
     if (!upgraded && !downgraded && !billingReturn) return;
-    let cancelled = false;
+    if (planRedirectHandled.current) return;
+    planRedirectHandled.current = true;
     void (async () => {
       await refreshAuthSession();
-      if (!cancelled) router.replace('/app', { scroll: false });
+      router.replace('/app', { scroll: false });
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [sessionStatus, searchParams, refreshAuthSession, router]);
 
   /**
@@ -179,6 +179,8 @@ export default function HomePage() {
    * Listening rank from `/api/listen-time` — avoids `updateSession({ proLevel })` for the same reason (soft refresh).
    */
   const [proLevelOverride, setProLevelOverride] = useState<number | null>(null);
+  const [subData, setSubData] = useState<SettingsSubscriptionPayload | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
 
   useEffect(() => {
     if (sessionStatus !== 'authenticated') {
@@ -214,7 +216,9 @@ export default function HomePage() {
     };
   }, [session, sessionNameOverride, proLevelOverride]);
 
-  const isPro = session?.user?.plan === UserPlan.Pro;
+  const sessionPlan = parseUserPlan(session?.user?.plan);
+  const effectivePlan = parseUserPlan(subData?.plan ?? sessionPlan);
+  const isPro = effectivePlan === UserPlan.Pro;
   const isFree = !isPro;
 
   const playlistAddAllowed = useMemo(() => {
@@ -256,8 +260,6 @@ export default function HomePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileMeta, setProfileMeta] = useState<SettingsProfileMeta | null>(null);
   const [profileMetaLoading, setProfileMetaLoading] = useState(false);
-  const [subData, setSubData] = useState<SettingsSubscriptionPayload | null>(null);
-  const [subLoading, setSubLoading] = useState(false);
   const authDropdownRef = useRef<HTMLDivElement | null>(null);
   const stageViewOpenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Wall clock when we last credited listen seconds (Pro only). */
