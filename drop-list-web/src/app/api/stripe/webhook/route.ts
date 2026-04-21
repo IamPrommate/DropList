@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.metadata?.userId;
       if (userId && session.subscription) {
+        const subscriptionId = session.subscription as string;
+        const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const { data: row } = await supabaseAdmin
           .from('users')
           .select('pro_level')
@@ -50,7 +52,9 @@ export async function POST(req: NextRequest) {
           .from('users')
           .update({
             plan: UserPlan.Pro,
-            stripe_subscription_id: session.subscription as string,
+            stripe_subscription_id: subscriptionId,
+            subscription_start: new Date(sub.start_date * 1000).toISOString(),
+            subscription_end: null,
             ...(hasRank ? {} : { pro_level: 1 }),
           })
           .eq('id', userId);
@@ -58,24 +62,60 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object as Stripe.Subscription;
-      const customerId = subscription.customer as string;
+    case 'invoice.paid': {
+      const invoice = event.data.object as Stripe.Invoice & { subscription?: string | null };
+      const customerId = invoice.customer as string;
+      const subscriptionId: string | null = invoice.subscription ?? null;
+      if (customerId && subscriptionId) {
+        const { data: row } = await supabaseAdmin
+          .from('users')
+          .select('pro_level')
+          .eq('stripe_customer_id', customerId)
+          .single();
+        const hasRank = row?.pro_level != null && isProLevelRank(Number(row.pro_level));
         await supabaseAdmin
+          .from('users')
+          .update({
+            plan: UserPlan.Pro,
+            stripe_subscription_id: subscriptionId,
+            ...(hasRank ? {} : { pro_level: 1 }),
+          })
+          .eq('stripe_customer_id', customerId);
+      }
+      break;
+    }
+
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as Stripe.Subscription & {
+        ended_at?: number | null;
+        current_period_end?: number;
+      };
+      const customerId = subscription.customer as string;
+      const endedAt = subscription.ended_at ?? subscription.current_period_end ?? Math.floor(Date.now() / 1000);
+      await supabaseAdmin
         .from('users')
-        .update({ plan: UserPlan.Free, stripe_subscription_id: null })
+        .update({
+          plan: UserPlan.Free,
+          stripe_subscription_id: null,
+          subscription_end: new Date(endedAt * 1000).toISOString(),
+        })
         .eq('stripe_customer_id', customerId);
       break;
     }
 
     case 'invoice.payment_failed': {
-      const invoice = event.data.object as Stripe.Invoice;
+      const invoice = event.data.object as Stripe.Invoice & { subscription?: string | null };
       const customerId = invoice.customer as string;
-      if (customerId) {
-        await supabaseAdmin
-          .from('users')
-          .update({ plan: UserPlan.Free })
-          .eq('stripe_customer_id', customerId);
+      const subscriptionId: string | null = invoice.subscription ?? null;
+      if (customerId && subscriptionId) {
+        const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+        if (sub.status === 'canceled' || sub.status === 'unpaid') {
+          await supabaseAdmin
+            .from('users')
+            .update({ plan: UserPlan.Free })
+            .eq('stripe_customer_id', customerId);
+        }
+        // status === 'past_due' → Stripe still retrying; keep Pro until final failure
       }
       break;
     }
