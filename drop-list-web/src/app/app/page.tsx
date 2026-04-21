@@ -33,7 +33,7 @@ import StageViewPanel from '../components/StageViewPanel';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LoadingLink } from '../components/NavigationLoading';
-import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings, LifeBuoy } from 'lucide-react';
+import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings, Mail } from 'lucide-react';
 import ProBadge from '../components/ProBadge';
 import FreeBadge from '../components/FreeBadge';
 import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
@@ -1905,9 +1905,9 @@ export default function HomePage() {
                         onClick={() => closeAuthDropdown()}
                       >
                         <span className="header-auth-dropdown-item-icon" aria-hidden>
-                          <LifeBuoy size={15} strokeWidth={1.75} />
+                          <Mail size={15} strokeWidth={1.75} />
                         </span>
-                        <span className="header-auth-dropdown-item-label">Contact support</span>
+                        <span className="header-auth-dropdown-item-label">Email support</span>
                       </a>
                       <button
                         type="button"

@@ -441,6 +441,29 @@
     outline: 1px solid var(--auth-menu-focus-ring);
     outline-offset: 2px;
   }
+
+  &--primary {
+    margin-top: 0.5rem;
+    border: none;
+    background: linear-gradient(
+      135deg,
+      var(--primary-gradient-start),
+      var(--primary-gradient-middle),
+      var(--primary-gradient-end)
+    );
+    color: #fff;
+
+    &:hover {
+      opacity: 0.92;
+      background: linear-gradient(
+        135deg,
+        var(--primary-gradient-start),
+        var(--primary-gradient-middle),
+        var(--primary-gradient-end)
+      );
+      color: #fff;
+    }
+  }
 }
 
 .settings-loading {

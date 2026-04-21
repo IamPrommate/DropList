@@ -8,7 +8,7 @@ import ProBadge from './ProBadge';
 import FreeBadge from './FreeBadge';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import { X, User, CreditCard, Zap, Copy, Check, Trophy, LifeBuoy } from 'lucide-react';
+import { X, User, CreditCard, Zap, Copy, Check, Trophy, Mail } from 'lucide-react';
 import { isProLevelRank, PRO_LEVEL_DISPLAY, PRO_LEVEL_RANKS, type ProLevelRank } from '../lib/proLevels';
 import { DISPLAY_NAME_MAX_LENGTH } from '../lib/displayNameLimits';
 import { UserPlan, parseUserPlan } from '../lib/userPlan';
@@ -63,7 +63,7 @@ function GoogleIcon({ size = 20 }: { size?: number }) {
   );
 }
 
-export type SectionId = 'profile' | 'ranks' | 'subscription';
+export type SectionId = 'profile' | 'ranks' | 'subscription' | 'customer-support';
 
 export type SettingsPanelProps = {
   open: boolean;
@@ -124,7 +124,12 @@ function SettingsPanel({
   useEffect(() => {
     if (!open) return;
     const raw = typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : '';
-    if (raw === 'profile' || raw === 'ranks' || raw === 'subscription') {
+    if (
+      raw === 'profile' ||
+      raw === 'ranks' ||
+      raw === 'subscription' ||
+      raw === 'customer-support'
+    ) {
       setActiveSection(raw);
       requestAnimationFrame(() => {
         document.getElementById(raw)?.scrollIntoView({ behavior: 'instant', block: 'start' });
@@ -291,6 +296,16 @@ function SettingsPanel({
               >
                 <CreditCard size={17} strokeWidth={1.75} aria-hidden />
                 Subscription
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeSection === 'customer-support'}
+                className={`settings-nav-item${activeSection === 'customer-support' ? ' is-active' : ''}`}
+                onClick={() => scrollToSection('customer-support')}
+              >
+                <Mail size={17} strokeWidth={1.75} aria-hidden />
+                Customer support
               </button>
             </nav>
           </aside>
@@ -652,15 +667,29 @@ function SettingsPanel({
                   </button>
                 </>
               )}
+            </section>
+
+            <section
+              id="customer-support"
+              className="settings-section"
+              aria-labelledby="settings-support-heading"
+            >
+              <h2 id="settings-support-heading" className="settings-section-title">
+                Customer support
+              </h2>
+              <p className="settings-muted">
+                Questions, billing help, or feedback? Email us and we will get back to you. Your account details are
+                included automatically so we can help faster.
+              </p>
               <a
                 href={buildSupportMailto({
                   id: session?.user?.id,
                   email: session?.user?.email,
                 })}
-                className="settings-support-link"
+                className="settings-support-link settings-support-link--primary"
               >
-                <LifeBuoy size={16} strokeWidth={1.75} aria-hidden />
-                Contact support
+                <Mail size={16} strokeWidth={1.75} aria-hidden />
+                Email support
               </a>
             </section>
           </main>
