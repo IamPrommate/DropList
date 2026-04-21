@@ -27,10 +27,12 @@ import { PRO_LEVEL_DISPLAY, PRO_LEVEL_RANKS } from './lib/proLevels';
 import DropListLogo from './components/DropListLogo';
 import ProBadge from './components/ProBadge';
 import FreeBadge from './components/FreeBadge';
+import Spinner from './components/Spinner';
 
 export default function LandingPage() {
   const { data: session, status } = useSession();
   const isAuthed = status === 'authenticated';
+  const isSessionLoading = status === 'loading';
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -67,6 +69,15 @@ export default function LandingPage() {
       console.error('Checkout failed');
     }
   };
+
+  if (isSessionLoading) {
+    return (
+      <div className="page-loading-overlay">
+        <Spinner size={32} />
+        <span>Loading…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="landing">
@@ -198,7 +209,7 @@ export default function LandingPage() {
               </ul>
               <button type="button" className="landing-feature-card-btn" onClick={() => void startFree()}>
                 {isAuthed ? 'Open app' : 'Try free'}
-                    </button>
+              </button>
                   </div>
 
             {/* Pro column */}
@@ -337,7 +348,7 @@ export default function LandingPage() {
             <button type="button" className="landing-btn-primary" onClick={() => void startFree()}>
               <Play size={18} aria-hidden />
               Sign in with Google
-      </button>
+            </button>
           )}
         </section>
     </main>

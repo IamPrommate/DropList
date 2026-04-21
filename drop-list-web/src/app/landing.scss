@@ -115,6 +115,7 @@
     opacity: 0.92;
     transform: translateY(-1px);
   }
+
 }
 
 /* Next.js <Link> is an <a>; nav link color would otherwise win specificity */
@@ -263,6 +264,7 @@
     transform: translateY(-2px);
     box-shadow: 0 0 36px rgba(168, 85, 247, 0.55);
   }
+
 }
 
 .landing-btn-secondary {
@@ -456,6 +458,7 @@
     border-color: var(--border-tertiary);
     color: var(--text-primary);
   }
+
 }
 
 .landing-feature-card-btn--pro {
