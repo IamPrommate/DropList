@@ -10,6 +10,68 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? process.env.GOOGL
 const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
 const baseUrl = process.env.NEXTAUTH_URL ?? process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 
+/** How often to re-read `plan` / `pro_level` from Supabase into the JWT (subscription is source of truth). */
+const PLAN_DB_SYNC_INTERVAL_SEC = 120;
+
+type JwtToken = Record<string, unknown> & {
+  userId?: string;
+  plan?: UserPlan;
+  proLevel?: number;
+  planSyncedAt?: number;
+};
+
+/**
+ * Pro vs Free and listening rank must come from the database only (Stripe webhook, stats APIs).
+ * Re-sync into the JWT so a stale cookie cannot keep Pro after cancel, and clients cannot self-grant Pro.
+ */
+async function syncPlanFromDatabase(token: JwtToken, force: boolean): Promise<void> {
+  const userId = token.userId;
+  if (!userId || typeof userId !== 'string') return;
+
+  const now = Math.floor(Date.now() / 1000);
+  const last = typeof token.planSyncedAt === 'number' ? token.planSyncedAt : 0;
+  if (!force && last > 0 && now - last < PLAN_DB_SYNC_INTERVAL_SEC) return;
+
+  try {
+    const { data: row } = await supabaseAdmin
+      .from('users')
+      .select('plan, pro_level')
+      .eq('id', userId)
+      .single();
+
+    if (!row) {
+      token.plan = UserPlan.Free;
+      token.proLevel = undefined;
+      token.planSyncedAt = now;
+      return;
+    }
+
+    token.plan = parseUserPlan((row.plan as string | null) ?? UserPlan.Free);
+    const plan = token.plan;
+    const rawPl = row.pro_level;
+    const pl =
+      typeof rawPl === 'number'
+        ? rawPl
+        : typeof rawPl === 'string' && /^\d+$/.test(rawPl)
+          ? Number(rawPl)
+          : null;
+
+    if (pl != null && isProLevelRank(pl)) {
+      token.proLevel = pl;
+    } else if (plan === UserPlan.Pro) {
+      token.proLevel = 1;
+    } else {
+      token.proLevel = undefined;
+    }
+    token.planSyncedAt = now;
+  } catch (err) {
+    console.error('[DropList] syncPlanFromDatabase failed:', err);
+    token.plan = UserPlan.Free;
+    token.proLevel = undefined;
+    token.planSyncedAt = now;
+  }
+}
+
 async function upsertUser(profile: { sub: string; email: string; name?: string; picture?: string }): Promise<UserPlan> {
   try {
     const { data: existing } = await supabaseAdmin
@@ -67,14 +129,14 @@ const handler = NextAuth({
   ],
   callbacks: {
     async jwt({ token, account, profile, trigger, session }) {
+      const t = token as JwtToken;
+
       if (trigger === 'update' && session && typeof session === 'object') {
-        const s = session as { name?: string | null; proLevel?: number | null };
+        const s = session as { name?: string | null };
         if (s.name !== undefined && s.name !== null) {
-          token.name = s.name;
+          t.name = s.name;
         }
-        if (s.proLevel !== undefined) {
-          token.proLevel = s.proLevel;
-        }
+        await syncPlanFromDatabase(t, true);
       }
 
       if (account && profile) {
@@ -119,6 +181,7 @@ const handler = NextAuth({
           token.picture = googleProfile.picture;
           token.proLevel = undefined;
         }
+        t.planSyncedAt = Math.floor(Date.now() / 1000);
       } else if (token.refreshToken && typeof token.refreshToken === 'string') {
         const now = Math.floor(Date.now() / 1000);
         const exp = typeof token.expiresAt === 'number' ? token.expiresAt : 0;
@@ -135,6 +198,10 @@ const handler = NextAuth({
             token.accessToken = undefined;
           }
         }
+      }
+
+      if (t.userId && !(account && profile)) {
+        await syncPlanFromDatabase(t, false);
       }
 
       return token;

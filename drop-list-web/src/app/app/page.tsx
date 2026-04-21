@@ -31,6 +31,7 @@ import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } 
 import '../layout.scss';
 import StageViewPanel from '../components/StageViewPanel';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { LoadingLink } from '../components/NavigationLoading';
 import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings } from 'lucide-react';
 import ProBadge from '../components/ProBadge';
@@ -149,7 +150,27 @@ export default function HomePage() {
     recentlyPlayed: []
   });
 
-  const { data: session, status: sessionStatus } = useSession();
+  const { data: session, status: sessionStatus, update: refreshAuthSession } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  /** After checkout or billing redirect, reload JWT so plan matches DB. */
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    const upgraded = searchParams.get('upgraded') === 'true';
+    const downgraded = searchParams.get('downgraded') === 'true';
+    const billingReturn = searchParams.get('billing_return') === 'true';
+    if (!upgraded && !downgraded && !billingReturn) return;
+    let cancelled = false;
+    void (async () => {
+      await refreshAuthSession();
+      if (!cancelled) router.replace('/app', { scroll: false });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, searchParams, refreshAuthSession, router]);
+
   /**
    * Local display name after PATCH — avoids `updateSession({ name })`, which triggers a soft refresh and stops audio.
    */
