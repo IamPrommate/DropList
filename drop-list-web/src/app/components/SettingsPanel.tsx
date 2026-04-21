@@ -8,11 +8,12 @@ import ProBadge from './ProBadge';
 import FreeBadge from './FreeBadge';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import { X, User, CreditCard, Zap, Copy, Check, Trophy } from 'lucide-react';
+import { X, User, CreditCard, Zap, Copy, Check, Trophy, LifeBuoy } from 'lucide-react';
 import { isProLevelRank, PRO_LEVEL_DISPLAY, PRO_LEVEL_RANKS, type ProLevelRank } from '../lib/proLevels';
 import { DISPLAY_NAME_MAX_LENGTH } from '../lib/displayNameLimits';
 import { UserPlan, parseUserPlan } from '../lib/userPlan';
 import type { SettingsProfileMeta, SettingsSubscriptionPayload } from '../lib/settingsTypes';
+import { buildSupportMailto } from '../lib/supportMailto';
 import '../layout.scss';
 import '../settings/settings.scss';
 
@@ -651,6 +652,16 @@ function SettingsPanel({
                   </button>
                 </>
               )}
+              <a
+                href={buildSupportMailto({
+                  id: session?.user?.id,
+                  email: session?.user?.email,
+                })}
+                className="settings-support-link"
+              >
+                <LifeBuoy size={16} strokeWidth={1.75} aria-hidden />
+                Contact support
+              </a>
             </section>
           </main>
         </div>

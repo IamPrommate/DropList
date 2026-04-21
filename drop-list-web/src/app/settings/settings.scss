@@ -415,6 +415,34 @@
   }
 }
 
+.settings-support-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid var(--auth-menu-badge-free-border);
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: var(--auth-menu-item-hover);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--auth-menu-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
 .settings-loading {
   display: flex;
   align-items: center;

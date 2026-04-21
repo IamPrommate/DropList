@@ -33,12 +33,13 @@ import StageViewPanel from '../components/StageViewPanel';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LoadingLink } from '../components/NavigationLoading';
-import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings } from 'lucide-react';
+import { LogIn, LogOut, Zap, CreditCard, Shuffle, Music, Settings, LifeBuoy } from 'lucide-react';
 import ProBadge from '../components/ProBadge';
 import FreeBadge from '../components/FreeBadge';
 import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
 import UpgradeModal, { type UpgradeModalReason } from '../components/UpgradeModal';
 import { isUpgradeEntrySnoozedForToday } from '../lib/upgradeEntrySnooze';
+import { buildSupportMailto } from '../lib/supportMailto';
 import { buildStreamUrlPath, resolveDriveStreamUrl, trackUsesDriveStreamProxy } from '../lib/driveStreamUrlClient';
 import AlertModal from '../components/AlertModal';
 import Spinner from '../components/Spinner';
@@ -1894,6 +1895,20 @@ export default function HomePage() {
                       </button>
                     </div>
                     <div className="header-auth-dropdown-footer">
+                      <a
+                        href={buildSupportMailto({
+                          id: sessionForUi.user?.id,
+                          email: sessionForUi.user?.email,
+                        })}
+                        className="header-auth-dropdown-item header-auth-dropdown-item--muted"
+                        role="menuitem"
+                        onClick={() => closeAuthDropdown()}
+                      >
+                        <span className="header-auth-dropdown-item-icon" aria-hidden>
+                          <LifeBuoy size={15} strokeWidth={1.75} />
+                        </span>
+                        <span className="header-auth-dropdown-item-label">Contact support</span>
+                      </a>
                       <button
                         type="button"
                         className="header-auth-dropdown-item header-auth-dropdown-item--signout"
