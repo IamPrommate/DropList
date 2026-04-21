@@ -110,9 +110,19 @@ export async function POST(req: NextRequest) {
       if (customerId && subscriptionId) {
         const sub = await getStripe().subscriptions.retrieve(subscriptionId);
         if (sub.status === 'canceled' || sub.status === 'unpaid') {
+          const subShape = sub as Stripe.Subscription & {
+            ended_at?: number | null;
+            current_period_end?: number;
+          };
+          const endedAt =
+            subShape.ended_at ?? subShape.current_period_end ?? Math.floor(Date.now() / 1000);
           await supabaseAdmin
             .from('users')
-            .update({ plan: UserPlan.Free })
+            .update({
+              plan: UserPlan.Free,
+              stripe_subscription_id: null,
+              subscription_end: new Date(endedAt * 1000).toISOString(),
+            })
             .eq('stripe_customer_id', customerId);
         }
         // status === 'past_due' → Stripe still retrying; keep Pro until final failure
