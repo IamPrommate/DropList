@@ -17,35 +17,7 @@ import JSZip from 'jszip';
 import { extractDominantColor, darkenColor, saturateColor } from '../../utils/color';
 import { squareCenterCropToJpegBlob } from '../../utils/squareCenterCrop';
 import type { SavedPlaylist } from '../lib/types';
-
-/** Inline vars this screen may set; removing them restores :root purple theme from layout.scss */
-const ALBUM_THEME_VARS_TO_CLEAR = [
-  '--bg-gradient-start',
-  '--bg-gradient-middle',
-  '--bg-gradient-end',
-  '--switch-bg',
-  '--switch-border',
-  '--switch-checked-bg',
-  '--switch-checked-border',
-  '--switch-hover',
-  '--switch-checked-hover',
-  '--shadow-primary',
-  '--shadow-primary-glow',
-  '--playlist-active-shadow',
-  '--player-border',
-  '--primary-gradient-start',
-  '--primary-gradient-middle',
-  '--primary-gradient-end',
-  '--primary-gradient-hover-start',
-  '--primary-gradient-hover-middle',
-  '--primary-gradient-hover-end',
-] as const;
-
-function clearAlbumDrivenThemeOverrides() {
-  for (const v of ALBUM_THEME_VARS_TO_CLEAR) {
-    document.documentElement.style.removeProperty(v);
-  }
-}
+import { clearAlbumTheme } from '../lib/albumTheme';
 
 interface TrackType {
   id: string;
@@ -164,7 +136,7 @@ export default function PlaylistHeader({
   // Extract accent for the main page background gradient only; everything else uses :root purple (layout.scss).
   useEffect(() => {
     if (!albumCoverUrl || !showCoverImage) {
-      clearAlbumDrivenThemeOverrides();
+      clearAlbumTheme();
       setIsAlbumCoverLoading(false);
       return;
     }
@@ -173,7 +145,7 @@ export default function PlaylistHeader({
 
     extractDominantColor(albumCoverUrl)
       .then((dominantColor) => {
-        clearAlbumDrivenThemeOverrides();
+        clearAlbumTheme();
         const gradientStart = saturateColor(darkenColor(dominantColor, 20), 50);
         const gradientMiddle = saturateColor(darkenColor(dominantColor, 35), 50);
         const gradientEnd = '#1f1f2e';
@@ -182,7 +154,7 @@ export default function PlaylistHeader({
         document.documentElement.style.setProperty('--bg-gradient-end', gradientEnd);
       })
       .catch(() => {
-        clearAlbumDrivenThemeOverrides();
+        clearAlbumTheme();
       })
       .finally(() => {
         setIsAlbumCoverLoading(false);

@@ -28,12 +28,16 @@ import DropListLogo from './components/DropListLogo';
 import ProBadge from './components/ProBadge';
 import FreeBadge from './components/FreeBadge';
 import Spinner from './components/Spinner';
+import { clearAlbumTheme } from './lib/albumTheme';
 
 export default function LandingPage() {
   const { data: session, status } = useSession();
   const isAuthed = status === 'authenticated';
   const isSessionLoading = status === 'loading';
   const mainRef = useRef<HTMLElement>(null);
+
+  // Clear any album-driven CSS variable overrides left on <html> from /app navigation.
+  useEffect(() => { clearAlbumTheme(); }, []);
 
   useEffect(() => {
     const root = mainRef.current;
@@ -70,17 +74,14 @@ export default function LandingPage() {
     }
   };
 
-  if (isSessionLoading) {
-    return (
-      <div className="page-loading-overlay">
-        <Spinner size={32} />
-        <span>Loading…</span>
-      </div>
-    );
-  }
-
   return (
     <div className="landing">
+      {isSessionLoading && (
+        <div className="page-loading-overlay">
+          <Spinner size={32} />
+          <span>Loading…</span>
+        </div>
+      )}
       <div className="landing-glow" aria-hidden />
 
       {/* ── Nav ── */}
