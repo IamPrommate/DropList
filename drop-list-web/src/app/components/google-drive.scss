@@ -72,8 +72,40 @@
   .ant-modal-body {
     background: transparent !important;
     color: var(--text-primary);
-    padding: 18px 32px 0 !important;
+    padding: 18px 0 0 !important;
     text-align: left;
+  }
+
+  /* Internal scroller so the modal stays anchored while the body grows */
+  .drive-modal-scroll {
+    max-height: min(62vh, 540px);
+    overflow-y: auto;
+    padding: 0 32px 4px;
+    overscroll-behavior: contain;
+
+    /* Subtle, brand-tinted scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(168, 85, 247, 0.35) transparent;
+
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(168, 85, 247, 0.28);
+      border-radius: 4px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+
+      &:hover {
+        background: rgba(168, 85, 247, 0.5);
+        background-clip: padding-box;
+      }
+    }
   }
 
   /* Same row as ConfirmModal: transparent strip, no divider, equal-width buttons */
@@ -163,65 +195,200 @@
     line-height: 1.5;
   }
 
-  .drive-modal-share-help {
-    background: var(--auth-menu-muted-row-bg);
-    border: 1px solid var(--auth-menu-badge-free-border);
+  /* ----- Hero strip (privacy reassurance) ----- */
+  .drive-modal-hero {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
     border-radius: 12px;
-    padding: 12px 14px;
-    margin: 0;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary-gradient-start) 16%, transparent),
+      color-mix(in srgb, var(--primary-gradient-end) 10%, transparent)
+    );
+    border: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 32%, transparent);
   }
 
-  .drive-modal-share-help-title {
-    margin: 0 0 8px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
+  .drive-modal-hero-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #d1fae5;
+    background: rgba(34, 197, 94, 0.16);
+    border: 1px solid rgba(34, 197, 94, 0.4);
   }
 
-  .drive-modal-share-steps {
+  .drive-modal-hero-text {
     margin: 0;
-    padding-left: 1.15rem;
-    font-size: 13px;
+    font-size: 12.5px;
     line-height: 1.5;
     color: var(--text-secondary);
+  }
 
-    li + li {
-      margin-top: 4px;
+  /* ----- Collapsible "How to share" with numbered steps + share-mock ----- */
+  .drive-modal-help {
+    margin: 0;
+    border-radius: 12px;
+    border: 1px solid var(--auth-menu-badge-free-border);
+    background: var(--auth-menu-muted-row-bg);
+    overflow: hidden;
+  }
+
+  .drive-modal-help > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+
+    &::-webkit-details-marker {
+      display: none;
     }
   }
 
-  .drive-modal-permission-details {
+  .drive-modal-help-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--primary-gradient-end) 65%, var(--text-secondary));
+  }
+
+  .drive-modal-help-chev {
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--text-muted);
+    border-bottom: 2px solid var(--text-muted);
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+    margin-bottom: 3px;
+  }
+
+  .drive-modal-help[open] > summary .drive-modal-help-chev {
+    transform: rotate(-135deg);
+    margin-bottom: 0;
+    margin-top: 3px;
+  }
+
+  .drive-modal-help-steps {
+    list-style: none;
     margin: 0;
-    font-size: 13px;
+    padding: 0 14px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .drive-modal-help-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .drive-modal-help-step-num {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(
+      135deg,
+      var(--primary-gradient-start),
+      var(--primary-gradient-middle),
+      var(--primary-gradient-end)
+    );
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-gradient-middle) 35%, transparent);
+  }
+
+  .drive-modal-help-step-text {
+    flex: 1;
+    font-size: 12.5px;
+    line-height: 1.5;
     color: var(--text-secondary);
-
-    summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--text-primary);
-      list-style: none;
-      padding: 4px 0;
-
-      &::-webkit-details-marker {
-        display: none;
-      }
-    }
-
-    &[open] summary {
-      margin-bottom: 6px;
-    }
   }
 
-  .drive-modal-permission-list {
-    margin: 0;
-    padding-left: 1.15rem;
-    font-size: 12px;
+  .drive-modal-help-mock {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 14px 12px;
+  }
+
+  .drive-modal-help-mock-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .drive-modal-help-mock-pill--accent {
+    color: #fff;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary-gradient-start) 28%, transparent),
+      color-mix(in srgb, var(--primary-gradient-end) 28%, transparent)
+    );
+    border-color: color-mix(in srgb, var(--primary-gradient-middle) 50%, transparent);
+  }
+
+  /* ----- Form fields (compact textarea, labeled input) ----- */
+  .drive-modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .drive-modal-field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .drive-modal-field-hint {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .drive-modal-field-help {
+    margin: 2px 0 0;
+    font-size: 11.5px;
     line-height: 1.45;
     color: var(--text-muted);
-
-    li + li {
-      margin-top: 2px;
-    }
   }
 
   .ant-alert {
@@ -281,30 +448,10 @@
   }
 
   textarea.ant-input {
-    min-height: 156px;
+    min-height: 78px;
+    max-height: 180px;
     resize: vertical;
-  }
-
-  .drive-modal-tracks-subfolder {
-    margin-top: 2px;
-
-    .drive-modal-tracks-subfolder-label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      margin-bottom: 6px;
-    }
-
-    .drive-modal-tracks-subfolder-hint {
-      margin: 8px 0 0;
-      font-size: 12px;
-      line-height: 1.45;
-      color: var(--text-muted);
-
-      code {
-        font-size: 0.95em;
-      }
-    }
+    font-size: 13px !important;
+    line-height: 1.5 !important;
   }
 }

@@ -8,7 +8,27 @@ import ProBadge from './ProBadge';
 import FreeBadge from './FreeBadge';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import { X, User, CreditCard, Zap, Copy, Check, Trophy, Mail, FolderOpen, ExternalLink } from 'lucide-react';
+import {
+  X,
+  User,
+  CreditCard,
+  Zap,
+  Copy,
+  Check,
+  Trophy,
+  Mail,
+  FolderOpen,
+  ExternalLink,
+  Share2,
+  Link2,
+  Eye,
+  ShieldCheck,
+  AlertTriangle,
+  Lock,
+  Trash2,
+  FolderInput,
+  UserMinus,
+} from 'lucide-react';
 import { isProLevelRank, PRO_LEVEL_DISPLAY, PRO_LEVEL_RANKS, type ProLevelRank } from '../lib/proLevels';
 import { DISPLAY_NAME_MAX_LENGTH } from '../lib/displayNameLimits';
 import { UserPlan, parseUserPlan } from '../lib/userPlan';
@@ -693,39 +713,95 @@ function SettingsPanel({
               <h2 id="settings-drive-help-heading" className="settings-section-title">
                 Drive folder requirements
               </h2>
-              <p className="settings-muted">
-                DropList plays audio directly from your Google Drive folders — your files never leave Drive.
-                For DropList to read a folder, sharing must be set so anyone with the link can view it.
-              </p>
-              <div className="settings-drive-help">
-                <div className="settings-drive-help-block">
-                  <p className="settings-drive-help-title">How to share a folder</p>
-                  <ol className="settings-drive-help-list">
-                    {DRIVE_SHARE_STEPS.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
+
+              <div className="drive-help-hero">
+                <div className="drive-help-hero-icon" aria-hidden>
+                  <FolderOpen size={26} strokeWidth={1.75} />
                 </div>
-                <div className="settings-drive-help-block">
-                  <p className="settings-drive-help-title">What breaks playback</p>
-                  <ul className="settings-drive-help-list">
-                    {DRIVE_PERMISSION_BREAKS.map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
-                  <p className="settings-drive-help-note" style={{ marginTop: '0.5rem' }}>
-                    If a saved playlist stops loading, fix sharing in Drive (or restore the folder), then open
-                    the playlist again. If the link itself changed, remove the playlist and add it again.
+                <div className="drive-help-hero-text">
+                  <p className="drive-help-hero-title">Public link, private files.</p>
+                  <p className="drive-help-hero-sub">
+                    DropList streams audio straight from your Google Drive — your files never leave Drive.
+                    We only need read access through your share link.
                   </p>
                 </div>
+                <span className="drive-help-hero-pill" aria-hidden>
+                  <ShieldCheck size={13} strokeWidth={2.25} />
+                  Read-only
+                </span>
               </div>
+
+              <div className="drive-help-block drive-help-block--steps">
+                <div className="drive-help-block-head">
+                  <span className="drive-help-block-eyebrow">
+                    <Share2 size={13} strokeWidth={2.25} aria-hidden />
+                    Setup
+                  </span>
+                  <h3 className="drive-help-block-title">Share your folder in 4 steps</h3>
+                </div>
+                <ol className="drive-help-steps">
+                  {DRIVE_SHARE_STEPS.map((step, i) => (
+                    <li key={step} className="drive-help-step">
+                      <span className="drive-help-step-num" aria-hidden>{i + 1}</span>
+                      <span className="drive-help-step-text">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                <div className="drive-help-share-mock" aria-hidden>
+                  <div className="drive-help-share-mock-caption">What it should look like</div>
+                  <div className="drive-help-share-mock-row">
+                    <span className="drive-help-share-mock-label">General access</span>
+                    <span className="drive-help-share-mock-pill drive-help-share-mock-pill--accent">
+                      <Link2 size={12} strokeWidth={2.5} />
+                      Anyone with the link
+                    </span>
+                  </div>
+                  <div className="drive-help-share-mock-row">
+                    <span className="drive-help-share-mock-label">Role</span>
+                    <span className="drive-help-share-mock-pill">
+                      <Eye size={12} strokeWidth={2.5} />
+                      Viewer
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="drive-help-block drive-help-block--breaks">
+                <div className="drive-help-block-head">
+                  <span className="drive-help-block-eyebrow drive-help-block-eyebrow--warn">
+                    <AlertTriangle size={13} strokeWidth={2.25} aria-hidden />
+                    Watch out
+                  </span>
+                  <h3 className="drive-help-block-title">What breaks playback</h3>
+                </div>
+                <ul className="drive-help-breaks">
+                  {DRIVE_PERMISSION_BREAKS.map((line, i) => {
+                    const Icon = [Lock, Trash2, FolderInput, UserMinus][i] ?? AlertTriangle;
+                    return (
+                      <li key={line} className="drive-help-break">
+                        <span className="drive-help-break-icon" aria-hidden>
+                          <Icon size={15} strokeWidth={2} />
+                        </span>
+                        <span className="drive-help-break-text">{line}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="drive-help-break-note">
+                  <span className="drive-help-break-note-tag">Tip</span>
+                  If a saved playlist stops loading, fix sharing in Drive (or restore the folder), then
+                  open the playlist again. If the link itself changed, remove the playlist and add it again.
+                </p>
+              </div>
+
               <a
                 href={GOOGLE_DRIVE_WEB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="settings-support-link"
+                className="drive-help-cta"
               >
-                <ExternalLink size={16} strokeWidth={1.75} aria-hidden />
+                <ExternalLink size={16} strokeWidth={2.25} aria-hidden />
                 Open Google Drive
               </a>
             </section>

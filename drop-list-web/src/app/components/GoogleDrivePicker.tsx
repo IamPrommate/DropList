@@ -5,11 +5,10 @@ import { Modal, Input, Space, Alert } from "antd";
 import type { TrackType } from "../lib/types";
 import { matchArtistImages } from "../../utils/track";
 import { isAudioFile, FileType } from "../lib/common";
-import { Cloud, Plus } from "lucide-react";
+import { Cloud, Plus, ShieldCheck, Share2, Link2, Eye, FolderInput } from "lucide-react";
 import Spinner from "./Spinner";
 import "./google-drive.scss";
 import {
-  DRIVE_PERMISSION_BREAKS,
   DRIVE_SHARE_STEPS,
   parseDriveFolderError,
 } from "../lib/driveSharingHelp";
@@ -263,7 +262,7 @@ export default function GoogleDrivePicker({
       <Modal
         title={<span className="drive-modal-title-text">Add Google Drive audio links</span>}
         open={open}
-        width={420}
+        width={580}
         wrapClassName="drive-modal-wrap"
         onOk={handleConfirm}
         onCancel={() => {
@@ -281,61 +280,91 @@ export default function GoogleDrivePicker({
         centered
         className="drive-modal"
       >
-        <Space direction="vertical" size="small" className="drive-modal-body-stack" style={{ width: '100%' }}>
-          <div className="drive-modal-share-help">
-            <p className="drive-modal-share-help-title">How to share your folder</p>
-            <ol className="drive-modal-share-steps">
-              {DRIVE_SHARE_STEPS.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-          </div>
-          <details className="drive-modal-permission-details">
-            <summary>What happens if I change permissions later?</summary>
-            <ul className="drive-modal-permission-list">
-              {DRIVE_PERMISSION_BREAKS.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </details>
-          <p className="drive-modal-tracks-subfolder-hint" style={{ marginTop: 0 }}>
-            Paste one folder link per line. DropList reads files through the link — your audio stays in Google Drive.
-          </p>
-          {pickError ? (
-            <Alert type="error" message={pickError.message} description={pickError.hint} showIcon />
-          ) : null}
-          {loading ? (
-            <div className="drive-modal-loading">
-              <Spinner size={18} />
-              <span>Fetching playlist from Drive…</span>
+        <div className="drive-modal-scroll">
+          <Space direction="vertical" size="small" className="drive-modal-body-stack" style={{ width: '100%' }}>
+            <div className="drive-modal-hero">
+              <span className="drive-modal-hero-pill" aria-hidden>
+                <ShieldCheck size={12} strokeWidth={2.5} />
+                Read-only
+              </span>
+              <p className="drive-modal-hero-text">
+                Files stay in your Drive. We only read through the share link you paste below.
+              </p>
             </div>
-          ) : (
-            <>
-              <Input.TextArea
-                rows={7}
-                placeholder="Google Drive folder share links"
-                value={raw}
-                onChange={(e) => setRaw(e.target.value)}
-              />
-              <div className="drive-modal-tracks-subfolder">
-                <label className="drive-modal-tracks-subfolder-label" htmlFor="drive-tracks-subfolder">
-                  Tracks folder (optional)
-                </label>
-                <Input
-                  id="drive-tracks-subfolder"
-                  placeholder="Leave blank for audio in the shared folder root"
-                  value={tracksSubfolder}
-                  onChange={(e) => setTracksSubfolder(e.target.value)}
-                  disabled={loading}
-                />
-                <p className="drive-modal-tracks-subfolder-hint">
-                  Leave blank to import audio from the folder you shared (root only). If your MP3s live one level down,
-                  enter that subfolder name exactly — case does not matter.
-                </p>
+
+            <details className="drive-modal-help" open>
+              <summary>
+                <span className="drive-modal-help-eyebrow">
+                  <Share2 size={12} strokeWidth={2.5} aria-hidden />
+                  How to share
+                </span>
+                <span className="drive-modal-help-chev" aria-hidden />
+              </summary>
+              <ol className="drive-modal-help-steps">
+                {DRIVE_SHARE_STEPS.map((step, i) => (
+                  <li key={step} className="drive-modal-help-step">
+                    <span className="drive-modal-help-step-num" aria-hidden>{i + 1}</span>
+                    <span className="drive-modal-help-step-text">{step}</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="drive-modal-help-mock" aria-hidden>
+                <span className="drive-modal-help-mock-pill drive-modal-help-mock-pill--accent">
+                  <Link2 size={11} strokeWidth={2.5} />
+                  Anyone with the link
+                </span>
+                <span className="drive-modal-help-mock-pill">
+                  <Eye size={11} strokeWidth={2.5} />
+                  Viewer
+                </span>
               </div>
-            </>
-          )}
-        </Space>
+            </details>
+
+            {pickError ? (
+              <Alert type="error" message={pickError.message} description={pickError.hint} showIcon />
+            ) : null}
+
+            {loading ? (
+              <div className="drive-modal-loading">
+                <Spinner size={18} />
+                <span>Fetching playlist from Drive…</span>
+              </div>
+            ) : (
+              <>
+                <div className="drive-modal-field">
+                  <label className="drive-modal-field-label" htmlFor="drive-folder-links">
+                    Folder link(s)
+                    <span className="drive-modal-field-hint">one per line</span>
+                  </label>
+                  <Input.TextArea
+                    id="drive-folder-links"
+                    rows={3}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    value={raw}
+                    onChange={(e) => setRaw(e.target.value)}
+                  />
+                </div>
+                <div className="drive-modal-field">
+                  <label className="drive-modal-field-label" htmlFor="drive-tracks-subfolder">
+                    <FolderInput size={13} strokeWidth={2} aria-hidden />
+                    Tracks subfolder
+                    <span className="drive-modal-field-hint">optional</span>
+                  </label>
+                  <Input
+                    id="drive-tracks-subfolder"
+                    placeholder="Leave blank for audio in the shared folder root"
+                    value={tracksSubfolder}
+                    onChange={(e) => setTracksSubfolder(e.target.value)}
+                    disabled={loading}
+                  />
+                  <p className="drive-modal-field-help">
+                    Use this if your MP3s live one level down — enter that subfolder name exactly (case-insensitive).
+                  </p>
+                </div>
+              </>
+            )}
+          </Space>
+        </div>
       </Modal>
     </>
   );
