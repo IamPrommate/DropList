@@ -138,8 +138,9 @@ export default function GoogleDrivePicker({
   };
 
   const handleConfirm = async () => {
-    const lines = raw
-      .split("\n")
+    const trimmed = raw.trim();
+    const linkLines = trimmed
+      .split(/\n/)
       .map((s) => s.trim())
       .filter(Boolean);
 
@@ -147,85 +148,78 @@ export default function GoogleDrivePicker({
     setPickError(null);
 
     try {
-    const tracks: TrackType[] = [];
-    let folderName: string | undefined;
-    let firstDriveFolderId: string | null = null;
-    let lastError: string | undefined;
-
-    for (const line of lines) {
-      try {
-        const folderId = extractDriveFolderId(line);
-        if (folderId) {
-          const folderData = await fetchFolderFiles(folderId, tracksSubfolder.trim());
-
-          // Check if there's an error from the backend
-          if (folderData.error) {
-            lastError = folderData.error;
-            console.error("Backend error:", folderData.error);
-            continue; // Skip this folder but continue with others
-          }
-
-          // Extract files array, folder name, and album cover URL
-          const files = folderData.files || [];
-          const currentFolderName = folderData.folderName;
-
-          // Separate audio and video files using enums
-          const audioFiles = files.filter((file) => isAudioFile(file.name) && file.type === FileType.AUDIO);
-          const artistVideos = files.filter((file) =>
-            file.type === FileType.VIDEO &&
-            file.source === 'video-subfolder'
-          );
-
-          const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
-
-          const folderTracks = audioFiles.map((file) => {
-            const url = driveProxyStreamUrl(file.id);
-            let stageViewVideoUrl: string | undefined;
-            const videoId = artistVideoMap.get(file.id);
-            if (videoId) {
-              stageViewVideoUrl = driveProxyStreamUrl(videoId);
-            }
-            return {
-              id: file.id,
-              name: file.name,
-              googleDriveUrl: url,
-              stageViewVideoUrl,
-            };
-          });
-          tracks.push(...folderTracks);
-          
-          if (!firstDriveFolderId) {
-            firstDriveFolderId = folderId;
-          }
-          if (currentFolderName && !folderName) {
-            folderName = currentFolderName;
-          }
-        } else {
-          console.log("Invalid folder link:", line);
-        }
-      } catch (error) {
-        console.error("Error processing:", line, error);
-        // Capture the error message to show to user
-        if (error instanceof Error) {
-          lastError = error.message;
-        } else if (typeof error === 'string') {
-          lastError = error;
-        }
+      if (!trimmed) {
+        setPickError({
+          message: 'Paste a Google Drive folder link',
+          hint: 'Use a folder share link (drive.google.com/.../folders/...), not a link to a single file.',
+        });
+        return;
       }
-    }
 
-    if (tracks.length > 0) {
-      onPicked(tracks, folderName, null, firstDriveFolderId, tracksSubfolder.trim());
-      setOpen(false);
-      setRaw("");
-      setTracksSubfolder("");
-      setPickError(null);
-    } else {
-      const errorMessage =
-        lastError ||
-        "No valid Google Drive folder links found. Paste folder links only (not single-file links).";
-      setPickError(parseDriveFolderError(errorMessage));
-    }
+      if (linkLines.length > 1) {
+        setPickError({
+          message: 'One folder at a time',
+          hint: 'Paste a single folder link. To add another folder, import again after this playlist is added.',
+        });
+        return;
+      }
+
+      const folderId = extractDriveFolderId(linkLines[0]!);
+      if (!folderId) {
+        setPickError(
+          parseDriveFolderError(
+            'That does not look like a Google Drive folder link. Paste the folder URL from the address bar or Share.'
+          )
+        );
+        return;
+      }
+
+      const folderData = await fetchFolderFiles(folderId, tracksSubfolder.trim());
+
+      if (folderData.error) {
+        setPickError(parseDriveFolderError(folderData.error));
+        return;
+      }
+
+      const files = folderData.files || [];
+      const audioFiles = files.filter((file) => isAudioFile(file.name) && file.type === FileType.AUDIO);
+      const artistVideos = files.filter(
+        (file) => file.type === FileType.VIDEO && file.source === 'video-subfolder'
+      );
+      const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
+
+      const tracks: TrackType[] = audioFiles.map((file) => {
+        const url = driveProxyStreamUrl(file.id);
+        let stageViewVideoUrl: string | undefined;
+        const videoId = artistVideoMap.get(file.id);
+        if (videoId) {
+          stageViewVideoUrl = driveProxyStreamUrl(videoId);
+        }
+        return {
+          id: file.id,
+          name: file.name,
+          googleDriveUrl: url,
+          stageViewVideoUrl,
+        };
+      });
+
+      if (tracks.length > 0) {
+        onPicked(tracks, folderData.folderName, null, folderId, tracksSubfolder.trim());
+        setOpen(false);
+        setRaw("");
+        setTracksSubfolder("");
+        setPickError(null);
+      } else {
+        setPickError(
+          parseDriveFolderError(
+            "We couldn't find playable audio in this folder. Check that MP3s are in the shared folder root, or enter the correct subfolder name below."
+          )
+        );
+      }
+    } catch (error) {
+      const lastError =
+        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error';
+      setPickError(parseDriveFolderError(lastError));
     } finally {
       setLoading(false);
     }
@@ -273,7 +267,7 @@ export default function GoogleDrivePicker({
           }
         }}
         okText={loading ? 'Loading…' : 'Add'}
-        okButtonProps={{ disabled: loading }}
+        okButtonProps={{ disabled: loading || !raw.trim() }}
         cancelButtonProps={{ disabled: loading }}
         closable={!loading}
         maskClosable={!loading}
@@ -332,33 +326,33 @@ export default function GoogleDrivePicker({
             ) : (
               <>
                 <div className="drive-modal-field">
-                  <label className="drive-modal-field-label" htmlFor="drive-folder-links">
-                    Folder link(s)
-                    <span className="drive-modal-field-hint">one per line</span>
+                  <label className="drive-modal-field-label" htmlFor="drive-folder-link">
+                    Folder link
                   </label>
-                  <Input.TextArea
-                    id="drive-folder-links"
-                    rows={3}
+                  <Input
+                    id="drive-folder-link"
                     placeholder="https://drive.google.com/drive/folders/..."
                     value={raw}
                     onChange={(e) => setRaw(e.target.value)}
+                    autoComplete="off"
                   />
                 </div>
                 <div className="drive-modal-field">
                   <label className="drive-modal-field-label" htmlFor="drive-tracks-subfolder">
                     <FolderInput size={13} strokeWidth={2} aria-hidden />
-                    Tracks subfolder
-                    <span className="drive-modal-field-hint">optional</span>
+                    Where the audio files live
                   </label>
                   <Input
                     id="drive-tracks-subfolder"
-                    placeholder="Leave blank for audio in the shared folder root"
+                    placeholder="Blank only if MP3s are in the shared folder root"
                     value={tracksSubfolder}
                     onChange={(e) => setTracksSubfolder(e.target.value)}
                     disabled={loading}
                   />
                   <p className="drive-modal-field-help">
-                    Use this if your MP3s live one level down — enter that subfolder name exactly (case-insensitive).
+                    If your tracks sit in the root of the link you shared, leave this blank. If they are inside a
+                    subfolder, type that folder name exactly as it appears in Drive (spelling matters; case does not).
+                    Leaving it blank when files are only in a subfolder will import nothing.
                   </p>
                 </div>
               </>

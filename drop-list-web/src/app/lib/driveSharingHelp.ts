@@ -10,7 +10,7 @@ export const DRIVE_SHARE_STEPS = [
   'Open the folder in Google Drive.',
   'Click Share.',
   'Set General access to Anyone with the link (Viewer).',
-  'Copy the folder link and paste it below.',
+  'Copy the folder link — DropList imports one shared folder at a time.',
 ] as const;
 
 export const DRIVE_PERMISSION_BREAKS = [
