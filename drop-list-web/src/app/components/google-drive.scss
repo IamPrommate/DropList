@@ -163,6 +163,67 @@
     line-height: 1.5;
   }
 
+  .drive-modal-share-help {
+    background: var(--auth-menu-muted-row-bg);
+    border: 1px solid var(--auth-menu-badge-free-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 0;
+  }
+
+  .drive-modal-share-help-title {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .drive-modal-share-steps {
+    margin: 0;
+    padding-left: 1.15rem;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+
+    li + li {
+      margin-top: 4px;
+    }
+  }
+
+  .drive-modal-permission-details {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-primary);
+      list-style: none;
+      padding: 4px 0;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+    }
+
+    &[open] summary {
+      margin-bottom: 6px;
+    }
+  }
+
+  .drive-modal-permission-list {
+    margin: 0;
+    padding-left: 1.15rem;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-muted);
+
+    li + li {
+      margin-top: 2px;
+    }
+  }
+
   .ant-alert {
     border-radius: 12px;
     padding: 10px 14px !important;

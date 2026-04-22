@@ -40,6 +40,7 @@ import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
 import UpgradeModal, { type UpgradeModalReason } from '../components/UpgradeModal';
 import { isUpgradeEntrySnoozedForToday } from '../lib/upgradeEntrySnooze';
 import { buildSupportMailto } from '../lib/supportMailto';
+import { driveAccessLostModalMessage } from '../lib/driveSharingHelp';
 import { buildStreamUrlPath, resolveDriveStreamUrl, trackUsesDriveStreamProxy } from '../lib/driveStreamUrlClient';
 import AlertModal from '../components/AlertModal';
 import Spinner from '../components/Spinner';
@@ -129,6 +130,10 @@ export default function HomePage() {
   const [audioLoadErrorOpen, setAudioLoadErrorOpen] = useState(false);
   const [playlistCapModalOpen, setPlaylistCapModalOpen] = useState(false);
   const [playlistCapModalMessage, setPlaylistCapModalMessage] = useState('');
+  const [driveAccessErrorOpen, setDriveAccessErrorOpen] = useState(false);
+  const [driveAccessErrorMessage, setDriveAccessErrorMessage] = useState<string>('');
+  /** Per-session: avoid spamming the modal if the same broken playlist gets re-touched (cache miss + autoload). */
+  const driveAccessNotifiedFolders = useRef<Set<string>>(new Set());
 
   // --- Saved playlists ---
   const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
@@ -451,6 +456,16 @@ export default function HomePage() {
     setAudioLoadErrorOpen(true);
   }, []);
 
+  const notifyDriveAccessLost = useCallback(
+    (folderId: string, code: 'NOT_PUBLIC' | 'NOT_FOUND') => {
+      if (driveAccessNotifiedFolders.current.has(folderId)) return;
+      driveAccessNotifiedFolders.current.add(folderId);
+      setDriveAccessErrorMessage(driveAccessLostModalMessage(code));
+      setDriveAccessErrorOpen(true);
+    },
+    []
+  );
+
   // --- Saved playlists: fetch on login ---
   const fetchSavedPlaylists = useCallback(async () => {
     try {
@@ -617,7 +632,12 @@ export default function HomePage() {
           body: JSON.stringify(body),
         });
         const data = await res.json();
-        if (data.error || !data.files) return null;
+        if (data.error || !data.files) {
+          if (data.code === 'NOT_PUBLIC' || data.code === 'NOT_FOUND') {
+            notifyDriveAccessLost(folderId, data.code);
+          }
+          return null;
+        }
 
         const { isAudioFile, FileType } = await import('../lib/common');
 
@@ -644,7 +664,7 @@ export default function HomePage() {
         return null;
       }
     },
-    []
+    [notifyDriveAccessLost]
   );
 
   const clearSleepTimer = useCallback(() => {
@@ -2112,6 +2132,13 @@ export default function HomePage() {
         onClose={() => setPlaylistCapModalOpen(false)}
         title="Playlist limit"
         message={playlistCapModalMessage}
+      />
+
+      <AlertModal
+        open={driveAccessErrorOpen}
+        onClose={() => setDriveAccessErrorOpen(false)}
+        title="Google Drive folder unavailable"
+        message={driveAccessErrorMessage}
       />
 
       <UpgradeModal

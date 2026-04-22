@@ -1,6 +1,16 @@
 import { AudioExtension, ImageExtension, VideoExtension, FileType } from '@/app/lib/common';
+import { classifyGoogleDriveApiError, type DriveFolderErrorCode } from '@/app/lib/driveSharingHelp';
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
+
+const ERROR_MESSAGES: Record<DriveFolderErrorCode, string> = {
+  NOT_PUBLIC:
+    "We can't open this Google Drive folder. It must be shared as Anyone with the link (Viewer).",
+  NOT_FOUND:
+    'Google Drive folder not found. The link may be invalid, the folder was deleted, or it was moved to Trash.',
+  EMPTY: "We couldn't find any audio files in this folder.",
+  GENERIC: 'Failed to access folder.',
+};
 
 // Configurable folder names from environment variables
 const CONFIG = {
@@ -118,7 +128,7 @@ export async function POST(request: NextRequest) {
     const { folderId, summaryOnly } = body;
 
     if (!folderId) {
-      return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Folder ID is required', code: 'GENERIC' }, { status: 400 });
     }
 
     const effectiveTracksFolder: string = Object.prototype.hasOwnProperty.call(body, 'tracksSubfolder')
@@ -129,6 +139,8 @@ export async function POST(request: NextRequest) {
     let folderName = 'Google Drive Folder';
     let rootFiles: Array<{ id: string; name: string; mimeType: string }> = [];
     let useAPI = false;
+    /** When the Drive API gives us an unambiguous reason (404 / 403), surface it instead of falling through to a generic error. */
+    let apiHardError: 'NOT_PUBLIC' | 'NOT_FOUND' | null = null;
 
     // Try using Drive API first if available
     if (drive) {
@@ -149,9 +161,32 @@ export async function POST(request: NextRequest) {
         rootFiles = await fetchFilesFromFolderAPI(folderId);
         console.log(`✅ DEBUG: API fetched ${rootFiles.length} files from root folder`);
       } catch (apiError) {
-        console.warn('⚠️ DEBUG: Drive API failed, falling back to HTML scraping:', apiError);
+        console.warn('⚠️ DEBUG: Drive API failed:', apiError);
         useAPI = false;
+        apiHardError = classifyGoogleDriveApiError(apiError);
       }
+    }
+
+    // If the Drive API gave a definitive 403 / 404, return a structured error immediately.
+    if (apiHardError) {
+      const code: DriveFolderErrorCode = apiHardError;
+      const err = ERROR_MESSAGES[code];
+      if (summaryOnly) {
+        return NextResponse.json({
+          error: err,
+          code,
+          folderName,
+          audioTrackCount: 0,
+          albumCoverUrl: null,
+        });
+      }
+      return NextResponse.json({
+        error: err,
+        code,
+        files: [],
+        folderName,
+        albumCoverUrl: null,
+      });
     }
 
     // Fallback to HTML scraping if API not available or failed
@@ -166,7 +201,24 @@ export async function POST(request: NextRequest) {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch folder: ${response.statusText}`);
+        const code: DriveFolderErrorCode = response.status === 404 ? 'NOT_FOUND' : 'NOT_PUBLIC';
+        return NextResponse.json(
+          summaryOnly
+            ? {
+                error: ERROR_MESSAGES[code],
+                code,
+                folderName,
+                audioTrackCount: 0,
+                albumCoverUrl: null,
+              }
+            : {
+                error: ERROR_MESSAGES[code],
+                code,
+                files: [],
+                folderName,
+                albumCoverUrl: null,
+              }
+        );
       }
 
       const html = await response.text();
@@ -298,6 +350,7 @@ export async function POST(request: NextRequest) {
         if (summaryOnly) {
           return NextResponse.json({
             error: err,
+            code: 'NOT_FOUND' satisfies DriveFolderErrorCode,
             folderName,
             audioTrackCount: 0,
             albumCoverUrl: null,
@@ -305,6 +358,7 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({
           error: err,
+          code: 'NOT_FOUND' satisfies DriveFolderErrorCode,
           files: [],
           folderName,
         });
@@ -317,10 +371,11 @@ export async function POST(request: NextRequest) {
       filesToProcess = await fetchTracksFromSubfolder(tracksFolderId);
       if (!filesToProcess) {
         console.warn(`Failed to fetch tracks from "${effectiveTracksFolder}" subfolder`);
-        const err = `Failed to access "${effectiveTracksFolder}" subfolder. Make sure the folder exists and is shared publicly.`;
+        const err = `Failed to access "${effectiveTracksFolder}" subfolder. Make sure the folder exists and is shared as Anyone with the link (Viewer).`;
         if (summaryOnly) {
           return NextResponse.json({
             error: err,
+            code: 'NOT_PUBLIC' satisfies DriveFolderErrorCode,
             folderName,
             audioTrackCount: 0,
             albumCoverUrl: null,
@@ -328,6 +383,7 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({
           error: err,
+          code: 'NOT_PUBLIC' satisfies DriveFolderErrorCode,
           files: [],
           folderName,
         });
@@ -504,11 +560,12 @@ export async function POST(request: NextRequest) {
     console.log(`Total files found: ${files.length} (${files.filter(f => f.type === FileType.AUDIO).length} audio, ${files.filter(f => f.type === FileType.IMAGE).length} images)`);
     
     if (files.length === 0) {
-      return NextResponse.json({ 
-        error: 'No files found in folder or folder not publicly accessible',
+      return NextResponse.json({
+        error: ERROR_MESSAGES.EMPTY,
+        code: 'EMPTY' satisfies DriveFolderErrorCode,
         files: [],
         folderName,
-        albumCoverUrl
+        albumCoverUrl,
       });
     }
     
@@ -516,17 +573,25 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('Error fetching folder:', error);
-    let errorMessage = 'Failed to access folder.';
-    if (error instanceof Error) {
-      errorMessage = `Failed to access folder: ${error.message}`;
-    } else if (typeof error === 'string') {
-      errorMessage = `Failed to access folder: ${error}`;
+    const classified = classifyGoogleDriveApiError(error);
+    const code: DriveFolderErrorCode = classified ?? 'GENERIC';
+    let errorMessage = ERROR_MESSAGES[code];
+    if (code === 'GENERIC') {
+      if (error instanceof Error) {
+        errorMessage = `Failed to access folder: ${error.message}`;
+      } else if (typeof error === 'string') {
+        errorMessage = `Failed to access folder: ${error}`;
+      }
     }
-    return NextResponse.json({ 
-      error: errorMessage,
-      files: [],
-      folderName: 'Google Drive Folder',
-      albumCoverUrl: null
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: errorMessage,
+        code,
+        files: [],
+        folderName: 'Google Drive Folder',
+        albumCoverUrl: null,
+      },
+      { status: code === 'GENERIC' ? 500 : 200 }
+    );
   }
 }

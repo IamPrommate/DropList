@@ -164,7 +164,10 @@ export default function LandingPage() {
                 <Link2 size={22} aria-hidden />
               </div>
               <h3>1. Paste a folder link</h3>
-              <p>Share your Google Drive folder publicly and drop the link into DropList.</p>
+              <p>
+                Set your Drive folder to <strong>Anyone with the link (Viewer)</strong>, then paste the link.
+                Your files stay in your Drive — we never copy or upload them.
+              </p>
             </div>
             <div className="landing-step">
               <div className="landing-step-icon">

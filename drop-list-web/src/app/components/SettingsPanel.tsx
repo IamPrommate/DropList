@@ -8,12 +8,17 @@ import ProBadge from './ProBadge';
 import FreeBadge from './FreeBadge';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import { X, User, CreditCard, Zap, Copy, Check, Trophy, Mail } from 'lucide-react';
+import { X, User, CreditCard, Zap, Copy, Check, Trophy, Mail, FolderOpen, ExternalLink } from 'lucide-react';
 import { isProLevelRank, PRO_LEVEL_DISPLAY, PRO_LEVEL_RANKS, type ProLevelRank } from '../lib/proLevels';
 import { DISPLAY_NAME_MAX_LENGTH } from '../lib/displayNameLimits';
 import { UserPlan, parseUserPlan } from '../lib/userPlan';
 import type { SettingsProfileMeta, SettingsSubscriptionPayload } from '../lib/settingsTypes';
 import { buildSupportMailto } from '../lib/supportMailto';
+import {
+  DRIVE_PERMISSION_BREAKS,
+  DRIVE_SHARE_STEPS,
+  GOOGLE_DRIVE_WEB_URL,
+} from '../lib/driveSharingHelp';
 import '../layout.scss';
 import '../settings/settings.scss';
 
@@ -63,7 +68,7 @@ function GoogleIcon({ size = 20 }: { size?: number }) {
   );
 }
 
-export type SectionId = 'profile' | 'ranks' | 'subscription' | 'customer-support';
+export type SectionId = 'profile' | 'ranks' | 'subscription' | 'drive-help' | 'customer-support';
 
 export type SettingsPanelProps = {
   open: boolean;
@@ -128,6 +133,7 @@ function SettingsPanel({
       raw === 'profile' ||
       raw === 'ranks' ||
       raw === 'subscription' ||
+      raw === 'drive-help' ||
       raw === 'customer-support'
     ) {
       setActiveSection(raw);
@@ -296,6 +302,16 @@ function SettingsPanel({
               >
                 <CreditCard size={17} strokeWidth={1.75} aria-hidden />
                 Subscription
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeSection === 'drive-help'}
+                className={`settings-nav-item${activeSection === 'drive-help' ? ' is-active' : ''}`}
+                onClick={() => scrollToSection('drive-help')}
+              >
+                <FolderOpen size={17} strokeWidth={1.75} aria-hidden />
+                Drive folder requirements
               </button>
               <button
                 type="button"
@@ -667,6 +683,51 @@ function SettingsPanel({
                   </button>
                 </>
               )}
+            </section>
+
+            <section
+              id="drive-help"
+              className="settings-section"
+              aria-labelledby="settings-drive-help-heading"
+            >
+              <h2 id="settings-drive-help-heading" className="settings-section-title">
+                Drive folder requirements
+              </h2>
+              <p className="settings-muted">
+                DropList plays audio directly from your Google Drive folders — your files never leave Drive.
+                For DropList to read a folder, sharing must be set so anyone with the link can view it.
+              </p>
+              <div className="settings-drive-help">
+                <div className="settings-drive-help-block">
+                  <p className="settings-drive-help-title">How to share a folder</p>
+                  <ol className="settings-drive-help-list">
+                    {DRIVE_SHARE_STEPS.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+                <div className="settings-drive-help-block">
+                  <p className="settings-drive-help-title">What breaks playback</p>
+                  <ul className="settings-drive-help-list">
+                    {DRIVE_PERMISSION_BREAKS.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                  <p className="settings-drive-help-note" style={{ marginTop: '0.5rem' }}>
+                    If a saved playlist stops loading, fix sharing in Drive (or restore the folder), then open
+                    the playlist again. If the link itself changed, remove the playlist and add it again.
+                  </p>
+                </div>
+              </div>
+              <a
+                href={GOOGLE_DRIVE_WEB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="settings-support-link"
+              >
+                <ExternalLink size={16} strokeWidth={1.75} aria-hidden />
+                Open Google Drive
+              </a>
             </section>
 
             <section

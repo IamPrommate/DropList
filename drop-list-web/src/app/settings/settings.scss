@@ -466,6 +466,46 @@
   }
 }
 
+.settings-drive-help {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.settings-drive-help-block {
+  background: var(--auth-menu-muted-row-bg);
+  border: 1px solid var(--auth-menu-badge-free-border);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+
+.settings-drive-help-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-drive-help-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+
+  li + li {
+    margin-top: 0.25rem;
+  }
+}
+
+.settings-drive-help-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
 .settings-loading {
   display: flex;
   align-items: center;

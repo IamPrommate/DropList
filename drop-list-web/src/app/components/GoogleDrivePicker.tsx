@@ -8,6 +8,11 @@ import { isAudioFile, FileType } from "../lib/common";
 import { Cloud, Plus } from "lucide-react";
 import Spinner from "./Spinner";
 import "./google-drive.scss";
+import {
+  DRIVE_PERMISSION_BREAKS,
+  DRIVE_SHARE_STEPS,
+  parseDriveFolderError,
+} from "../lib/driveSharingHelp";
 
 type Props = {
   onPicked: (
@@ -54,7 +59,13 @@ function driveProxyStreamUrl(fileId: string): string {
 async function fetchFolderFiles(
   folderId: string,
   tracksSubfolder: string
-): Promise<{ files: DriveFolderFile[]; folderName?: string; albumCoverUrl?: string | null; error?: string }> {
+): Promise<{
+  files: DriveFolderFile[];
+  folderName?: string;
+  albumCoverUrl?: string | null;
+  error?: string;
+  code?: string;
+}> {
   try {
     console.log("Fetching folder via server API:", folderId, "tracksSubfolder:", tracksSubfolder);
 
@@ -66,17 +77,22 @@ async function fetchFolderFiles(
       body: JSON.stringify({ folderId, tracksSubfolder }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        errorData.error || `Server error: ${response.statusText}`
-      );
-    }
-
     const data = await response.json();
 
     if (data.error) {
-      return { files: [], folderName: data.folderName, albumCoverUrl: data.albumCoverUrl || null, error: data.error };
+      return {
+        files: [],
+        folderName: data.folderName,
+        albumCoverUrl: data.albumCoverUrl || null,
+        error: data.error,
+        code: typeof data.code === "string" ? data.code : undefined,
+      };
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        (typeof data.error === "string" && data.error) || `Server error: ${response.statusText}`
+      );
     }
 
     console.log("Successfully found files:", data.files);
@@ -115,6 +131,13 @@ export default function GoogleDrivePicker({
   const [raw, setRaw] = useState("");
   const [tracksSubfolder, setTracksSubfolder] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pickError, setPickError] = useState<{ message: string; hint?: string } | null>(null);
+
+  const openDriveModal = () => {
+    setPickError(null);
+    setOpen(true);
+  };
+
   const handleConfirm = async () => {
     const lines = raw
       .split("\n")
@@ -122,6 +145,7 @@ export default function GoogleDrivePicker({
       .filter(Boolean);
 
     setLoading(true);
+    setPickError(null);
 
     try {
     const tracks: TrackType[] = [];
@@ -196,9 +220,12 @@ export default function GoogleDrivePicker({
       setOpen(false);
       setRaw("");
       setTracksSubfolder("");
+      setPickError(null);
     } else {
-      const errorMessage = lastError || "No valid Google Drive folder links found. Please paste Google Drive folder share links only.";
-      alert(errorMessage);
+      const errorMessage =
+        lastError ||
+        "No valid Google Drive folder links found. Paste folder links only (not single-file links).";
+      setPickError(parseDriveFolderError(errorMessage));
     }
     } finally {
       setLoading(false);
@@ -208,7 +235,7 @@ export default function GoogleDrivePicker({
   return (
     <>
       {variant === 'dropdown' ? (
-        <div className="dropdown-item" onClick={() => setOpen(true)}>
+        <div className="dropdown-item" onClick={openDriveModal}>
           <Cloud size={16} />
           <span>Add From Google Drive</span>
         </div>
@@ -221,14 +248,14 @@ export default function GoogleDrivePicker({
               onAddBlocked?.();
               return;
             }
-            setOpen(true);
+            openDriveModal();
           }}
         >
           <Plus size={16} />
           <span>Add Playlist</span>
         </button>
       ) : (
-        <button className="add-btn-ggd" onClick={() => setOpen(true)}>
+        <button className="add-btn-ggd" onClick={openDriveModal}>
           <Cloud size={20} />
           <span>Add From Google Drive</span>
         </button>
@@ -243,6 +270,7 @@ export default function GoogleDrivePicker({
           if (!loading) {
             setOpen(false);
             setTracksSubfolder("");
+            setPickError(null);
           }
         }}
         okText={loading ? 'Loading…' : 'Add'}
@@ -254,10 +282,28 @@ export default function GoogleDrivePicker({
         className="drive-modal"
       >
         <Space direction="vertical" size="small" className="drive-modal-body-stack" style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            message="Paste Google Drive folder share links (one per line). Folder must be shared publicly."
-          />
+          <div className="drive-modal-share-help">
+            <p className="drive-modal-share-help-title">How to share your folder</p>
+            <ol className="drive-modal-share-steps">
+              {DRIVE_SHARE_STEPS.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+          <details className="drive-modal-permission-details">
+            <summary>What happens if I change permissions later?</summary>
+            <ul className="drive-modal-permission-list">
+              {DRIVE_PERMISSION_BREAKS.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </details>
+          <p className="drive-modal-tracks-subfolder-hint" style={{ marginTop: 0 }}>
+            Paste one folder link per line. DropList reads files through the link — your audio stays in Google Drive.
+          </p>
+          {pickError ? (
+            <Alert type="error" message={pickError.message} description={pickError.hint} showIcon />
+          ) : null}
           {loading ? (
             <div className="drive-modal-loading">
               <Spinner size={18} />
