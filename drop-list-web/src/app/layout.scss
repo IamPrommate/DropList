@@ -2371,11 +2371,6 @@
 }
 
 /* Subtle aura on the playlist-header Play button while playing */
-.play-btn.is-playing {
-  box-shadow:
-    0 3px 14px rgba(255, 255, 255, 0.18),
-    0 0 22px color-mix(in srgb, var(--primary-gradient-middle) 40%, transparent);
-}
 
 .add-btn {
   background: var(--btn-secondary-bg);

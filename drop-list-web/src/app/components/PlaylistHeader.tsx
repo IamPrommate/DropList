@@ -674,7 +674,7 @@ export default function PlaylistHeader({
           {tracks.length > 0 && (
             <>
               <button 
-                className={`play-btn${headerShowsPause ? ' is-playing' : ''}`}
+                className="play-btn"
                 onClick={() => {
                   if (headerShowsPause) {
                     onPlayPause();
