@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, memo } from 'react';
 import { TrackType } from '../lib/types';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
-import { Play, Pause, Music } from 'lucide-react';
+import { Play, Pause, Music, Volume2, VolumeX, Volume1 } from 'lucide-react';
 import { formatDuration } from '../../utils/time';
 import { parseTrackName } from '../../utils/track';
 import ScrollingText from './ScrollingText';
@@ -84,6 +84,8 @@ function AudioPlayer({
     const [isSeeking, setIsSeeking] = useState<boolean>(false);
     const [trackDurations, setTrackDurations] = useState<Map<string, number>>(new Map());
     const [shouldScroll, setShouldScroll] = useState<boolean>(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const preMuteVolumeRef = useRef<number>(1);
 
     /**
      * Resolved URL is stored with the track id it belongs to. While switching tracks, `src` is omitted
@@ -165,6 +167,13 @@ function AudioPlayer({
         if (!audio) return;
         audio.volume = volume;
     }, [volume]);
+
+    // Sync mute state when the slider is dragged to/from 0
+    useEffect(() => {
+        if (volume > 0 && isMuted) {
+            setIsMuted(false);
+        }
+    }, [volume, isMuted]);
 
     // Track event listeners for cleanup
     const eventListenersRef = useRef<(() => void)[]>([]);
@@ -856,10 +865,28 @@ function AudioPlayer({
 
                 {/* Volume Control */}
                 <div className="volume-control">
-                    <button className="volume-btn" title={`Volume: ${Math.round(volumePercentage)}%`}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                        </svg>
+                    <button
+                        className={`volume-btn${isMuted ? ' volume-btn--muted' : ''}`}
+                        title={isMuted ? 'Unmute' : `Volume: ${Math.round(volumePercentage)}%`}
+                        onClick={() => {
+                            if (isMuted) {
+                                // Restore pre-mute volume (minimum 10% so it's audible)
+                                onVolumeChange(preMuteVolumeRef.current > 0 ? preMuteVolumeRef.current : 0.5);
+                                setIsMuted(false);
+                            } else {
+                                preMuteVolumeRef.current = volume > 0 ? volume : 0.5;
+                                onVolumeChange(0);
+                                setIsMuted(true);
+                            }
+                        }}
+                    >
+                        {isMuted || volume === 0 ? (
+                            <VolumeX size={20} strokeWidth={1.75} />
+                        ) : volume < 0.4 ? (
+                            <Volume1 size={20} strokeWidth={1.75} />
+                        ) : (
+                            <Volume2 size={20} strokeWidth={1.75} />
+                        )}
                     </button>
                     <div 
                         className="volume-slider-wrap"

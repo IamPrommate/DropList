@@ -3042,6 +3042,16 @@
     color: var(--text-primary);
     background: var(--overlay-medium);
   }
+
+  &--muted {
+    color: var(--brand-purple, #a855f7);
+    opacity: 0.75;
+
+    &:hover {
+      color: var(--brand-purple, #a855f7);
+      opacity: 1;
+    }
+  }
 }
 
 .volume-slider {
