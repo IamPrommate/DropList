@@ -735,7 +735,7 @@ function AudioPlayer({
                             <StepBackwardOutlined style={{ fontSize: '20px' }} />
                         </button>
                         <button 
-                            className="play-pause-btn" 
+                            className={`play-pause-btn${isPlaying ? ' is-playing' : ''}`}
                             onClick={handleUserPlayPauseClick}
                             disabled={!track}
                         >

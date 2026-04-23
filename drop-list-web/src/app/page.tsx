@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { 
@@ -35,9 +35,46 @@ export default function LandingPage() {
   const isAuthed = status === 'authenticated';
   const isSessionLoading = status === 'loading';
   const mainRef = useRef<HTMLElement>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
 
   // Clear any album-driven CSS variable overrides left on <html> from /app navigation.
   useEffect(() => { clearAlbumTheme(); }, []);
+
+  // Scroll progress bar
+  useEffect(() => {
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const doc = document.documentElement;
+      const scrollable = doc.scrollHeight - doc.clientHeight;
+      setScrollProgress(scrollable > 0 ? Math.min(1, doc.scrollTop / scrollable) : 0);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Mouse-tracking spotlight — sets --mx/--my on the hovered card
+  useEffect(() => {
+    const root = mainRef.current;
+    if (!root) return;
+    const onMove = (e: MouseEvent) => {
+      const card = (e.target as HTMLElement | null)
+        ?.closest<HTMLElement>('.landing-step, .landing-feature-card');
+      if (!card) return;
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
+      card.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
+    };
+    root.addEventListener('mousemove', onMove);
+    return () => root.removeEventListener('mousemove', onMove);
+  }, []);
 
   useEffect(() => {
     const root = mainRef.current;
@@ -83,6 +120,11 @@ export default function LandingPage() {
         </div>
       )}
       <div className="landing-glow" aria-hidden />
+      <div
+        className="landing-scroll-progress"
+        aria-hidden
+        style={{ transform: `scaleX(${scrollProgress})` }}
+      />
 
       {/* ── Nav ── */}
       <header className="landing-nav">

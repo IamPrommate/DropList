@@ -2370,6 +2370,13 @@
   box-shadow: 0 6px 22px rgba(255, 255, 255, 0.24);
 }
 
+/* Subtle aura on the playlist-header Play button while playing */
+.play-btn.is-playing {
+  box-shadow:
+    0 3px 14px rgba(255, 255, 255, 0.18),
+    0 0 22px color-mix(in srgb, var(--primary-gradient-middle) 40%, transparent);
+}
+
 .add-btn {
   background: var(--btn-secondary-bg);
   color: var(--btn-secondary-text);
@@ -2926,6 +2933,7 @@
 }
 
 .play-pause-btn {
+  position: relative;
   background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
   width: 46.8px;
@@ -2945,6 +2953,34 @@
   background: var(--btn-primary-hover);
   transform: scale(1.05);
   box-shadow: 0 8px 30px rgba(255, 255, 255, 0.3);
+}
+
+/* Ping ring + brand glow on the bottom-bar circular play button while playing */
+.play-pause-btn.is-playing {
+  box-shadow:
+    0 4px 20px rgba(255, 255, 255, 0.25),
+    0 0 28px color-mix(in srgb, var(--primary-gradient-middle) 38%, transparent);
+}
+
+.play-pause-btn.is-playing::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--primary-gradient-middle) 65%, transparent);
+  opacity: 0;
+  animation: play-pause-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes play-pause-ping {
+  0%   { transform: scale(0.9);  opacity: 0.55; }
+  80%  { transform: scale(1.55); opacity: 0;    }
+  100% { transform: scale(1.55); opacity: 0;    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-pause-btn.is-playing::before { animation: none; }
 }
 
 .progress-bar-container {
