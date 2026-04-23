@@ -1732,6 +1732,13 @@ export default function HomePage() {
                     setPlaybackPlaylistId(data.playlist.id);
                     void updatePlaylistAudioTrackCount(data.playlist.id, picked.length);
                   } else if (data.alreadyExists && data.playlist) {
+                    // Merge the updated row (tracks_subfolder may have changed) so a
+                    // page refresh loads the correct subfolder instead of the old one.
+                    setSavedPlaylists((prev) =>
+                      prev.map((p) =>
+                        p.id === data.playlist.id ? { ...p, ...data.playlist } : p
+                      )
+                    );
                     setActivePlaylistId(data.playlist.id);
                     setPlaybackPlaylistId(data.playlist.id);
                     void updatePlaylistAudioTrackCount(data.playlist.id, picked.length);

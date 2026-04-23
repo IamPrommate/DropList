@@ -79,7 +79,17 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (existing) {
-    return NextResponse.json({ playlist: existing, alreadyExists: true });
+    // Always persist the latest tracks_subfolder so re-imports with a different
+    // subfolder survive a page refresh (the old value would otherwise be used).
+    const newTracksSubfolder =
+      body.tracks_subfolder !== undefined ? body.tracks_subfolder : null;
+    const { data: updatedRow } = await supabaseAdmin
+      .from('playlists')
+      .update({ tracks_subfolder: newTracksSubfolder })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    return NextResponse.json({ playlist: updatedRow ?? existing, alreadyExists: true });
   }
 
   const { data: userRow } = await supabaseAdmin
@@ -144,6 +154,8 @@ export async function POST(req: NextRequest) {
   if (error) {
     // Unique idx_playlists_user_id_folder_id: concurrent save of same folder
     if (error.code === '23505') {
+      const newTracksSubfolder2 =
+        body.tracks_subfolder !== undefined ? body.tracks_subfolder : null;
       const { data: row } = await supabaseAdmin
         .from('playlists')
         .select('id')
@@ -152,7 +164,13 @@ export async function POST(req: NextRequest) {
         .limit(1)
         .maybeSingle();
       if (row) {
-        return NextResponse.json({ playlist: row, alreadyExists: true });
+        const { data: updatedRow2 } = await supabaseAdmin
+          .from('playlists')
+          .update({ tracks_subfolder: newTracksSubfolder2 })
+          .eq('id', row.id)
+          .select()
+          .single();
+        return NextResponse.json({ playlist: updatedRow2 ?? row, alreadyExists: true });
       }
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
