@@ -60,22 +60,6 @@ export default function LandingPage() {
     };
   }, []);
 
-  // Mouse-tracking spotlight — sets --mx/--my on the hovered card
-  useEffect(() => {
-    const root = mainRef.current;
-    if (!root) return;
-    const onMove = (e: MouseEvent) => {
-      const card = (e.target as HTMLElement | null)
-        ?.closest<HTMLElement>('.landing-step, .landing-feature-card');
-      if (!card) return;
-      const r = card.getBoundingClientRect();
-      card.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
-      card.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
-    };
-    root.addEventListener('mousemove', onMove);
-    return () => root.removeEventListener('mousemove', onMove);
-  }, []);
-
   useEffect(() => {
     const root = mainRef.current;
     if (!root) return;
