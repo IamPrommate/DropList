@@ -3039,12 +3039,11 @@
   }
 
   &--muted {
-    color: var(--brand-purple, #a855f7);
-    opacity: 0.75;
+    color: var(--text-primary);
 
     &:hover {
-      color: var(--brand-purple, #a855f7);
-      opacity: 1;
+      color: var(--text-primary);
+      background: var(--overlay-medium);
     }
   }
 }
