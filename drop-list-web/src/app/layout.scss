@@ -3595,3 +3595,86 @@
   font-weight: 500;
   letter-spacing: 0.02em;
 }
+
+/* ─── Legal pages (/privacy, /terms) ─────────────────────────────────────── */
+.legal-page {
+  min-height: 100vh;
+  background: var(--app-bg, #0d0d14);
+  color: var(--text-primary, #f0f0f5);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  padding: 3rem 1.25rem 5rem;
+}
+
+.legal-container {
+  max-width: 720px;
+  margin: 0 auto;
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    background: linear-gradient(90deg, #fff 60%, var(--primary-gradient-middle, #a855f7));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary, #f0f0f5);
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p,
+  li {
+    font-size: 0.9375rem;
+    line-height: 1.75;
+    color: var(--text-secondary, #b0b0c8);
+  }
+
+  ul {
+    padding-left: 1.4rem;
+    margin: 0.5rem 0;
+  }
+
+  li {
+    margin-bottom: 0.4rem;
+  }
+
+  a {
+    color: var(--primary-gradient-middle, #a855f7);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  strong {
+    color: var(--text-primary, #f0f0f5);
+    font-weight: 600;
+  }
+}
+
+.legal-back {
+  display: inline-block;
+  margin-bottom: 2.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted, #7a7a9a) !important;
+  -webkit-text-fill-color: var(--text-muted, #7a7a9a) !important;
+
+  &:hover {
+    color: var(--text-primary, #f0f0f5) !important;
+    -webkit-text-fill-color: var(--text-primary, #f0f0f5) !important;
+    text-decoration: none !important;
+  }
+}
+
+.legal-updated {
+  font-size: 0.8125rem !important;
+  color: var(--text-muted, #7a7a9a) !important;
+  margin-bottom: 1.75rem !important;
+}

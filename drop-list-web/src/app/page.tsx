@@ -397,6 +397,10 @@ export default function LandingPage() {
             Sign in with Google
           </button>
         )}
+        <span className="landing-footer-legal">
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+        </span>
       </footer>
     </div>
   );

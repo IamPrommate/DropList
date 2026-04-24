@@ -780,7 +780,10 @@
   z-index: 1;
   border-top: 1px solid color-mix(in srgb, var(--primary-gradient-middle) 18%, rgba(255, 255, 255, 0.06));
   padding: 1.75rem 2rem;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
   font-size: 0.8125rem;
   color: var(--text-muted);
 
@@ -789,6 +792,12 @@
     align-items: center;
     vertical-align: middle;
     margin-right: 0.35rem;
+  }
+
+  .landing-footer-legal {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 0;
   }
 
   a,
