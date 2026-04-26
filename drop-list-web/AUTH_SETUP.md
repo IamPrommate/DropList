@@ -48,3 +48,7 @@ npm run dev
 ```
 
 Open the sidebar and click **Sign in with Google**. After signing in, the app has permission to create/update files in your Drive (scope `drive.file` = only files the app creates). This will be used later for saving listening statistics to a JSON file in your Drive.
+
+## 4. Optional: IP fields for abuse review
+
+Run [`sql/009_user_ip_tracking.sql`](sql/009_user_ip_tracking.sql) on Supabase so `users` gets `signup_ip`, `last_seen_ip`, and `last_seen_at`. These are filled **only on Google sign-in** (from `x-forwarded-for` / `x-real-ip`) and are **not** returned to the browser. Example SQL to find many accounts per IP is in comments at the bottom of that file.

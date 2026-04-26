@@ -1,9 +1,15 @@
+import type { NextRequest } from 'next/server';
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { supabaseAdmin } from '@/app/lib/supabase';
 import { isProLevelRank } from '@/app/lib/proLevels';
 import { UserPlan, parseUserPlan } from '@/app/lib/userPlan';
 import { refreshGoogleAccessToken, GOOGLE_ACCESS_BUFFER_SEC } from '@/app/api/lib/google-oauth-refresh';
+import {
+  getAuthRequestClientIp,
+  getClientIpFromHeaders,
+  runWithAuthRequestContext,
+} from '@/app/lib/authRequestContext';
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '';
@@ -75,6 +81,9 @@ async function syncPlanFromDatabase(token: JwtToken, force: boolean): Promise<vo
 }
 
 async function upsertUser(profile: { sub: string; email: string; name?: string; picture?: string }): Promise<UserPlan> {
+  const clientIp = getAuthRequestClientIp();
+  const nowIso = new Date().toISOString();
+
   try {
     const { data: existing } = await supabaseAdmin
       .from('users')
@@ -84,20 +93,32 @@ async function upsertUser(profile: { sub: string; email: string; name?: string; 
 
     if (existing) {
       // Do not overwrite `name` — user may set display name in Edit profile; keep syncing Google email/image.
-      await supabaseAdmin
-        .from('users')
-        .update({ image: profile.picture, email: profile.email })
-        .eq('id', profile.sub);
+      const updatePayload: Record<string, unknown> = {
+        image: profile.picture,
+        email: profile.email,
+      };
+      if (clientIp) {
+        updatePayload.last_seen_ip = clientIp;
+        updatePayload.last_seen_at = nowIso;
+      }
+      await supabaseAdmin.from('users').update(updatePayload).eq('id', profile.sub);
       return parseUserPlan(existing.plan);
     }
 
-    await supabaseAdmin.from('users').insert({
+    const insertPayload: Record<string, unknown> = {
       id: profile.sub,
       email: profile.email,
       name: profile.name,
       image: profile.picture,
       plan: UserPlan.Free,
-    });
+    };
+    if (clientIp) {
+      insertPayload.signup_ip = clientIp;
+      insertPayload.last_seen_ip = clientIp;
+      insertPayload.last_seen_at = nowIso;
+    }
+
+    await supabaseAdmin.from('users').insert(insertPayload);
     return UserPlan.Free;
   } catch (err) {
     console.error('[DropList] upsertUser failed (Supabase may not be set up yet):', err);
@@ -105,7 +126,7 @@ async function upsertUser(profile: { sub: string; email: string; name?: string; 
   }
 }
 
-const handler = NextAuth({
+const nextAuthHandler = NextAuth({
   providers: [
     ...(googleClientId && googleClientSecret
       ? [
@@ -241,4 +262,9 @@ const handler = NextAuth({
   ...(baseUrl && { trustHost: true }),
 });
 
-export { handler as GET, handler as POST };
+async function authRouteHandler(req: NextRequest) {
+  const ip = getClientIpFromHeaders(req.headers);
+  return runWithAuthRequestContext(ip, () => nextAuthHandler(req));
+}
+
+export { authRouteHandler as GET, authRouteHandler as POST };
