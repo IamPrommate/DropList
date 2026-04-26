@@ -12,6 +12,7 @@ import {
   Library,
 } from 'lucide-react';
 import { snoozeUpgradeEntryModalForToday } from '../lib/upgradeEntrySnooze';
+import { showStripeCheckoutErrorModal } from '../lib/stripeClientUi';
 import ProBadge from './ProBadge';
 
 export type UpgradeModalReason = 'daily-limit' | 'track-select' | 'feature' | 'entry';
@@ -72,12 +73,21 @@ export default function UpgradeModal({
     setLoading(true);
     try {
       const res = await fetch('/api/stripe/checkout', { method: 'POST' });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
+      let data: { url?: string } = {};
+      try {
+        data = (await res.json()) as { url?: string };
+      } catch {
+        showStripeCheckoutErrorModal();
+        return;
       }
+      if (!res.ok || !data.url) {
+        showStripeCheckoutErrorModal();
+        return;
+      }
+      window.location.href = data.url;
     } catch {
       console.error('Failed to create checkout session');
+      showStripeCheckoutErrorModal();
     } finally {
       setLoading(false);
     }

@@ -34,6 +34,7 @@ import { DISPLAY_NAME_MAX_LENGTH } from '../lib/displayNameLimits';
 import { UserPlan, parseUserPlan } from '../lib/userPlan';
 import type { SettingsProfileMeta, SettingsSubscriptionPayload } from '../lib/settingsTypes';
 import { buildSupportMailto } from '../lib/supportMailto';
+import { showStripeCheckoutErrorModal, showStripePortalErrorModal } from '../lib/stripeClientUi';
 import {
   DRIVE_PERMISSION_BREAKS,
   DRIVE_SHARE_STEPS,
@@ -234,20 +235,42 @@ function SettingsPanel({
   const handleManageBilling = async () => {
     try {
       const res = await fetch('/api/stripe/portal', { method: 'POST' });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url as string;
+      let data: { url?: string } = {};
+      try {
+        data = (await res.json()) as { url?: string };
+      } catch {
+        showStripePortalErrorModal();
+        return;
+      }
+      if (!res.ok || !data.url) {
+        showStripePortalErrorModal();
+        return;
+      }
+      window.location.href = data.url;
     } catch {
       console.error('Failed to open billing portal');
+      showStripePortalErrorModal();
     }
   };
 
   const handleUpgrade = async () => {
     try {
       const res = await fetch('/api/stripe/checkout', { method: 'POST' });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url as string;
+      let data: { url?: string } = {};
+      try {
+        data = (await res.json()) as { url?: string };
+      } catch {
+        showStripeCheckoutErrorModal();
+        return;
+      }
+      if (!res.ok || !data.url) {
+        showStripeCheckoutErrorModal();
+        return;
+      }
+      window.location.href = data.url;
     } catch {
       console.error('Failed to create checkout session');
+      showStripeCheckoutErrorModal();
     }
   };
 

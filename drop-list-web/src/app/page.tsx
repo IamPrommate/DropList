@@ -29,6 +29,7 @@ import ProBadge from './components/ProBadge';
 import FreeBadge from './components/FreeBadge';
 import Spinner from './components/Spinner';
 import { clearAlbumTheme } from './lib/albumTheme';
+import { showStripeCheckoutErrorModal } from './lib/stripeClientUi';
 
 export default function LandingPage() {
   const { data: session, status } = useSession();
@@ -88,10 +89,21 @@ export default function LandingPage() {
   const handleGetPro = async () => {
     try {
       const res = await fetch('/api/stripe/checkout', { method: 'POST' });
-      const data = (await res.json()) as { url?: string };
-      if (data.url) window.location.href = data.url;
+      let data: { url?: string } = {};
+      try {
+        data = (await res.json()) as { url?: string };
+      } catch {
+        showStripeCheckoutErrorModal();
+        return;
+      }
+      if (!res.ok || !data.url) {
+        showStripeCheckoutErrorModal();
+        return;
+      }
+      window.location.href = data.url;
     } catch {
       console.error('Checkout failed');
+      showStripeCheckoutErrorModal();
     }
   };
 

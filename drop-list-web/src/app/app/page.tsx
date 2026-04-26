@@ -40,6 +40,7 @@ import { useStageViewAutoHide } from '../hooks/useStageViewAutoHide';
 import UpgradeModal, { type UpgradeModalReason } from '../components/UpgradeModal';
 import { isUpgradeEntrySnoozedForToday } from '../lib/upgradeEntrySnooze';
 import { buildSupportMailto } from '../lib/supportMailto';
+import { showStripePortalErrorModal } from '../lib/stripeClientUi';
 import { driveAccessLostModalMessage } from '../lib/driveSharingHelp';
 import { buildStreamUrlPath, resolveDriveStreamUrl, trackUsesDriveStreamProxy } from '../lib/driveStreamUrlClient';
 import AlertModal from '../components/AlertModal';
@@ -1863,15 +1864,14 @@ export default function HomePage() {
                         ) : (
                           <FreeBadge size="xs" />
                         )}
-                        {sessionForUi.user?.proLevel != null && isProLevelRank(sessionForUi.user.proLevel) ? (
-                          <span
-                            className={`ranks-your-card-badge ranks-catalog-card--${PRO_LEVEL_DISPLAY[sessionForUi.user.proLevel as ProLevelRank].name.toLowerCase()}`}
-                          >
-                            {proLevelLabel(sessionForUi.user.proLevel)}
-                          </span>
-                        ) : (
-                          <span className="header-auth-dropdown-rank header-auth-dropdown-rank--empty">—</span>
-                        )}
+                        {sessionForUi.user?.proLevel != null &&
+                          isProLevelRank(sessionForUi.user.proLevel) && (
+                            <span
+                              className={`ranks-your-card-badge ranks-catalog-card--${PRO_LEVEL_DISPLAY[sessionForUi.user.proLevel as ProLevelRank].name.toLowerCase()}`}
+                            >
+                              {proLevelLabel(sessionForUi.user.proLevel)}
+                            </span>
+                          )}
                       </div>
                     </div>
                     <div className="header-auth-dropdown-body">
@@ -1895,9 +1895,23 @@ export default function HomePage() {
                           role="menuitem"
                           onClick={async () => {
                             closeAuthDropdown();
-                            const res = await fetch('/api/stripe/portal', { method: 'POST' });
-                            const data = await res.json();
-                            if (data.url) window.location.href = data.url;
+                            try {
+                              const res = await fetch('/api/stripe/portal', { method: 'POST' });
+                              let data: { url?: string } = {};
+                              try {
+                                data = (await res.json()) as { url?: string };
+                              } catch {
+                                showStripePortalErrorModal();
+                                return;
+                              }
+                              if (!res.ok || !data.url) {
+                                showStripePortalErrorModal();
+                                return;
+                              }
+                              window.location.href = data.url;
+                            } catch {
+                              showStripePortalErrorModal();
+                            }
                           }}
                         >
                           <span className="header-auth-dropdown-item-icon" aria-hidden>
