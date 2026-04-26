@@ -8,7 +8,9 @@ import { refreshGoogleAccessToken, GOOGLE_ACCESS_BUFFER_SEC } from '@/app/api/li
 const googleClientId = process.env.GOOGLE_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '';
 const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
-const baseUrl = process.env.NEXTAUTH_URL ?? process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+const baseUrl =
+  process.env.NEXTAUTH_URL?.trim() ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 
 /** How often to re-read `plan` / `pro_level` from Supabase into the JWT (subscription is source of truth). */
 const PLAN_DB_SYNC_INTERVAL_SEC = 120;
