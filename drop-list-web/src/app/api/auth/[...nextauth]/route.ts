@@ -262,9 +262,13 @@ const nextAuthHandler = NextAuth({
   ...(baseUrl && { trustHost: true }),
 });
 
-async function authRouteHandler(req: NextRequest) {
+/** NextAuth’s returned handler expects `(req, context)` in the App Router; `context.params` carries `nextauth` segments. */
+async function authRouteHandler(
+  req: NextRequest,
+  context: { params: Promise<{ nextauth: string[] }> },
+) {
   const ip = getClientIpFromHeaders(req.headers);
-  return runWithAuthRequestContext(ip, () => nextAuthHandler(req));
+  return runWithAuthRequestContext(ip, () => nextAuthHandler(req, context));
 }
 
 export { authRouteHandler as GET, authRouteHandler as POST };
