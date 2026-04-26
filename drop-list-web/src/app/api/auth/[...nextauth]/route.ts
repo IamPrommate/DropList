@@ -10,6 +10,7 @@ import {
   getClientIpFromHeaders,
   runWithAuthRequestContext,
 } from '@/app/lib/authRequestContext';
+import { notifyAdminNewSignup } from '@/app/lib/adminSignupNotify';
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '';
@@ -119,6 +120,13 @@ async function upsertUser(profile: { sub: string; email: string; name?: string; 
     }
 
     await supabaseAdmin.from('users').insert(insertPayload);
+    void notifyAdminNewSignup({
+      userId: profile.sub,
+      email: profile.email,
+      name: profile.name,
+      signupIp: clientIp,
+      at: nowIso,
+    });
     return UserPlan.Free;
   } catch (err) {
     console.error('[DropList] upsertUser failed (Supabase may not be set up yet):', err);
