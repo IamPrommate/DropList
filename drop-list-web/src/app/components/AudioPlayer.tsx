@@ -553,7 +553,7 @@ function AudioPlayer({
     }, [onIsPlayingChange, isPlaying, logAudioPlaybackDebug, shouldSuppressPauseSync]);
 
     // Parse track info early so it can be used in useEffects
-    const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Local File' };
+    const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Unknown' };
 
     // Check for text overflow to enable scrolling
     useEffect(() => {

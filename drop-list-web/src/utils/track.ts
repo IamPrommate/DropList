@@ -45,7 +45,7 @@ export function parseTrackName(name: string): ParsedTrackInfo {
   
   return {
     title: nameWithoutExt,
-    artist: 'Local File'
+    artist: 'Unknown'
   };
 }
 
