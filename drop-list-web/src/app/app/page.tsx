@@ -2265,6 +2265,7 @@ export default function HomePage() {
                   isRepeated={isRepeated}
                   onDurationLoaded={handleDurationLoaded}
                   getCachedBlobUrl={getCachedBlobUrl}
+                  cachedImages={cachedImages}
                   isStageViewOpen={isStageViewOpen}
                   isSleepTimerExpired={sleepTimerExpired}
                   onTrackPlayed={handleTrackPlayed}

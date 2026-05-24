@@ -28,6 +28,7 @@ type Props = {
     /** Uses the same track identity as the parent’s duration map (`getTrackCacheKey`). */
     onDurationLoaded?: (track: TrackType, duration: number) => void;
     getCachedBlobUrl?: (track: TrackType) => string | undefined;
+    cachedImages?: Map<string, string>;
     isStageViewOpen?: boolean;
     onToggleStageView?: () => void;
     /** Called once when playback actually starts (for play-count stats) */
@@ -61,6 +62,7 @@ function AudioPlayer({
     handleRepeatToggle,
     onDurationLoaded,
     getCachedBlobUrl,
+    cachedImages,
     isStageViewOpen,
     onToggleStageView,
     onTrackPlayed,
@@ -86,6 +88,8 @@ function AudioPlayer({
     const [shouldScroll, setShouldScroll] = useState<boolean>(false);
     const [isMuted, setIsMuted] = useState(false);
     const preMuteVolumeRef = useRef<number>(1);
+    const [artistImageLoaded, setArtistImageLoaded] = useState(false);
+    const [artistImageFailed, setArtistImageFailed] = useState(false);
 
     /**
      * Resolved URL is stored with the track id it belongs to. While switching tracks, `src` is omitted
@@ -554,6 +558,15 @@ function AudioPlayer({
 
     // Parse track info early so it can be used in useEffects
     const trackInfo = track ? parseTrackName(track.name) : { title: 'No track selected', artist: 'Unknown' };
+    const artistImageSrc = track?.artistImageUrl
+      ? cachedImages?.get(track.id) || track.artistImageUrl
+      : undefined;
+    const showArtistImage = Boolean(artistImageSrc && !artistImageFailed);
+
+    useEffect(() => {
+        setArtistImageLoaded(false);
+        setArtistImageFailed(false);
+    }, [track?.id, track?.artistImageUrl]);
 
     // Check for text overflow to enable scrolling
     useEffect(() => {
@@ -684,7 +697,25 @@ function AudioPlayer({
                 {/* Track Info */}
                 <div className="player-track-info">
                     <div className="player-album-art">
-                        <div className="player-album-art-fallback show">
+                        {showArtistImage && (
+                            <>
+                                <img
+                                    src={artistImageSrc}
+                                    alt={`${trackInfo.artist} image`}
+                                    className="artist-image"
+                                    onLoad={() => setArtistImageLoaded(true)}
+                                    onError={() => setArtistImageFailed(true)}
+                                />
+                                {!artistImageLoaded && (
+                                    <div className="artist-image-spinner">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                                        </svg>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                        <div className={`player-album-art-fallback ${showArtistImage ? '' : 'show'}`}>
                         <Music size={26} strokeWidth={1.75} />
                         </div>
                     </div>
