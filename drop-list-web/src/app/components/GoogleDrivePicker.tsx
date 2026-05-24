@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Modal, Input, Space, Alert } from "antd";
 import type { TrackType } from "../lib/types";
 import { matchArtistImages } from "../../utils/track";
-import { isAudioFile, FileType } from "../lib/common";
+import { isAudioFile, isImageFile, FileType } from "../lib/common";
 import { Cloud, Plus, ShieldCheck, Share2, Link2, Eye, FolderInput } from "lucide-react";
 import Spinner from "./Spinner";
 import "./google-drive.scss";
@@ -183,13 +183,25 @@ export default function GoogleDrivePicker({
 
       const files = folderData.files || [];
       const audioFiles = files.filter((file) => isAudioFile(file.name) && file.type === FileType.AUDIO);
+      const artistImages = files.filter(
+        (file) =>
+          isImageFile(file.name) &&
+          file.type === FileType.IMAGE &&
+          file.source === 'artist-subfolder'
+      );
       const artistVideos = files.filter(
         (file) => file.type === FileType.VIDEO && file.source === 'video-subfolder'
       );
+      const artistImageMap = matchArtistImages(audioFiles, artistImages);
       const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
 
       const tracks: TrackType[] = audioFiles.map((file) => {
         const url = driveProxyStreamUrl(file.id);
+        let artistImageUrl: string | undefined;
+        const imageId = artistImageMap.get(file.id);
+        if (imageId) {
+          artistImageUrl = driveProxyStreamUrl(imageId);
+        }
         let stageViewVideoUrl: string | undefined;
         const videoId = artistVideoMap.get(file.id);
         if (videoId) {
@@ -199,6 +211,7 @@ export default function GoogleDrivePicker({
           id: file.id,
           name: file.name,
           googleDriveUrl: url,
+          artistImageUrl,
           stageViewVideoUrl,
         };
       });

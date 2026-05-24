@@ -16,11 +16,17 @@ interface TrackItemProps {
   duration: number;
   durationLoaded: boolean;
   durationLoading: boolean;
+  showArtistImages?: boolean;
+  artistImageUrl?: string;
+  imageLoading?: boolean;
+  onImageLoad?: (trackId: string) => void;
+  onImageError?: (trackId: string) => void;
   onClick: (index: number) => void;
 }
 
 function TrackItem({
   index,
+  trackId,
   title,
   artist,
   isActive,
@@ -29,6 +35,11 @@ function TrackItem({
   duration,
   durationLoaded,
   durationLoading,
+  showArtistImages = false,
+  artistImageUrl,
+  imageLoading = false,
+  onImageLoad,
+  onImageError,
   onClick,
 }: TrackItemProps) {
   return (
@@ -37,12 +48,33 @@ function TrackItem({
       onClick={() => onClick(index)}
     >
       <div className="track-number">{index + 1}</div>
-      <div className="track-thumb-image" aria-hidden>
-        <div className="track-thumb-placeholder">
-          <Music size={22} strokeWidth={1.75} />
-        </div>
-      </div>
-      <div className="track-splitter"></div>
+      {showArtistImages && (
+        <>
+          <div className="track-thumb-image">
+            {artistImageUrl ? (
+              <>
+                <img
+                  src={artistImageUrl}
+                  alt={artist}
+                  className="artist-thumbnail"
+                  onLoad={() => onImageLoad?.(trackId)}
+                  onError={() => onImageError?.(trackId)}
+                />
+                {imageLoading && (
+                  <div className="artist-image-spinner">
+                    <Spinner size={12} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="track-thumb-placeholder">
+                <Music size={22} strokeWidth={1.75} />
+              </div>
+            )}
+          </div>
+          <div className="track-splitter"></div>
+        </>
+      )}
       <div className="track-info">
         <div className="track-title">
           {isActive && isPlaying && <div className="running-track-indicator"></div>}

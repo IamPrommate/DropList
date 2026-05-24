@@ -2,6 +2,7 @@
 'use client';
 
 import '@ant-design/v5-patch-for-react-19';
+import { Switch } from 'antd';
 import { useCallback, useState, useRef, useEffect, useLayoutEffect, useMemo, startTransition, lazy, Suspense, memo } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import {
@@ -27,7 +28,7 @@ import {
   resetShuffleState 
 } from '../../utils/shuffle';
 import { formatDuration } from '../../utils/time';
-import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName } from '../../utils/track';
+import { parseTrackName, generateTrackId, filterAudioFiles, extractFolderName, matchArtistImages } from '../../utils/track';
 import '../layout.scss';
 import StageViewPanel from '../components/StageViewPanel';
 import Link from 'next/link';
@@ -116,10 +117,13 @@ export default function HomePage() {
     return new Map();
   });
   const [loadingDurations, setLoadingDurations] = useState<Set<string>>(new Set());
+  const [cachedImages, setCachedImages] = useState<Map<string, string>>(new Map());
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const [showArtistImages, setShowArtistImages] = useState<boolean>(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // Stage View is disabled for now.
+  // Stage View is enabled when tracks include stage view videos.
   const [isStageViewOpen, setIsStageViewOpen] = useState(false);
-  const STAGE_VIEW_DISABLED = true;
+  const STAGE_VIEW_DISABLED = false;
   /** Drive folder ID when playlist is loaded from Google Drive (for saving stats into that folder) */
   const [currentDriveFolderId, setCurrentDriveFolderId] = useState<string | null>(null);
 
@@ -640,18 +644,40 @@ export default function HomePage() {
           return null;
         }
 
-        const { isAudioFile, FileType } = await import('../lib/common');
+        const { isAudioFile, isImageFile, FileType } = await import('../lib/common');
 
         const audioFiles = data.files.filter(
           (f: { name: string; type?: string }) => isAudioFile(f.name) && f.type === FileType.AUDIO
         );
+        const artistImages = data.files.filter(
+          (f: { name: string; type?: string; source?: string }) =>
+            isImageFile(f.name) &&
+            f.type === FileType.IMAGE &&
+            f.source === 'artist-subfolder'
+        );
+        const artistVideos = data.files.filter(
+          (f: { type?: string; source?: string }) =>
+            f.type === FileType.VIDEO && f.source === 'video-subfolder'
+        );
+        const artistImageMap = matchArtistImages(audioFiles, artistImages);
+        const artistVideoMap = matchArtistImages(audioFiles, artistVideos);
 
         // Proxy URL only here — R2 is resolved lazily in AudioPlayer (one track at a time).
-        const tracks: TrackType[] = audioFiles.map((file: { id: string; name: string }) => ({
-          id: file.id,
-          name: file.name,
-          googleDriveUrl: `/api/drive-file?id=${encodeURIComponent(file.id)}`,
-        }));
+        const tracks: TrackType[] = audioFiles.map((file: { id: string; name: string }) => {
+          const imageId = artistImageMap.get(file.id);
+          const videoId = artistVideoMap.get(file.id);
+          return {
+            id: file.id,
+            name: file.name,
+            googleDriveUrl: `/api/drive-file?id=${encodeURIComponent(file.id)}`,
+            ...(imageId
+              ? { artistImageUrl: `/api/drive-file?id=${encodeURIComponent(imageId)}` }
+              : {}),
+            ...(videoId
+              ? { stageViewVideoUrl: `/api/drive-file?id=${encodeURIComponent(videoId)}` }
+              : {}),
+          };
+        });
 
         const folderName: string | undefined = data.folderName;
         playlistContentCache.current.set(cacheKey, {
@@ -769,8 +795,31 @@ export default function HomePage() {
 
   const togglePlayPause = useCallback(() => setIsPlaying((p) => !p), []);
   const handleIsPlayingChange = useCallback((v: boolean) => setIsPlaying(v), []);
-  const noopToggleStageView = useCallback(() => {}, []);
+  const handleToggleStageView = useCallback(() => {
+    if (!currentTrack?.stageViewVideoUrl) return;
+    if (isStageViewOpen) {
+      closeStageView('player-toggle-close');
+    } else {
+      openStageView('player-toggle-open');
+    }
+  }, [currentTrack?.stageViewVideoUrl, isStageViewOpen, closeStageView, openStageView]);
   const handleSeekBlocked = useCallback(() => showUpgradeFor('feature'), [showUpgradeFor]);
+
+  const handleArtistImageLoad = useCallback((trackId: string) => {
+    setLoadingImages((prev) => {
+      const updated = new Set(prev);
+      updated.delete(trackId);
+      return updated;
+    });
+  }, []);
+
+  const handleArtistImageError = useCallback((trackId: string) => {
+    setLoadingImages((prev) => {
+      const updated = new Set(prev);
+      updated.delete(trackId);
+      return updated;
+    });
+  }, []);
 
   const handleTrackClick = useCallback(
     (index: number) => {
@@ -792,6 +841,9 @@ export default function HomePage() {
       setPlaybackPlaylistId(activePlaylistId);
       setPlaybackIndex(index);
       setIsPlaying(true);
+      if (t?.stageViewVideoUrl) {
+        openStageView('track-click-with-video');
+      }
     },
     [
       isFree,
@@ -801,6 +853,7 @@ export default function HomePage() {
       activePlaylistId,
       showUpgradeFor,
       maybeCancelExpiredSleepTimerOnManualTrackChange,
+      openStageView,
     ]
   );
 
@@ -1061,6 +1114,62 @@ export default function HomePage() {
     };
   }, []);
 
+  const revokeCachedArtistImages = useCallback((imageMap: Map<string, string>) => {
+    imageMap.forEach((url) => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
+  }, []);
+
+  const preloadArtistImages = useCallback(async (tracksToPreload: TrackType[]) => {
+    const tracksWithImages = tracksToPreload.filter((track) => track.artistImageUrl);
+    setLoadingImages((prev) => {
+      const updated = new Set(prev);
+      tracksWithImages.forEach((track) => updated.add(track.id));
+      return updated;
+    });
+
+    const imagePromises = tracksWithImages.map(async (track) => {
+      return new Promise<{ trackId: string; imageUrl: string }>((resolve) => {
+        const img = new Image();
+
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          ctx?.drawImage(img, 0, 0);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve({ trackId: track.id, imageUrl: URL.createObjectURL(blob) });
+              } else {
+                resolve({ trackId: track.id, imageUrl: track.artistImageUrl! });
+              }
+            },
+            'image/jpeg',
+            0.9
+          );
+        };
+
+        img.onerror = () => {
+          resolve({ trackId: track.id, imageUrl: track.artistImageUrl! });
+        };
+
+        img.src = track.artistImageUrl!;
+      });
+    });
+
+    const results = await Promise.all(imagePromises);
+    const newCachedImages = new Map<string, string>();
+    results.forEach(({ trackId, imageUrl }) => {
+      newCachedImages.set(trackId, imageUrl);
+    });
+    setCachedImages(newCachedImages);
+  }, []);
+
   // Preload durations for all tracks with batching and caching
   const preloadTrackDurations = useCallback(async (tracks: TrackType[]) => {
     // Filter tracks that don't already have durations and aren't currently loading
@@ -1226,6 +1335,7 @@ export default function HomePage() {
       if (preservePlaybackAtClick) {
         preloadTrackDurations(result.tracks);
         preloadAudioFiles(result.tracks);
+        void preloadArtistImages(result.tracks);
         void updatePlaylistAudioTrackCount(playlist.id, result.tracks.length);
       } else {
         setPlaybackTracks(result.tracks);
@@ -1240,6 +1350,7 @@ export default function HomePage() {
         setIsPlaying(false);
         preloadTrackDurations(result.tracks);
         preloadAudioFiles(result.tracks);
+        void preloadArtistImages(result.tracks);
         void updatePlaylistAudioTrackCount(playlist.id, result.tracks.length);
       }
 
@@ -1270,6 +1381,7 @@ export default function HomePage() {
         }
 
         preloadTrackDurations(fresh.tracks);
+        void preloadArtistImages(fresh.tracks);
         void updatePlaylistAudioTrackCount(playlist.id, fresh.tracks.length);
       });
     },
@@ -1282,6 +1394,7 @@ export default function HomePage() {
       playbackTracks.length,
       preloadTrackDurations,
       preloadAudioFiles,
+      preloadArtistImages,
       loadPlaylistFromDrive,
       updatePlaylistAudioTrackCount,
     ]
@@ -1629,9 +1742,16 @@ export default function HomePage() {
           e.preventDefault();
           setVolume(prev => Math.max(0, prev - 0.1));
           break;
-        // Stage View keyboard shortcut disabled
-        // case KeyboardShortcuts.KEY_V:
-        //   break;
+        case KeyboardShortcuts.KEY_V:
+          if (playbackTracks.length > 0 && currentTrack?.stageViewVideoUrl) {
+            e.preventDefault();
+            if (isStageViewOpen) {
+              closeStageView('keyboard-v-toggle-close');
+            } else {
+              openStageView('keyboard-v-toggle-open');
+            }
+          }
+          break;
       }
     };
 
@@ -1671,6 +1791,12 @@ export default function HomePage() {
             loadingPlaylistId={loadingPlaylistId}
             loadingPlaylists={isAuthPending || isPlaylistCatalogLoading}
             onGoogleDrivePicked={async (picked, folderName, coverUrl, driveFolderId, tracksSubfolder = '') => {
+              setCachedImages((prev) => {
+                revokeCachedArtistImages(prev);
+                return new Map();
+              });
+              setLoadingImages(new Set());
+
               if (driveFolderId) {
                 playlistContentCache.current.set(playlistContentCacheKey(driveFolderId, tracksSubfolder), {
                   tracks: picked,
@@ -1700,6 +1826,7 @@ export default function HomePage() {
 
               preloadTrackDurations(picked);
               preloadAudioFiles(picked);
+              void preloadArtistImages(picked);
 
               // Persist playlist to Supabase
               if (driveFolderId && session?.user) {
@@ -2057,6 +2184,19 @@ export default function HomePage() {
 
               {/* {currentTrack && (<Divider />)} */}
 
+              {tracks.length > 0 && (
+                <div className="playlist-controls">
+                  <div className="image-toggle-control">
+                    <span className="toggle-label">Show artist image</span>
+                    <Switch
+                      checked={showArtistImages}
+                      onChange={setShowArtistImages}
+                      size="small"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="playlist" ref={playlistRef}>
                 {tracks.map((track, i) => {
                   const trackInfo = parseTrackName(track.name);
@@ -2079,6 +2219,11 @@ export default function HomePage() {
                       duration={trackDurations.get(cacheKey) || 0}
                       durationLoaded={trackDurations.has(cacheKey)}
                       durationLoading={loadingDurations.has(cacheKey)}
+                      showArtistImages={showArtistImages}
+                      artistImageUrl={cachedImages.get(track.id) ?? track.artistImageUrl}
+                      imageLoading={loadingImages.has(track.id)}
+                      onImageLoad={handleArtistImageLoad}
+                      onImageError={handleArtistImageError}
                       onClick={handleTrackClick}
                     />
                   );
@@ -2094,7 +2239,12 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Stage View – disabled for now */}
+            {/* Stage View – fixed on the right, uses Google Drive video */}
+            {shouldAttemptShowStageView && currentTrack && (
+              <div className={`stage-view-shell ${isStageViewAutoHidden ? 'is-auto-hidden' : ''}`}>
+                <StageViewPanel track={currentTrack} playbackProgress={playbackProgress} />
+              </div>
+            )}
 
             {/* Fixed bottom audio bar with smooth appearance */}
             <div className={`player-footer-transition ${currentTrack ? 'visible' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}>
@@ -2115,12 +2265,12 @@ export default function HomePage() {
                   isRepeated={isRepeated}
                   onDurationLoaded={handleDurationLoaded}
                   getCachedBlobUrl={getCachedBlobUrl}
-                  isStageViewOpen={false}
+                  isStageViewOpen={isStageViewOpen}
                   isSleepTimerExpired={sleepTimerExpired}
                   onTrackPlayed={handleTrackPlayed}
                   onPlaybackFailed={openAudioLoadErrorModal}
                   onProgressUpdate={setPlaybackProgress}
-                  onToggleStageView={noopToggleStageView}
+                  onToggleStageView={handleToggleStageView}
                   seekDisabled={isFree}
                   onSeekBlocked={handleSeekBlocked}
                 />
